@@ -7,34 +7,11 @@ version resolves the same or better context.
 import hashlib
 import json
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
 from typing import List, Optional
 from uuid import uuid4
 
-
-@dataclass
-class RegressionCase:
-    """A frozen successful session used as a regression test."""
-    id: str
-    scope_expr: str
-    budget: Optional[int] = None
-    task: Optional[str] = None
-    expected_files: List[str] = field(default_factory=list)
-    expected_context_hash: str = ""
-    actual_recall: float = 0.0
-    timestamp: str = ""
-
-
-@dataclass
-class ReplayResult:
-    """Result of replaying a regression case against current state."""
-    case: RegressionCase
-    new_files: List[str] = field(default_factory=list)
-    new_context_hash: str = ""
-    files_added: List[str] = field(default_factory=list)
-    files_dropped: List[str] = field(default_factory=list)
-    context_changed: bool = False
-    is_regression: bool = False
+from .models.state import RegressionCase, ReplayResult  # noqa: F401
 
 
 def maybe_freeze_session(

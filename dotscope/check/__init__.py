@@ -1,1 +1,1 @@
-"""Architectural enforcement for dotscope."""
+"""Backward-compatibility stub. Moved to dotscope.passes.sentinel."""

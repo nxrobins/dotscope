@@ -7,57 +7,9 @@ incomplete context.
 Defined in intent.yaml (project-wide) or .scope files (per-scope).
 """
 
-from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-
-class ContextExhaustionError(Exception):
-    """Token budget cannot satisfy required assertions."""
-
-    def __init__(
-        self,
-        assertion_type: str,
-        detail: str,
-        file: Optional[str] = None,
-        file_tokens: int = 0,
-        budget: int = 0,
-        tokens_used: int = 0,
-        reason: str = "",
-        suggestion: str = "",
-    ):
-        self.assertion_type = assertion_type
-        self.detail = detail
-        self.file = file
-        self.file_tokens = file_tokens
-        self.budget = budget
-        self.tokens_used = tokens_used
-        self.reason = reason
-        self.suggestion = suggestion
-        super().__init__(detail)
-
-    def to_dict(self) -> dict:
-        return {
-            "error": "context_exhaustion",
-            "assertion_failed": {
-                "type": self.assertion_type,
-                "detail": self.detail,
-                "file": self.file,
-                "file_tokens": self.file_tokens,
-                "budget": self.budget,
-                "reason": self.reason,
-            },
-            "suggestion": self.suggestion,
-        }
-
-
-@dataclass
-class Assertion:
-    """A single architectural assertion."""
-    scope: str = "*"  # Scope name or "*" for all
-    ensure_includes: List[str] = field(default_factory=list)
-    ensure_context_contains: List[str] = field(default_factory=list)
-    ensure_constraints: bool = False
-    reason: str = ""
+from .models.intent import Assertion, ContextExhaustionError  # noqa: F401
 
 
 def load_assertions(repo_root: str, scope_name: str = "") -> List[Assertion]:

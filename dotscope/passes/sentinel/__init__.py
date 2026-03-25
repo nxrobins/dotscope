@@ -1,0 +1,1 @@
+"""Architectural enforcement for dotscope."""

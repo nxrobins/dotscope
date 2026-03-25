@@ -1,1 +1,1 @@
-"""Individual check implementations."""
+"""Backward-compatibility stub. Moved to dotscope.passes.sentinel.checks."""

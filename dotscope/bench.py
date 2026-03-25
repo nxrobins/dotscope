@@ -5,36 +5,10 @@ Plus scope health aggregation.
 """
 
 import os
-from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from .models.state import BenchReport  # noqa: F401
 from .timing import load_timings, median, percentile
-
-
-@dataclass
-class BenchReport:
-    # Token efficiency
-    avg_tokens_resolved: int = 0
-    avg_tokens_used: int = 0
-    efficiency_ratio: float = 0.0
-
-    # Hold rate
-    total_commits: int = 0
-    commits_with_holds: int = 0
-    holds_acknowledged: int = 0
-    effective_hold_rate: float = 0.0
-
-    # Compilation speed
-    resolve_median_ms: float = 0.0
-    resolve_p95_ms: float = 0.0
-    check_median_ms: float = 0.0
-    check_p95_ms: float = 0.0
-
-    # Scope health
-    scopes_above_80_recall: int = 0
-    total_scopes: int = 0
-    stale_scopes: int = 0
-    avg_observations: float = 0.0
 
 
 def run_bench(repo_root: str) -> BenchReport:

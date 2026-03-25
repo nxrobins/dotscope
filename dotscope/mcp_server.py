@@ -55,7 +55,7 @@ def main():
     try:
         from .discovery import find_repo_root
         from .parser import parse_scopes_index
-        from .cache import load_cached_history, load_cached_graph_hubs
+        from .storage.cache import load_cached_history, load_cached_graph_hubs
         _root = find_repo_root()
         if _root:
             _idx_path = os.path.join(_root, ".scopes")
@@ -78,7 +78,7 @@ def main():
 
     def _save_session_scopes():
         try:
-            from .near_miss import save_session_scopes
+            from .storage.near_miss import save_session_scopes
             scopes = list(tracker._stats.unique_scopes)
             if scopes and _root:
                 save_session_scopes(_root, scopes)
@@ -122,7 +122,7 @@ def main():
 
         from pathlib import Path
         from .composer import compose
-        from .budget import apply_budget
+        from .passes.budget_allocator import apply_budget
         from .discovery import find_repo_root
         from .formatter import format_resolved
 
@@ -176,14 +176,14 @@ def main():
         # Track session (MCP calls only — compose stays pure)
         session_id = None
         try:
-            from .sessions import SessionManager
+            from .storage.session_manager import SessionManager
             mgr = SessionManager(root)
             mgr.ensure_initialized()
             task_str = f"resolve {scope}" + (f" (budget={budget})" if budget else "")
             session_id = mgr.create_session(scope, task_str, resolved.files, resolved.context)
             resolved.context = f"# dotscope-session: {session_id}\n{resolved.context}"
             # Onboarding
-            from .onboarding import mark_milestone, increment_counter
+            from .storage.onboarding import mark_milestone, increment_counter
             mark_milestone(root, "first_session")
             increment_counter(root, "sessions_completed")
         except Exception:
@@ -222,7 +222,7 @@ def main():
 
                 # Constraints (prophylactic enforcement)
                 try:
-                    from .check.constraints import build_constraints
+                    from .passes.sentinel.constraints import build_constraints
                     from .intent import load_intents
                     invariants = {}
                     inv_path = os.path.join(root, ".dotscope", "invariants.json")
@@ -230,7 +230,7 @@ def main():
                         with open(inv_path, "r", encoding="utf-8") as _f:
                             invariants = json.loads(_f.read())
                     scopes_data = {}
-                    from .check.checker import _load_scopes_with_antipatterns
+                    from .passes.sentinel.checker import _load_scopes_with_antipatterns
                     scopes_data = _load_scopes_with_antipatterns(root)
                     intents = load_intents(root)
                     constraints = build_constraints(
@@ -257,7 +257,7 @@ def main():
 
                 # Features requiring observation data
                 if dot_dir and dot_dir.exists():
-                    from .sessions import SessionManager
+                    from .storage.session_manager import SessionManager
                     mgr = SessionManager(root)
                     sessions = mgr.get_sessions(limit=200)
                     scope_session_ids = {
@@ -283,7 +283,7 @@ def main():
 
                     # Feature 5: Near-misses (from persistent storage)
                     try:
-                        from .near_miss import load_recent_near_misses
+                        from .storage.near_miss import load_recent_near_misses
                         nms = load_recent_near_misses(root, module)
                         if nms:
                             data["near_misses"] = nms
@@ -312,7 +312,7 @@ def main():
         # Record timing
         try:
             elapsed_ms = (_time.perf_counter() - _resolve_start) * 1000
-            from .timing import record_timing
+            from .storage.timing import record_timing
             if root:
                 record_timing(root, "resolve", elapsed_ms)
         except Exception:
@@ -603,7 +603,7 @@ def main():
         Args:
             file_path: Path to the file to analyze (relative to repo root)
         """
-        from .graph import build_graph
+        from .passes.graph_builder import build_graph
         from .discovery import find_repo_root
 
         root = find_repo_root()
@@ -656,7 +656,7 @@ def main():
         Args:
             commits: Number of recent commits to test against
         """
-        from .backtest import backtest_scopes as _backtest
+        from .passes.backtest import backtest_scopes as _backtest
         from .discovery import find_repo_root, find_all_scopes
         from .parser import parse_scope_file
 
@@ -703,7 +703,7 @@ def main():
             scope: Scope name
             limit: Max observations to return
         """
-        from .sessions import SessionManager
+        from .storage.session_manager import SessionManager
         from .discovery import find_repo_root
 
         root = find_repo_root()
@@ -743,7 +743,7 @@ def main():
         Args:
             scope: Scope name
         """
-        from .sessions import SessionManager
+        from .storage.session_manager import SessionManager
         from .lessons import generate_lessons
         from .discovery import find_repo_root
 
@@ -778,7 +778,7 @@ def main():
         Args:
             scope: Scope name
         """
-        from .sessions import SessionManager
+        from .storage.session_manager import SessionManager
         from .utility import compute_utility_scores
         from .discovery import find_repo_root
 
@@ -839,7 +839,7 @@ def main():
         If no diff provided, checks current git staged changes.
         If session_id provided, uses that session for boundary checking.
         """
-        from .check.checker import check_diff, check_staged
+        from .passes.sentinel.checker import check_diff, check_staged
         from .discovery import find_repo_root
 
         root = find_repo_root()
@@ -936,7 +936,7 @@ def main():
             ids: Comma-separated acknowledge IDs from dotscope_check holds
             reason: Why this acknowledgment is correct
         """
-        from .check.acknowledge import record_acknowledgment
+        from .passes.sentinel.acknowledge import record_acknowledgment
         from .discovery import find_repo_root
 
         root = find_repo_root()

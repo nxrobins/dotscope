@@ -6,23 +6,9 @@ constraints to identify the root cause.
 
 import json
 import os
-from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
-
-@dataclass
-class BisectionResult:
-    """Root cause analysis of a bad agent session."""
-    session_id: str
-    files_that_mattered: List[str] = field(default_factory=list)
-    files_that_didnt_help: List[str] = field(default_factory=list)
-    context_sections_relevant: List[str] = field(default_factory=list)
-    context_sections_irrelevant: List[str] = field(default_factory=list)
-    constraints_honored: List[dict] = field(default_factory=list)
-    constraints_violated: List[dict] = field(default_factory=list)
-    missing_files: List[str] = field(default_factory=list)
-    diagnosis: str = ""  # "resolution_gap" | "constraint_gap" | "agent_ignored" | "context_conflict"
-    recommendations: List[str] = field(default_factory=list)
+from .models.state import BisectionResult  # noqa: F401
 
 
 def debug_session(

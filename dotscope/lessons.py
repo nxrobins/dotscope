@@ -11,34 +11,10 @@ import json
 import os
 import time
 from collections import defaultdict
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .models import ObservationLog, SessionLog
-
-
-@dataclass
-class Lesson:
-    """A machine-generated lesson from observation patterns."""
-    trigger: str
-    observation: str
-    lesson_text: str
-    confidence: float
-    created: float
-    source_sessions: List[str] = field(default_factory=list)
-    acknowledged: bool = False
-
-
-@dataclass
-class ObservedInvariant:
-    """An evidence-based boundary constraint."""
-    boundary: str          # e.g., "auth -> payments"
-    direction: str         # "no_import"
-    held_since: str        # ISO date
-    commit_count: int
-    confidence: float
-    violations: List[str] = field(default_factory=list)
+from .models.state import Lesson, ObservationLog, ObservedInvariant, SessionLog  # noqa: F401
 
 
 def generate_lessons(

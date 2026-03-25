@@ -11,31 +11,10 @@ Five features that surface existing data through two channels:
 import os
 import re
 import time
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Set
 
-from .models import ObservationLog, SessionLog
-
-
-# ---------------------------------------------------------------------------
-# Feature 1: Session Summary
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class SessionStats:
-    """Raw stats accumulated during an MCP session."""
-    scopes_resolved: int = 0
-    tokens_served: int = 0
-    tokens_available: int = 0
-    context_fields_used: int = 0
-    attribution_hints_served: int = 0
-    health_warnings_surfaced: int = 0
-    unique_scopes: Set[str] = field(default_factory=set)
-    constraints_served: List[dict] = field(default_factory=list)
-    started_at: Optional[str] = None
-    last_activity: Optional[str] = None
+from .models.state import ObservationLog, SessionLog, SessionStats  # noqa: F401
 
 
 class SessionTracker:

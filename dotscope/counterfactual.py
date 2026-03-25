@@ -10,17 +10,9 @@ the agent received. Coincidences don't count.
 """
 
 import re
-from dataclasses import dataclass
 from typing import Dict, List, Optional, Set
 
-
-@dataclass
-class Counterfactual:
-    """A bad thing that didn't happen because dotscope was there."""
-    type: str  # "anti_pattern_avoided", "contract_honored", "intent_respected"
-    description: str
-    source: str  # Where the knowledge came from
-    severity: str = "high"  # "high" or "medium"
+from .models.state import Counterfactual  # noqa: F401
 
 
 def compute_counterfactuals(

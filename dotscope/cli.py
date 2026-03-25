@@ -176,7 +176,7 @@ def main(argv=None):
 
 def _cmd_resolve(args):
     from .composer import compose
-    from .budget import apply_budget
+    from .passes.budget_allocator import apply_budget
     from .discovery import find_repo_root
     from .formatter import format_resolved
 
@@ -443,7 +443,7 @@ def _cmd_ingest(args):
     else:
         # Onboarding: mark milestone + show next step + vc tip
         try:
-            from .onboarding import (
+            from .storage.onboarding import (
                 mark_milestone, next_step, version_control_tip, mark_vc_tip_shown,
             )
             mark_milestone(root, "first_ingest")
@@ -459,7 +459,7 @@ def _cmd_ingest(args):
 
 
 def _cmd_impact(args):
-    from .graph import build_graph, transitive_dependents
+    from .passes.graph_builder import build_graph, transitive_dependents
     from .discovery import find_repo_root
 
     root = find_repo_root()
@@ -507,7 +507,7 @@ def _cmd_impact(args):
 
 def _cmd_observe(args):
     from pathlib import Path
-    from .sessions import SessionManager
+    from .storage.session_manager import SessionManager
     from .discovery import find_repo_root
     from .visibility import format_observation_delta
 
@@ -529,7 +529,7 @@ def _cmd_observe(args):
 
         # Onboarding: mark first observation + increment counter
         try:
-            from .onboarding import mark_milestone, increment_counter
+            from .storage.onboarding import mark_milestone, increment_counter
             mark_milestone(root, "first_observation")
             increment_counter(root, "observations_recorded")
         except Exception:
@@ -555,7 +555,7 @@ def _cmd_observe(args):
         # Near-miss detection using structured warning pairs
         try:
             import subprocess
-            from .near_miss import (
+            from .storage.near_miss import (
                 detect_near_misses as detect_nms,
                 store_near_misses, load_session_scopes,
             )
@@ -618,7 +618,7 @@ def _cmd_observe(args):
 
 
 def _cmd_hook(args):
-    from .hooks import install_hook, uninstall_hook, is_hook_installed
+    from .storage.git_hooks import install_hook, uninstall_hook, is_hook_installed
     from .discovery import find_repo_root
 
     root = find_repo_root()
@@ -639,7 +639,7 @@ def _cmd_hook(args):
 
 
 def _cmd_backtest(args):
-    from .backtest import backtest_scopes, format_backtest_report
+    from .passes.backtest import backtest_scopes, format_backtest_report
     from .discovery import find_repo_root, find_all_scopes
     from .parser import parse_scope_file
 
@@ -665,7 +665,7 @@ def _cmd_backtest(args):
 
 def _cmd_utility(args):
     from .discovery import find_repo_root
-    from .sessions import SessionManager
+    from .storage.session_manager import SessionManager
     from .utility import compute_utility_scores
 
     root = find_repo_root()
@@ -699,8 +699,8 @@ def _cmd_utility(args):
 
 def _cmd_virtual(args):
     from .discovery import find_repo_root
-    from .graph import build_graph
-    from .virtual import detect_virtual_scopes, format_virtual_scopes
+    from .passes.graph_builder import build_graph
+    from .passes.virtual import detect_virtual_scopes, format_virtual_scopes
 
     root = find_repo_root()
     if root is None:
@@ -713,7 +713,7 @@ def _cmd_virtual(args):
 
 def _cmd_lessons(args):
     from .discovery import find_repo_root
-    from .sessions import SessionManager
+    from .storage.session_manager import SessionManager
     from .lessons import generate_lessons
 
     root = find_repo_root()
@@ -743,9 +743,9 @@ def _cmd_lessons(args):
 
 def _cmd_invariants(args):
     from .discovery import find_repo_root
-    from .graph import build_graph
+    from .passes.graph_builder import build_graph
     from .lessons import detect_invariants
-    from .history import analyze_history
+    from .passes.history_miner import analyze_history
 
     root = find_repo_root()
     if root is None:
@@ -779,10 +779,10 @@ def _cmd_invariants(args):
 
 def _cmd_rebuild(args):
     from .discovery import find_repo_root
-    from .sessions import SessionManager
+    from .storage.session_manager import SessionManager
     from .utility import rebuild_utility
     from .lessons import generate_lessons, save_lessons, detect_invariants, save_invariants
-    from .graph import build_graph
+    from .passes.graph_builder import build_graph
 
     root = find_repo_root()
     if root is None:
@@ -808,7 +808,7 @@ def _cmd_rebuild(args):
             print(f"  {mod}: {len(lessons)} lesson(s)")
 
     print("Rebuilding invariants...", file=sys.stderr)
-    from .history import analyze_history
+    from .passes.history_miner import analyze_history
     history = analyze_history(root, max_commits=500)
     for mod in all_modules:
         invariants = detect_invariants(graph.edges, mod, all_modules, history.commits_analyzed)
@@ -822,7 +822,7 @@ def _cmd_rebuild(args):
 def _cmd_check(args):
     import json as json_mod
     from .discovery import find_repo_root
-    from .check.checker import check_diff, check_staged, format_terminal
+    from .passes.sentinel.checker import check_diff, check_staged, format_terminal
 
     root = find_repo_root()
     if root is None:
@@ -890,7 +890,7 @@ def _cmd_check_backtest(root, n_commits, json_output):
     """Replay recent commits against checks to validate enforcement."""
     import json as json_mod
     import subprocess
-    from .check.checker import check_diff
+    from .passes.sentinel.checker import check_diff
 
     try:
         result = subprocess.run(
@@ -954,7 +954,7 @@ def _cmd_check_backtest(root, n_commits, json_output):
 
     # Onboarding: mark backtest milestone + show next step
     try:
-        from .onboarding import mark_milestone, next_step
+        from .storage.onboarding import mark_milestone, next_step
         state = mark_milestone(root, "first_backtest")
         ns = next_step(state)
         if ns:

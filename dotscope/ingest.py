@@ -10,8 +10,6 @@ This is how dotscope enters any codebase — not by asking humans to write
 
 import os
 import sys
-from dataclasses import dataclass, field
-
 from pathlib import Path
 from typing import List, Optional, Set, Tuple
 
@@ -19,36 +17,11 @@ from .absorber import AbsorptionResult, absorb_docs
 from .context import parse_context
 from .graph import DependencyGraph, ModuleBoundary, build_graph, transitive_dependents
 from .history import HistoryAnalysis, analyze_history
-from .models import BacktestReport, ScopeConfig, ScopesIndex, ScopeEntry
+from .models.core import ScopeConfig, ScopesIndex, ScopeEntry
+from .models.passes import IngestPlan, PlannedScope  # noqa: F401
+from .models.state import BacktestReport
 from .parser import serialize_scope
 from .tokens import estimate_scope_tokens
-
-
-@dataclass
-class IngestPlan:
-    """Plan for .scope files to be created."""
-    root: str
-    scopes: List["PlannedScope"] = field(default_factory=list)
-    index: Optional[ScopesIndex] = None
-    graph_summary: str = ""
-    history_summary: str = ""
-    backtest_summary: str = ""
-    # Structured data for discovery rendering
-    graph: Optional[DependencyGraph] = None
-    history: Optional[HistoryAnalysis] = None
-    backtest_report: Optional[BacktestReport] = None
-    virtual_scopes: List[ScopeConfig] = field(default_factory=list)
-    total_repo_files: int = 0
-    total_repo_tokens: int = 0
-
-
-@dataclass
-class PlannedScope:
-    """A .scope file to be created."""
-    directory: str  # Relative to root
-    config: ScopeConfig
-    confidence: float  # How confident we are in this scope boundary
-    signals: List[str]  # What signals contributed to this scope
 
 
 def ingest(

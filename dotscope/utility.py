@@ -10,27 +10,15 @@ rarely edited but frequently read always retain a base weight.
 
 import json
 import time
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .models import ObservationLog, SessionLog
+from .models.state import FileUtilityScore, ObservationLog, SessionLog  # noqa: F401
 
 
 BASE_UTILITY_WEIGHT = 0.5
 MAX_UTILITY_BONUS = 1.0
 MIN_SAMPLE_SIZE = 3
-
-
-@dataclass
-class FileUtilityScore:
-    """Utility score for a single file, derived from observations."""
-    path: str
-    resolve_count: int = 0       # Sessions that included this file
-    touch_count: int = 0         # Observations where this file was modified
-    utility_ratio: float = 0.0   # touch_count / resolve_count
-    last_touched: float = 0.0
-    last_resolved: float = 0.0
 
 
 def compute_utility_scores(
