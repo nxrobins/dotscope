@@ -2,7 +2,7 @@
 
 Your codebase has years of knowledge trapped in git history, scattered docs, and the heads of engineers who've moved on. AI agents see none of it. They start every task blind — reading the wrong files, missing hidden dependencies, breaking rules nobody told them about.
 
-dotscope fixes this. Point it at any codebase and it reverse-engineers the architectural knowledge into `.scope` files that agents read before they write a single line of code. Then it watches what actually happens, learns from every commit, and gets more accurate over time.
+dotscope fixes this. Point it at any codebase and it reverse-engineers the architectural knowledge into `.scope` files that agents read before they write a single line of code. Then it watches what actually happens, learns from every commit, enforces the rules, and tells you what it prevented.
 
 Two commands to start:
 
@@ -48,11 +48,11 @@ No configuration. No manual file writing. dotscope reads your dependency graph, 
 
 ---
 
-## Three things dotscope does that nothing else does
+## What dotscope does
 
-### 1. It gives agents the right context before they start
+### 1. Right context before the agent starts
 
-Every agent session starts cold. dotscope generates `.scope` files that tell the agent exactly which files matter, which to skip, and the architectural knowledge that isn't in the code — invariants, gotchas, hidden dependencies, stability warnings.
+Every agent session starts cold. dotscope generates `.scope` files that tell the agent which files matter, which to skip, and the architectural knowledge that isn't in the code.
 
 ```yaml
 # auth/.scope
@@ -66,16 +66,16 @@ context: |
   JWT tokens with 15-min access / 7-day refresh rotation.
   Session store is Redis. User model has soft deletes —
   never call .delete(), use .deactivate().
-related:
-  - payments/.scope
-  - api/.scope
+assertions:
+  ensure_includes: [models/user.py]
+  ensure_context_contains: ["soft deletes"]
 ```
 
-The `context` field is the part that matters most. It carries knowledge that doesn't exist anywhere in the code itself.
+The `context` field carries knowledge that doesn't exist in the code. The `assertions` field guarantees critical files are never silently dropped by token budgeting — if `models/user.py` can't fit, dotscope raises an error instead of serving incomplete context.
 
-### 2. It enforces the rules before mistakes happen
+### 2. Rule enforcement before mistakes happen
 
-dotscope knows your codebase's implicit contracts (from git history), anti-patterns (from scope context), dependency boundaries (from the import graph), and architectural direction (from your declared intents). It surfaces all of this as **constraints** — before the agent writes code, and again before it commits.
+dotscope surfaces constraints before the agent writes code, and validates changes before the agent commits.
 
 ```bash
 dotscope check
@@ -83,7 +83,6 @@ dotscope check
   HOLD  implicit_contract
     auth/tokens.py modified without api/auth_routes.py (82% co-change)
     Likely needs changes: validate_token(), refresh_handler()
-    -> Acknowledge: dotscope check --acknowledge contract_auth_tokens_api_a1b2c3
 
   NOTE  architectural_intent
     New import from payments/ in auth/handler.py
@@ -92,39 +91,57 @@ dotscope check
 dotscope: 1 hold, 1 note — address holds to proceed
 ```
 
-Holds come with fix proposals. Anti-pattern violations come with exact replacement diffs. The agent can apply them without thinking.
+Six check categories. Holds come with fix proposals. Anti-pattern violations come with exact replacement diffs.
 
-Declare where your codebase is headed:
+Declare architectural direction:
 
 ```bash
 dotscope intent add decouple auth/ payments/ --reason "Separate concerns"
-dotscope intent add freeze core/                # Changes require acknowledgment
+dotscope intent add freeze core/
 dotscope intent add deprecate utils/legacy.py --replacement utils/helpers.py
 ```
 
-Rules that are consistently wrong self-correct — acknowledged holds decay in confidence over time.
-
-### 3. It learns from every commit
+### 3. Learning from every commit
 
 Most tools generate once and rot. dotscope closes a feedback loop:
 
 ```
-Agent resolves a scope (the prediction)
+Agent resolves a scope (prediction)
   → Agent works, commits
-    → Post-commit hook records what actually happened (the observation)
-      → Utility scores update, constraints refine
+    → Post-commit hook records what actually happened (observation)
+      → Utility scores update, constraints refine, sessions freeze as regression tests
         → Next resolution is more accurate
 ```
 
-After enough observations, dotscope knows which files agents actually use (utility scoring), which patterns keep recurring (lessons), and which boundaries have never been crossed (invariants). It feeds all of this back into every subsequent resolution.
+At session end, dotscope shows what it prevented:
 
-Install with `dotscope hook install`.
+```
+── dotscope session ──────────────────────────────
+  3 scopes resolved · 4,200 tokens served (91% reduction)
+
+  What dotscope prevented:
+    Agent used .deactivate() instead of .delete() on User
+      ← auth/ scope context
+    Agent included webhook_handler.py alongside billing.py
+      ← implicit contract (73% co-change)
+───────────────────────────────────────────────────
+```
+
+### 4. Compiler-grade rigor
+
+dotscope treats context resolution like compilation. If it silently resolves wrong context, the agent doesn't crash — it writes subtly incorrect code and nobody knows why.
+
+**Assertions** guarantee critical files and context survive budget cuts. Violations are hard errors, not silent drops.
+
+**Regression suite** auto-freezes successful sessions as test cases. `dotscope test-compiler` replays them after algorithm changes — dropped files are regressions.
+
+**Benchmarking** proves it works with numbers: token efficiency, hold rate, compilation speed, scope health.
+
+**Context bisection** debugs bad sessions deterministically: `dotscope debug --last` bisects files, context, and constraints to find whether the issue was a resolution gap, constraint gap, agent ignoring context, or context conflict. Zero LLM calls.
 
 ---
 
-## What the agent actually receives
-
-Every `resolve_scope` call returns files, context, and structured metadata the agent weaves into its reasoning:
+## What the agent receives
 
 ```json
 {
@@ -149,17 +166,9 @@ Every `resolve_scope` call returns files, context, and structured metadata the a
 }
 ```
 
-**Constraints** — the rules. Contracts, anti-patterns, boundaries, intents. Prevention, not correction.
-
-**Attribution hints** — where the knowledge came from. Git history and hand-authored warnings carry different weight.
-
-**Accuracy** — how well this scope predicts what agents actually need. Self-reported. Auditable.
-
 ---
 
 ## MCP server
-
-The primary interface for agents. Every resolution is tracked.
 
 ```bash
 pip install dotscope[mcp]
@@ -174,35 +183,45 @@ dotscope-mcp
 }
 ```
 
-Tools: `resolve_scope`, `match_scope`, `get_context`, `impact_analysis`, `dotscope_check`, `dotscope_acknowledge`, `session_summary`, `suggest_scope_changes`.
+Tools: `resolve_scope`, `match_scope`, `get_context`, `impact_analysis`, `dotscope_check`, `dotscope_acknowledge`, `dotscope_debug`, `session_summary`.
 
 ## CLI
 
 ```bash
+# Context
 dotscope ingest .                          # Enter any codebase
 dotscope resolve auth --budget 4000        # Files + context within token budget
-dotscope resolve auth+payments             # Compose scopes (union, subtract, intersect)
-dotscope check                             # Validate staged changes against rules
-dotscope check --backtest                  # What would checks have caught?
+dotscope resolve auth+payments             # Compose scopes
+
+# Enforcement
+dotscope check                             # Validate staged changes
+dotscope check --backtest                  # Prove it catches real mistakes
 dotscope intent add freeze core/           # Declare architectural direction
-dotscope impact auth/tokens.py             # Blast radius before touching a file
-dotscope health                            # Staleness, drift, coverage gaps
+
+# Rigor
+dotscope test-compiler                     # Regression suite
+dotscope bench                             # Performance metrics
+dotscope debug --last                      # Bisect a bad session
+
+# Maintenance
+dotscope impact auth/tokens.py             # Blast radius
+dotscope health                            # Staleness, drift, coverage
 dotscope hook install                      # Start the feedback loop
 ```
 
 ## Docs
 
-- [How It Works](docs/how-it-works.md) — ingest pipeline, feedback loop, backtest validation
-- [The .scope File](docs/scope-file.md) — fields, editing, signal comments, the .scopes index
-- [MCP Server Setup](docs/mcp-setup.md) — Claude Desktop, Claude Code, Cursor, troubleshooting
+- [How It Works](docs/how-it-works.md) — ingest, enforcement, feedback loop, rigor
+- [The .scope File](docs/scope-file.md) — fields, assertions, anti-patterns, intent
+- [MCP Server Setup](docs/mcp-setup.md) — setup, all tools, troubleshooting
 
 ## Details
 
-**Zero dependencies** in the base install. Python 3.9+. Cross-platform (macOS, Linux, Windows). Optional extras: `mcp` for the agent server.
+**Zero dependencies** in the base install. Python 3.9+. Cross-platform. Optional extras: `mcp` for the agent server.
 
-**No lock-in.** `.scope` files are plain YAML. `.dotscope/` is gitignored and rebuildable from event logs via `dotscope rebuild`.
+**No lock-in.** `.scope` files are plain YAML. `.dotscope/` is gitignored and rebuildable via `dotscope rebuild`.
 
-**221 tests.** Every feature validated. Every edge case covered.
+**266 tests.** Every feature validated.
 
 **Lineage.** `.gitignore` → what to skip. `.env` → what to configure. `.scope` → what to understand.
 

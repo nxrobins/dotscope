@@ -75,6 +75,10 @@ Ask your agent: "What scopes are available?" It should call `list_scopes` and sh
 
 **`dotscope_acknowledge`** — Acknowledge a hold and proceed. Takes comma-separated IDs and a reason. Repeated acknowledgments decay the constraint's confidence.
 
+### Debugging
+
+**`dotscope_debug`** — Bisect a bad session to find root cause. Deterministic analysis of files, context, and constraints. Returns diagnosis (resolution_gap, constraint_gap, agent_ignored, context_conflict) with recommendations. If no session_id, debugs the most recent bad session.
+
 ### Session
 
 **`session_summary`** — Summary of the current session: scopes resolved, tokens served, constraints applied, counterfactuals (what dotscope prevented).
@@ -144,6 +148,27 @@ Ask your agent: "What scopes are available?" It should call `list_scopes` and sh
 ```
 
 Holds come with fix proposals. The agent can apply them or acknowledge and proceed.
+
+## Assertion Errors
+
+If a token budget can't fit an asserted file, `resolve_scope` returns an error instead of silently dropping it:
+
+```json
+{
+  "error": "context_exhaustion",
+  "assertion_failed": {
+    "type": "ensure_includes",
+    "detail": "Budget (4000) cannot fit required file: models/user.py (1200 tokens)",
+    "file": "models/user.py",
+    "file_tokens": 1200,
+    "budget": 4000,
+    "reason": "Auth scope is meaningless without the User model"
+  },
+  "suggestion": "Increase budget to at least 5200 tokens"
+}
+```
+
+The agent sees this and either increases its budget or reports the constraint to the developer. No silent corruption.
 
 ## Session Summary
 

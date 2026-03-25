@@ -104,6 +104,23 @@ anti_patterns:
 
 Anti-patterns are checked by `dotscope check` and surfaced as constraints in `resolve_scope`. They're the enforcement bridge between prose context ("never call .delete()") and machine-verifiable rules.
 
+### `assertions`
+
+Compiler-grade guarantees that survive token budgeting. Asserted files get infinite utility — they're selected first, unconditionally. If they don't fit the budget, dotscope raises a hard error instead of serving incomplete context.
+
+```yaml
+assertions:
+  ensure_includes: [models/user.py]
+  ensure_context_contains: ["soft deletes", ".deactivate()"]
+```
+
+Three types:
+- `ensure_includes` — these files must be in the resolved file list
+- `ensure_context_contains` — these substrings must appear in the context
+- `ensure_constraints` — the resolve response must include constraints
+
+Assertions can also be defined project-wide in `intent.yaml` with a `scope` field for targeting.
+
 ### `related`
 
 Other scopes frequently relevant alongside this one. Generated from imports and co-change patterns.

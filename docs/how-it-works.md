@@ -133,22 +133,106 @@ dotscope tracks milestones in `.dotscope/onboarding.json` and prints one next st
 
 Complexity is gated: counterfactuals appear after 3+ observations, health nudges after 7+ days. Each prompt appears once.
 
+## Compiler Rigor
+
+dotscope treats context resolution like compilation. Four features prevent silent corruption:
+
+### Architectural Assertions
+
+Critical files and context can be declared non-negotiable:
+
+```yaml
+# In intent.yaml (project-wide)
+assertions:
+  - scope: auth/
+    ensure_includes: [models/user.py]
+    reason: "Auth scope is meaningless without the User model"
+
+# In .scope files (per-scope)
+assertions:
+  ensure_includes: [models/user.py]
+  ensure_context_contains: ["soft deletes"]
+```
+
+Asserted files get infinite utility in the budgeting algorithm — they're selected first, unconditionally. If the budget can't fit them, dotscope raises a `ContextExhaustionError` instead of silently dropping critical context. Same as a compiler error.
+
+Three types: `ensure_includes` (files must be present), `ensure_context_contains` (substrings in context), `ensure_constraints` (constraints field must be populated).
+
+### Observation Regression Suite
+
+Successful agent sessions (recall ≥ 80%) are automatically frozen as test cases in `.dotscope/regressions/`. When dotscope's algorithms change, replay them:
+
+```bash
+dotscope test-compiler
+
+  regression_a1b2c3  auth (budget 4000)
+    Files: 3/3 same  OK
+
+  regression_j0k1l2  api (budget 3000)
+    REGRESSION: models/request.py no longer resolved
+
+  46/47 passed · 1 regression detected
+```
+
+If a file that previously led to a successful commit is no longer resolved under the same conditions, that's a regression.
+
+### Benchmarking
+
+```bash
+dotscope bench
+
+  Token Efficiency
+    Efficiency ratio: 73.8%
+
+  Hold Rate
+    Effective hold rate: 10.6%
+
+  Compilation Speed
+    Median resolve: 12ms, P95: 34ms
+
+  Scope Health
+    Scopes with >80% recall: 9/12
+```
+
+Four metrics from stored data: token efficiency (served vs used), hold rate (catches minus false positives), compilation speed (instrumented timing), scope health (recall + staleness).
+
+### Context Bisection
+
+When an agent writes bad code, `dotscope debug` finds out why — deterministically, with zero LLM calls:
+
+```bash
+dotscope debug --last
+
+  File Bisection
+    Files that mattered: auth/handler.py, models/user.py
+    Missing files: cache/sessions.py
+
+  Constraints Violated
+    auth/handler.py ↔ cache/sessions.py (73% co-change)
+
+  Diagnosis: resolution_gap
+    -> Add cache/sessions.py to scope includes
+    -> Consider increasing budget from 4000 to 6000
+```
+
+Four diagnosis categories: resolution gap (dotscope didn't serve something needed), constraint gap (a rule should have existed), agent ignored context (right info served, agent didn't use it), context conflict (contradictory guidance).
+
 ## What's in `.dotscope/`
 
-The `.dotscope/` directory stores runtime state. Gitignored. Fully rebuildable via `dotscope rebuild`.
+Runtime state. Gitignored. Fully rebuildable via `dotscope rebuild`.
 
 ```
 .dotscope/
   history.json           # Cached implicit contracts, stabilities, hotspots
   graph_hubs.json        # Cached cross-cutting hub analysis
-  invariants.json        # Contracts, function co-changes, file stabilities (for enforcement)
+  invariants.json        # Contracts, function co-changes, file stabilities
   sessions/              # Per-session JSON files (predictions)
   observations/          # Observation events from post-commit hooks
+  regressions/           # Frozen successful sessions (regression test cases)
   near_misses.jsonl      # Detected near-misses
   utility_scores.json    # Per-file utility scores
+  timings.jsonl          # Operation timing data (resolve, check, ingest)
   acknowledgments.jsonl  # Acknowledged holds with reasons
   onboarding.json        # Milestone tracking for stage-aware prompts
   last_session.json      # Scopes resolved in most recent session
 ```
-
-`dotscope rebuild` regenerates everything from the event logs.
