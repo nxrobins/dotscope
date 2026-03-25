@@ -451,6 +451,7 @@ def _cmd_impact(args):
 def _cmd_observe(args):
     from .sessions import SessionManager
     from .discovery import find_repo_root
+    from .visibility import format_observation_delta
 
     root = find_repo_root()
     if root is None:
@@ -460,10 +461,45 @@ def _cmd_observe(args):
     obs = mgr.record_observation(args.commit)
 
     if obs:
-        print(f"Observed: {obs.commit_hash[:8]} → session {obs.session_id}")
-        print(f"  Recall: {obs.recall:.0%}  Precision: {obs.precision:.0%}")
-        if obs.touched_not_predicted:
-            print(f"  Scope gaps: {', '.join(obs.touched_not_predicted[:5])}")
+        # Find the session to get scope_expr
+        sessions = mgr.get_sessions(limit=50)
+        scope_expr = "unknown"
+        for s in sessions:
+            if s.session_id == obs.session_id:
+                scope_expr = s.scope_expr
+                break
+
+        delta = format_observation_delta(obs, scope_expr)
+        try:
+            print(delta)
+        except UnicodeEncodeError:
+            print(delta.encode("ascii", errors="replace").decode("ascii"))
+
+        # Near-miss detection on successful predictions
+        if not obs.touched_not_predicted:
+            try:
+                import subprocess
+                from .visibility import detect_near_misses
+                from .discovery import find_scope
+                from .parser import parse_scope_file
+
+                scope_cfg = find_scope(scope_expr.split("+")[0].split("-")[0], root=root)
+                if scope_cfg:
+                    config = parse_scope_file(scope_cfg)
+                    diff_result = subprocess.run(
+                        ["git", "diff", obs.commit_hash + "~1", obs.commit_hash],
+                        cwd=root, capture_output=True, text=True, timeout=5,
+                    )
+                    if diff_result.returncode == 0:
+                        nms = detect_near_misses(
+                            config.context_str, diff_result.stdout, scope_expr,
+                        )
+                        for nm in nms:
+                            print(f"\ndotscope: near-miss detected")
+                            print(f"  {nm['scope_context_used']}")
+                            print(f"  {nm['potential_impact']}")
+            except Exception:
+                pass  # Near-miss detection is best-effort
     else:
         print(f"No matching session for commit {args.commit[:8]}")
 

@@ -43,6 +43,10 @@ def main():
         ),
     )
 
+    # Session-level tracker (lives across tool calls in a single MCP session)
+    from .visibility import SessionTracker
+    tracker = SessionTracker()
+
     @mcp.tool()
     def resolve_scope(
         scope: str,
@@ -120,39 +124,98 @@ def main():
 
         output = format_resolved(resolved, fmt=format, root=root)
 
-        # Wire 2: inject scope_accuracy metadata into JSON responses
-        if format == "json" and dot_dir and dot_dir.exists():
+        # Enrich JSON responses with visibility metadata
+        if format == "json":
             try:
-                from .sessions import SessionManager
-                mgr = SessionManager(root)
-                sessions = mgr.get_sessions(limit=200)
-                scope_session_ids = {
-                    s.session_id for s in sessions if scope in s.scope_expr
-                }
-                observations = [
-                    o for o in mgr.get_observations(limit=200)
-                    if o.session_id in scope_session_ids
-                ]
-                if observations:
-                    recalls = [o.recall for o in observations]
-                    precisions = [o.precision for o in observations]
-                    recent = recalls[-5:] if len(recalls) >= 5 else recalls
-                    older = recalls[:-5] if len(recalls) > 5 else []
-                    trend = (
-                        "improving"
-                        if older and sum(recent) / len(recent) > sum(older) / len(older)
-                        else "stable"
-                    )
-                    data = json.loads(output)
-                    data["scope_accuracy"] = {
-                        "observations": len(observations),
-                        "avg_recall": round(sum(recalls) / len(recalls), 3),
-                        "avg_precision": round(sum(precisions) / len(precisions), 3),
-                        "trend": trend,
+                data = json.loads(output)
+
+                # Feature 2: Attribution hints + source signals
+                from .visibility import (
+                    extract_attribution_hints, compute_source_signals,
+                    build_recent_learning, check_health_nudges,
+                )
+                data["attribution_hints"] = extract_attribution_hints(
+                    resolved.context
+                )
+                data["source_signals"] = compute_source_signals(
+                    resolved.context
+                )
+
+                # Track for session summary
+                token_count = data.get("token_count", 0)
+                has_contracts = "implicit contract" in resolved.context.lower()
+                tracker.record_resolve(token_count, 0, has_contracts)
+
+                # Features 2-5 require observation data
+                if dot_dir and dot_dir.exists():
+                    from .sessions import SessionManager
+                    mgr = SessionManager(root)
+                    sessions = mgr.get_sessions(limit=200)
+                    scope_session_ids = {
+                        s.session_id for s in sessions
+                        if scope in s.scope_expr
                     }
-                    output = json.dumps(data, indent=2)
+                    observations = [
+                        o for o in mgr.get_observations(limit=200)
+                        if o.session_id in scope_session_ids
+                    ]
+
+                    # Wire 2: scope_accuracy
+                    if observations:
+                        recalls = [o.recall for o in observations]
+                        precisions = [o.precision for o in observations]
+                        recent_r = recalls[-5:] if len(recalls) >= 5 else recalls
+                        older_r = recalls[:-5] if len(recalls) > 5 else []
+                        trend = (
+                            "improving"
+                            if older_r and sum(recent_r) / len(recent_r) > sum(older_r) / len(older_r)
+                            else "stable"
+                        )
+                        data["scope_accuracy"] = {
+                            "observations": len(observations),
+                            "avg_recall": round(sum(recalls) / len(recalls), 3),
+                            "avg_precision": round(sum(precisions) / len(precisions), 3),
+                            "trend": trend,
+                        }
+
+                    # Feature 3: Recent learning
+                    learning = build_recent_learning(observations, scope)
+                    if learning:
+                        data["recent_learning"] = learning
+
+                    # Feature 4: Health nudges
+                    nudges = check_health_nudges(observations, scope)
+                    if nudges:
+                        data["health_warnings"] = nudges
+
+                    # Feature 5: Near-misses (from most recent observation)
+                    if observations:
+                        latest_obs = observations[-1]
+                        if latest_obs.touched_not_predicted == []:
+                            # Agent got all files right — check for near-misses
+                            try:
+                                import subprocess
+                                from .visibility import detect_near_misses
+                                diff_result = subprocess.run(
+                                    ["git", "diff", latest_obs.commit_hash + "~1",
+                                     latest_obs.commit_hash],
+                                    cwd=root, capture_output=True, text=True,
+                                    timeout=5,
+                                )
+                                if diff_result.returncode == 0:
+                                    nms = detect_near_misses(
+                                        resolved.context,
+                                        diff_result.stdout,
+                                        scope,
+                                    )
+                                    if nms:
+                                        data["near_misses"] = nms
+                            except Exception:
+                                pass
+
+                output = json.dumps(data, indent=2)
             except Exception:
-                pass  # Accuracy metadata is best-effort
+                pass  # Visibility metadata is best-effort, never blocks
 
         return output
 
@@ -646,6 +709,21 @@ def main():
             "suggest_add": add,
             "suggest_deprioritize": deprioritize,
         }, indent=2)
+
+    @mcp.tool()
+    def session_summary() -> str:
+        """Get a summary of the current MCP session's dotscope usage.
+
+        Call this at the end of a task to see how many scopes were resolved,
+        tokens served, and reduction achieved. Helps the developer understand
+        what dotscope contributed to the session.
+        """
+        summary = tracker.summary()
+        # Also print to stderr for terminal visibility
+        terminal = tracker.format_terminal()
+        if terminal:
+            print(terminal, file=sys.stderr)
+        return json.dumps(summary, indent=2)
 
     mcp.run(transport="stdio")
 
