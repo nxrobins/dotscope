@@ -45,23 +45,54 @@ dotscope scanned 43 files across 7 modules.
 
 Every agent session starts cold. No memory of why things are the way they are, what's fragile, what's safe to change.
 
-dotscope generates `.scope` files that declare what an agent should understand about each part of your codebase: which files matter, which to skip, and the architectural knowledge that isn't in the code. It builds these from your dependency graph, git history, and existing docs. No configuration required.
+dotscope generates `.scope` files from your dependency graph, git history, and existing docs. Each one declares what an agent should understand about a module: which files matter, which to skip, and the architectural knowledge that isn't in the code. No configuration required.
 
-Then it validates its own output against your commit history and tells you how accurate it is.
+Then it watches what actually happens. After every commit, it compares its prediction to reality, updates utility scores, and gets more accurate over time.
 
-## Why it keeps getting better
+## What the agent sees
 
-Most tools stop at generation. dotscope closes a feedback loop:
+Every `resolve_scope` response includes visibility metadata the agent naturally weaves into its reasoning:
+
+```json
+{
+  "files": ["auth/handler.py", "auth/tokens.py", "models/user.py"],
+  "context": "JWT tokens with 15-min access / 7-day refresh...",
+  "token_count": 1420,
+
+  "attribution_hints": [
+    { "hint": "billing.py and webhook_handler.py have 73% co-change rate", "source": "git_history" },
+    { "hint": "Never call .delete() on User, use .deactivate()", "source": "hand_authored" }
+  ],
+
+  "accuracy": {
+    "observations": 12, "avg_recall": 0.91, "trend": "improving",
+    "last_observation": "2h ago", "lessons_applied": 3
+  },
+
+  "health_warnings": [],
+  "near_misses": []
+}
+```
+
+**Attribution hints** tell the agent *what matters most* and *where the knowledge came from* — git history analysis vs hand-authored warnings vs graph structure. Different credibility registers for different knowledge types.
+
+**Accuracy** tracks how well this scope predicts what agents actually need. Trend tells you if it's getting better or worse.
+
+**Health warnings** fire when a scope degrades: accuracy dropped >15%, scope file >30 days stale, or uncovered files appeared.
+
+**Near-misses** surface after a commit where the agent avoided an anti-pattern that the scope warned against. The disaster that didn't happen.
+
+## The feedback loop
 
 ```
 Agent resolves a scope (prediction)
   → Agent works, commits
     → Post-commit hook records what actually happened (observation)
-      → Utility scores update, lessons generated
+      → Utility scores update, near-misses detected
         → Next resolution is more accurate
 ```
 
-Install the hook with `dotscope hook install`. Scopes that start as documentation become intelligence.
+Install with `dotscope hook install`. Scopes that start as documentation become intelligence.
 
 ## The .scope file
 
@@ -85,7 +116,7 @@ related:
   - api/.scope
 ```
 
-The `context` field is the part that matters. It carries knowledge that doesn't exist anywhere in the code itself. dotscope populates it from implicit contracts, stability profiles, docstrings, and signal comments. You can edit it by hand.
+The `context` field carries knowledge that doesn't exist anywhere in the code. dotscope populates it from implicit contracts, stability profiles, docstrings, and signal comments. You can edit it by hand.
 
 ## MCP server
 
@@ -104,9 +135,9 @@ dotscope-mcp
 }
 ```
 
-Key tools: `resolve_scope`, `match_scope`, `get_context`, `impact_analysis`, `scope_observations`, `suggest_scope_changes`. [Full reference →](docs/reference.md)
+Key tools: `resolve_scope`, `match_scope`, `get_context`, `impact_analysis`, `session_summary`, `suggest_scope_changes`.
 
-## CLI quick reference
+## CLI
 
 ```bash
 dotscope ingest .                          # Enter any codebase
@@ -117,17 +148,16 @@ dotscope resolve auth@context              # Knowledge only, no files
 dotscope impact auth/tokens.py             # Blast radius
 dotscope health                            # Staleness, drift, coverage gaps
 dotscope backtest --commits 500            # Validate against history
+dotscope hook install                      # Start the feedback loop
 ```
-
-[Full CLI reference →](docs/reference.md)
 
 ## Details
 
-**Zero dependencies** in the base install. Python 3.9+. Optional extras: `mcp` for the agent server, `tokens` for accurate token counting.
+**Zero dependencies** in the base install. Python 3.9+. Cross-platform (macOS, Linux, Windows). Optional extras: `mcp` for the agent server.
 
-**No lock-in.** `.scope` files are plain YAML. The `.dotscope/` state directory is gitignored and fully rebuildable from event logs via `dotscope rebuild`.
+**No lock-in.** `.scope` files are plain YAML. `.dotscope/` is gitignored and rebuildable via `dotscope rebuild`.
 
-**Lineage.** `.gitignore` tells git what to skip. `.env` tells your app what to configure. `.scope` tells your agent what to understand.
+**Lineage.** `.gitignore` → what to skip. `.env` → what to configure. `.scope` → what to understand.
 
 ## License
 
