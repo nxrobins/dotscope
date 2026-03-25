@@ -15,7 +15,7 @@ import os
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set
 
 from .context import parse_context
 from .graph import DependencyGraph
@@ -188,7 +188,7 @@ def _deduplicate(clusters: List[VirtualScope]) -> List[VirtualScope]:
     return result
 
 
-def _cluster_to_scope(cluster: VirtualScope, root: str) -> ScopeConfig | None:
+def _cluster_to_scope(cluster: VirtualScope, root: str) -> Optional[ScopeConfig]:
     """Convert a virtual scope cluster to a ScopeConfig."""
     if not cluster.files or not cluster.name:
         return None

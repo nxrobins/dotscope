@@ -390,7 +390,12 @@ def _cmd_ingest(args):
         dry_run=args.dry_run,
     )
 
-    print(format_ingest_report(plan))
+    report = format_ingest_report(plan)
+    try:
+        print(report)
+    except UnicodeEncodeError:
+        # Windows terminals with cp1252 — write as safe ASCII
+        print(report.encode("ascii", errors="replace").decode("ascii"))
 
     if args.dry_run:
         print("Dry run — no files written. Remove --dry-run to write scope files.")

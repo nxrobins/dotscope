@@ -11,13 +11,15 @@ This is how dotscope enters any codebase — not by asking humans to write
 import os
 import sys
 from dataclasses import dataclass, field
-from typing import List, Optional
+
+from pathlib import Path
+from typing import List, Optional, Set, Tuple
 
 from .absorber import AbsorptionResult, absorb_docs
 from .context import parse_context
-from .graph import DependencyGraph, ModuleBoundary, build_graph
+from .graph import DependencyGraph, ModuleBoundary, build_graph, transitive_dependents
 from .history import HistoryAnalysis, analyze_history
-from .models import ScopeConfig, ScopesIndex, ScopeEntry
+from .models import BacktestReport, ScopeConfig, ScopesIndex, ScopeEntry
 from .parser import serialize_scope
 from .tokens import estimate_scope_tokens
 
@@ -31,6 +33,13 @@ class IngestPlan:
     graph_summary: str = ""
     history_summary: str = ""
     backtest_summary: str = ""
+    # Structured data for discovery rendering
+    graph: Optional[DependencyGraph] = None
+    history: Optional[HistoryAnalysis] = None
+    backtest_report: Optional[BacktestReport] = None
+    virtual_scopes: List[ScopeConfig] = field(default_factory=list)
+    total_repo_files: int = 0
+    total_repo_tokens: int = 0
 
 
 @dataclass
@@ -73,6 +82,12 @@ def ingest(
     # Step 1: Dependency graph
     print("Analyzing dependency graph...", file=sys.stderr)
     graph = build_graph(root)
+    plan.graph = graph
+    plan.total_repo_files = len(graph.files)
+    plan.total_repo_tokens = sum(
+        estimate_scope_tokens([os.path.join(root, p)])
+        for p in graph.files
+    )
     from .graph import format_graph_summary
     plan.graph_summary = format_graph_summary(graph)
 
@@ -83,6 +98,7 @@ def ingest(
         history = analyze_history(root, max_commits=max_commits)
         from .history import format_history_summary
         plan.history_summary = format_history_summary(history)
+    plan.history = history
 
     # Step 3: Doc absorption (with AST data if available)
     docs = AbsorptionResult()
@@ -101,6 +117,7 @@ def ingest(
     print("Detecting virtual scopes...", file=sys.stderr)
     from .virtual import detect_virtual_scopes
     virtual_scopes = detect_virtual_scopes(graph)
+    plan.virtual_scopes = virtual_scopes
     for vs in virtual_scopes:
         plan.scopes.append(PlannedScope(
             directory=f"virtual/{vs.description.split('(')[0].strip().split(':')[-1].strip()}",
@@ -140,6 +157,7 @@ def ingest(
             report = backtest_scopes(root, configs, n_commits=min(max_commits, 50))
 
         plan.backtest_summary = format_backtest_report(report)
+        plan.backtest_report = report
 
     # Build .scopes index
     plan.index = _build_index(plan.scopes)
@@ -215,16 +233,10 @@ def _synthesize_scope(
     # --- Excludes ---
     excludes = _default_excludes(directory, module.files)
 
-    # --- Context ---
+    # --- Context (priority: contracts → stability → docs → deps → recent → transitive) ---
     context_parts = []
 
-    # From absorbed docs
-    doc_context = docs.synthesize_context(directory, max_chars=1500)
-    if doc_context:
-        context_parts.append(doc_context)
-        signals.append(f"docs: absorbed {len(docs.for_module(directory))} fragments")
-
-    # From implicit contracts
+    # 1. Implicit contracts FIRST — the thing nobody documented
     relevant_contracts = [
         ic for ic in history.implicit_contracts
         if ic.trigger_file.startswith(directory + "/")
@@ -236,22 +248,7 @@ def _synthesize_scope(
             context_parts.append(f"- {ic.description}")
         signals.append(f"history: {len(relevant_contracts)} implicit contracts")
 
-    # From recent changes
-    recent = history.recent_summaries.get(directory, [])
-    if recent:
-        context_parts.append("## Recent Changes")
-        for msg in recent[:5]:
-            context_parts.append(f"- {msg}")
-
-    # Dependency context
-    if module.external_deps:
-        context_parts.append("## Dependencies")
-        context_parts.append(f"This module imports from: {', '.join(module.external_deps)}")
-    if module.depended_on_by:
-        context_parts.append(f"This module is used by: {', '.join(module.depended_on_by)}")
-        context_parts.append("Changes here may affect downstream consumers.")
-
-    # Stability per file (from weighted history)
+    # 2. Stability profiles — which files are fragile
     stability_lines = []
     for f in module.files:
         fh = history.file_histories.get(f)
@@ -264,32 +261,51 @@ def _synthesize_scope(
         context_parts.append("## Stability")
         context_parts.extend(stability_lines[:10])
 
-    # Transitive dependency chain (if deeper than 1 hop)
+    # 3. Absorbed docs — READMEs, docstrings, signal comments
+    doc_context = docs.synthesize_context(directory, max_chars=1500)
+    if doc_context:
+        context_parts.append(doc_context)
+        signals.append(f"docs: absorbed {len(docs.for_module(directory))} fragments")
+
+    # 4. Dependencies + structural
+    if module.external_deps:
+        context_parts.append("## Dependencies")
+        context_parts.append(f"This module imports from: {', '.join(module.external_deps)}")
+    if module.depended_on_by:
+        context_parts.append(f"This module is used by: {', '.join(module.depended_on_by)}")
+        context_parts.append("Changes here may affect downstream consumers.")
+
+    # 5. Recent changes
+    recent = history.recent_summaries.get(directory, [])
+    if recent:
+        context_parts.append("## Recent Changes")
+        for msg in recent[:5]:
+            context_parts.append(f"- {msg}")
+
+    # 6. Transitive dependency chain (if deeper than 1 hop)
     from .graph import transitive_deps as _transitive_deps
-    deep_deps = set()
+    deep_deps: Set[str] = set()
     for f in module.files:
         for dep in _transitive_deps(graph, f):
             dep_parts = dep.split("/")
             if len(dep_parts) > 1 and dep_parts[0] != directory:
                 deep_deps.add(dep)
     if deep_deps:
-        direct = set()
+        direct: Set[str] = set()
         for dep in module.external_deps:
-            direct.update(
-                d for d in deep_deps if d.startswith(dep + "/")
-            )
+            direct.update(d for d in deep_deps if d.startswith(dep + "/"))
         transitive_only = deep_deps - direct
         if transitive_only:
             context_parts.append("## Transitive Dependencies")
             for dep in sorted(transitive_only)[:5]:
                 context_parts.append(f"- {dep} (indirect)")
 
-    # If no context was gathered, add a TODO
+    # 7. NEVER TODO. If empty, synthesize from graph structure.
     if not context_parts:
         context_parts.append(
-            "# TODO: Add architectural context here.\n"
-            "# What invariants does this module maintain?\n"
-            "# What gotchas should an agent know about?"
+            f"{directory} module — {file_count} files, "
+            f"cohesion {module.cohesion:.0%}, "
+            f"{len(module.external_deps)} external dependencies."
         )
 
     context_str = "\n".join(context_parts)
@@ -455,42 +471,278 @@ def _serialize_index(index: ScopesIndex) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _use_unicode() -> bool:
+    """Check if stdout can handle Unicode (emoji, box-drawing)."""
+    import io
+    enc = getattr(sys.stdout, "encoding", None) or ""
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        enc = sys.stdout.encoding or ""
+    return enc.lower().replace("-", "") in ("utf8", "utf16", "utf32", "utf8sig")
+
+
+# Glyph sets: Unicode vs ASCII-safe fallbacks
+_GLYPHS_UNICODE = {
+    "discoveries": "\u26a1 Discoveries",
+    "validation": "\U0001f4ca Validation",
+    "created": "\U0001f4c1 Created",
+    "bar_full": "\u2588",
+    "bar_empty": "\u2591",
+    "arrow": "\u2192",
+    "dash": "\u2014",
+    "attention": "\u2190 needs attention",
+}
+_GLYPHS_ASCII = {
+    "discoveries": ">> Discoveries",
+    "validation": ">> Validation",
+    "created": ">> Created",
+    "bar_full": "#",
+    "bar_empty": ".",
+    "arrow": "->",
+    "dash": "--",
+    "attention": "<- needs attention",
+}
+
+
+def _glyphs() -> dict:
+    """Return the appropriate glyph set for the current terminal."""
+    return _GLYPHS_UNICODE if _use_unicode() else _GLYPHS_ASCII
+
+
 def format_ingest_report(plan: IngestPlan) -> str:
-    """Format a human-readable report of the ingest plan."""
-    lines = [
-        f"Ingest Report for {os.path.basename(plan.root)}/",
-        "=" * 50,
-        "",
-    ]
+    """Format the discovery-first ingest report."""
+    g = _glyphs()
+    lines = []
 
-    if plan.graph_summary:
-        lines.append(plan.graph_summary)
-        lines.append("")
-
-    if plan.history_summary:
-        lines.append(plan.history_summary)
-        lines.append("")
-
-    if plan.backtest_summary:
-        lines.append(plan.backtest_summary)
-        lines.append("")
-
-    lines.append(f"Planned {len(plan.scopes)} scope file(s):")
+    # --- Header ---
+    real_scopes = [s for s in plan.scopes if not s.directory.startswith("virtual/")]
+    module_count = len(real_scopes)
+    lines.append(
+        f"dotscope scanned {plan.total_repo_files} files "
+        f"across {module_count} modules."
+    )
     lines.append("")
 
-    for ps in plan.scopes:
-        conf_bar = "█" * int(ps.confidence * 10) + "░" * (10 - int(ps.confidence * 10))
-        lines.append(
-            f"  {ps.directory}/.scope — confidence: {conf_bar} {ps.confidence:.0%}"
-        )
-        lines.append(f"    {ps.config.description}")
-        lines.append(f"    includes: {len(ps.config.includes)} path(s), "
-                      f"~{ps.config.tokens_estimate:,} tokens")
-        if ps.signals:
-            for sig in ps.signals:
-                lines.append(f"    signal: {sig}")
-        if ps.config.related:
-            lines.append(f"    related: {', '.join(ps.config.related)}")
+    # --- Section 1: Discoveries ---
+    discoveries = _extract_discoveries(plan, g)
+    if discoveries:
+        lines.append(g["discoveries"])
         lines.append("")
+        lines.extend(discoveries)
+
+    # --- Section 2: Validation ---
+    validation = _extract_validation(plan, g)
+    if validation:
+        lines.append(g["validation"])
+        lines.append("")
+        lines.extend(validation)
+
+    # --- Section 3: Files created ---
+    lines.append(f"{g['created']} {len(real_scopes)} .scope files + .scopes index")
+    lines.append("")
+    lines.append("  Try it:  dotscope resolve <module>")
+    lines.append("  See it:  dotscope resolve <module> --json --budget 4000")
+    lines.append("  Trust it: dotscope backtest --commits 500")
 
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Discovery extraction helpers
+# ---------------------------------------------------------------------------
+
+
+def _is_cross_module(file_a: str, file_b: str) -> bool:
+    """True if two files are in different top-level directories."""
+    dir_a = file_a.split("/")[0] if "/" in file_a else ""
+    dir_b = file_b.split("/")[0] if "/" in file_b else ""
+    return dir_a != dir_b and bool(dir_a) and bool(dir_b)
+
+
+def _find_hub_discoveries(
+    graph: DependencyGraph,
+) -> List[Tuple[str, int, int, int]]:
+    """Find files with high import fan-in across multiple modules.
+
+    Returns: [(path, importer_count, directory_count, blast_radius)]
+    """
+    results = []
+    for path, node in graph.files.items():
+        if not node.imported_by:
+            continue
+        importer_dirs: Set[str] = set()
+        for imp_by in node.imported_by:
+            parts = Path(imp_by).parts
+            if len(parts) > 1:
+                importer_dirs.add(parts[0])
+
+        if len(node.imported_by) >= 3 and len(importer_dirs) >= 2:
+            blast = transitive_dependents(graph, path)
+            results.append((
+                path,
+                len(node.imported_by),
+                len(importer_dirs),
+                len(blast) + 1,  # +1 for the file itself
+            ))
+
+    results.sort(key=lambda x: -x[1])
+    return results
+
+
+# Directories an engineer expects to be stable
+_EXPECTED_STABLE = {
+    "config", "configs", "settings", "constants",
+    "migrations", "fixtures", "static",
+}
+
+
+def _find_volatility_surprises(
+    history: HistoryAnalysis,
+) -> List[Tuple[str, "FileHistory"]]:
+    """Files classified volatile that live in directories expected to be stable."""
+    from .history import FileHistory  # noqa: F811 — type hint only
+
+    surprises: List[Tuple[str, FileHistory]] = []
+    for path, fh in history.file_histories.items():
+        if fh.stability != "volatile":
+            continue
+        parts = path.split("/")
+        if len(parts) > 1 and parts[0].lower() in _EXPECTED_STABLE:
+            surprises.append((path, fh))
+
+    # Also include the repo's most-changed file if high churn
+    if history.hotspots:
+        top_path, _top_churn = history.hotspots[0]
+        top_fh = history.file_histories.get(top_path)
+        if top_fh and top_fh.commit_count >= 10:
+            if not any(p == top_path for p, _ in surprises):
+                surprises.insert(0, (top_path, top_fh))
+
+    surprises.sort(key=lambda x: -x[1].total_lines_changed)
+    return surprises
+
+
+def _extract_discoveries(plan: IngestPlan, g: Optional[dict] = None) -> List[str]:
+    """Extract surprising findings from history, graph, and docs."""
+    if g is None:
+        g = _glyphs()
+    lines: List[str] = []
+    history = plan.history
+    graph = plan.graph
+
+    # --- Hidden dependencies (cross-module implicit contracts) ---
+    if history and history.implicit_contracts:
+        cross_module = [
+            ic for ic in history.implicit_contracts
+            if _is_cross_module(ic.trigger_file, ic.coupled_file)
+            and ic.confidence >= 0.65
+        ]
+        if cross_module:
+            lines.append(
+                f"  Hidden dependencies "
+                f"(from {history.commits_analyzed} commits of git history):"
+            )
+            for ic in cross_module[:5]:
+                trigger = os.path.basename(ic.trigger_file)
+                coupled = os.path.basename(ic.coupled_file)
+                if trigger == coupled:
+                    trigger = ic.trigger_file
+                    coupled = ic.coupled_file
+                lines.append(
+                    f"    {trigger} {g['arrow']} {coupled}"
+                    f"    {ic.confidence:.0%} co-change, undocumented"
+                )
+            lines.append("")
+
+    # --- Cross-cutting hubs (from graph analysis) ---
+    if graph:
+        hubs = _find_hub_discoveries(graph)
+        if hubs:
+            for hub_path, importer_count, dir_count, blast_radius in hubs[:3]:
+                lines.append("  Cross-cutting hub:")
+                lines.append(
+                    f"    {hub_path} is imported by "
+                    f"{importer_count} files across {dir_count} modules"
+                )
+                if blast_radius > importer_count:
+                    lines.append(
+                        f"    A change here affects "
+                        f"{blast_radius} files transitively"
+                    )
+            lines.append("")
+
+    # --- Volatility surprises ---
+    if history and history.file_histories:
+        surprises = _find_volatility_surprises(history)
+        if surprises:
+            lines.append("  Volatility surprise:")
+            for path, fh in surprises[:3]:
+                lines.append(
+                    f"    {path} {g['dash']} {fh.commit_count} commits, "
+                    f"{fh.total_lines_changed} lines changed"
+                )
+            # Annotate if top file has no scope covering it
+            if surprises:
+                top_path = surprises[0][0]
+                has_scope = any(
+                    top_path.startswith(s.directory + "/")
+                    for s in plan.scopes
+                )
+                if not has_scope:
+                    lines.append(
+                        "    Most changed file in the repo. "
+                        "No .scope context exists for it."
+                    )
+            lines.append("")
+
+    return lines
+
+
+def _extract_validation(plan: IngestPlan, g: Optional[dict] = None) -> List[str]:
+    """Extract validation stats: backtest recall + token reduction."""
+    if g is None:
+        g = _glyphs()
+    lines: List[str] = []
+    report = plan.backtest_report
+
+    if not report or report.total_commits == 0:
+        return lines
+
+    lines.append(
+        f"  Backtested against {report.total_commits} recent commits:"
+    )
+    lines.append(
+        f"  Overall recall: {report.overall_recall:.0%} {g['dash']} "
+        f"scopes would have given agents the right files"
+    )
+
+    # Token reduction ratio — the single most compelling number
+    real_scopes = [
+        s for s in plan.scopes
+        if not s.directory.startswith("virtual/")
+    ]
+    if plan.total_repo_tokens > 0 and real_scopes:
+        avg_scope_tokens = sum(
+            s.config.tokens_estimate or 0 for s in real_scopes
+        ) / max(len(real_scopes), 1)
+        reduction = (1 - avg_scope_tokens / plan.total_repo_tokens) * 100
+        lines.append(
+            f"  Token reduction: {reduction:.0f}% {g['dash']} "
+            f"from ~{plan.total_repo_tokens:,} to "
+            f"~{int(avg_scope_tokens):,} average per resolution"
+        )
+
+    lines.append("")
+
+    # Per-scope recall bars
+    for result in report.results:
+        scope_name = os.path.basename(os.path.dirname(result.scope_path))
+        if result.total_commits == 0:
+            continue
+        filled = int(result.recall * 10)
+        bar = g["bar_full"] * filled + g["bar_empty"] * (10 - filled)
+        suffix = f" {g['attention']}" if result.recall < 0.8 else ""
+        lines.append(
+            f"  {scope_name:<12} {bar} {result.recall:.0%} recall{suffix}"
+        )
+
+    return lines

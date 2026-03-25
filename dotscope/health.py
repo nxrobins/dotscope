@@ -3,7 +3,7 @@
 
 import os
 import re
-from typing import List, Set
+from typing import List, Optional, Set
 
 from .constants import SKIP_DIRS, SOURCE_EXTS
 from .models import HealthIssue, HealthReport, ScopeConfig
@@ -104,7 +104,8 @@ def check_broken_paths(config: ScopeConfig, root: str = "") -> List[HealthIssue]
 
     for rel in config.related:
         clean = strip_inline_comment(rel)
-        if not path_exists(scope_dir, clean):
+        # Related paths are repo-root-relative; try root first, then scope dir
+        if not path_exists(base, clean) and not path_exists(scope_dir, clean):
             issues.append(HealthIssue(
                 scope_path=config.path, severity="warning",
                 category="broken_path", message=f"related scope not found: {clean}",
@@ -203,7 +204,7 @@ def _find_source_dirs(root: str) -> Set[str]:
     return dirs
 
 
-def _get_mtime(path: str) -> float | None:
+def _get_mtime(path: str) -> Optional[float]:
     """Get file modification time, None if not accessible."""
     try:
         return os.path.getmtime(path)

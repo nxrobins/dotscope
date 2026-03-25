@@ -3,13 +3,29 @@
 import os
 import subprocess
 import pytest
-from dotscope.ingest import ingest, format_ingest_report
+from dotscope.ingest import (
+    ingest,
+    format_ingest_report,
+    _is_cross_module,
+    _find_hub_discoveries,
+    _find_volatility_surprises,
+    _extract_discoveries,
+    _extract_validation,
+)
 
 
 def _git_init(path):
     subprocess.run(["git", "init"], cwd=str(path), capture_output=True)
     subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=str(path), capture_output=True)
     subprocess.run(["git", "config", "user.name", "Test"], cwd=str(path), capture_output=True)
+
+
+def _git_commit(path, msg="commit"):
+    subprocess.run(["git", "add", "-A"], cwd=str(path), capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", msg, "--allow-empty"],
+        cwd=str(path), capture_output=True,
+    )
 
 
 class TestIngest:
@@ -78,14 +94,17 @@ class TestIngest:
         # Should detect models as a dependency
         assert any("models" in inc for inc in auth_scope.config.includes)
 
-    def test_format_report(self, tmp_path):
+    def test_format_report_discovery_sections(self, tmp_path):
+        """Report should have header, Created section, and usage hints."""
         _git_init(tmp_path)
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "main.py").write_text("")
 
         plan = ingest(str(tmp_path), mine_history=False, dry_run=True)
         report = format_ingest_report(plan)
-        assert "Ingest Report" in report
+        assert "scanned" in report
+        assert "\U0001f4c1 Created" in report
+        assert "dotscope resolve" in report
 
     def test_ingest_builds_index(self, tmp_path):
         _git_init(tmp_path)
@@ -99,3 +118,98 @@ class TestIngest:
         plan = ingest(str(tmp_path), mine_history=False, dry_run=True)
         assert plan.index is not None
         assert len(plan.index.scopes) >= 3
+
+
+class TestIngestPlanStructuredData:
+    """Verify that ingest() populates structured data on the plan."""
+
+    def test_repo_token_stats(self, tmp_path):
+        _git_init(tmp_path)
+        mod = tmp_path / "mymod"
+        mod.mkdir()
+        (mod / "__init__.py").write_text("")
+        (mod / "core.py").write_text("x = 1\n" * 50)
+
+        plan = ingest(str(tmp_path), mine_history=False, dry_run=True)
+        assert plan.total_repo_files > 0
+        assert plan.total_repo_tokens > 0
+        assert plan.graph is not None
+
+    def test_history_stored_on_plan(self, tmp_path):
+        _git_init(tmp_path)
+        mod = tmp_path / "mymod"
+        mod.mkdir()
+        (mod / "__init__.py").write_text("")
+        (mod / "core.py").write_text("x = 1\n")
+        _git_commit(tmp_path, "initial")
+
+        plan = ingest(str(tmp_path), mine_history=True, dry_run=True)
+        assert plan.history is not None
+        assert plan.history.commits_analyzed >= 0
+
+
+class TestContextPriority:
+    """Verify the new context priority order and TODO elimination."""
+
+    def test_context_never_has_todo(self, tmp_path):
+        _git_init(tmp_path)
+        mod = tmp_path / "mymod"
+        mod.mkdir()
+        (mod / "__init__.py").write_text("")
+        (mod / "core.py").write_text("def main(): pass\n")
+
+        plan = ingest(str(tmp_path), mine_history=False, dry_run=True)
+        for ps in plan.scopes:
+            assert "TODO" not in ps.config.context_str
+
+    def test_empty_module_gets_structural_summary(self, tmp_path):
+        """Modules with zero docs should get a graph-derived summary, not TODO."""
+        _git_init(tmp_path)
+        mod = tmp_path / "bare"
+        mod.mkdir()
+        (mod / "a.py").write_text("x = 1\n")
+
+        plan = ingest(str(tmp_path), mine_history=False, dry_run=True)
+        bare_scope = next(
+            (s for s in plan.scopes if s.directory == "bare"), None
+        )
+        if bare_scope:
+            ctx = bare_scope.config.context_str
+            assert "TODO" not in ctx
+            # Should have structural info instead
+            assert "module" in ctx.lower() or "files" in ctx.lower() or "cohesion" in ctx.lower()
+
+
+class TestDiscoveryHelpers:
+    """Unit tests for the discovery extraction functions."""
+
+    def test_is_cross_module(self):
+        assert _is_cross_module("auth/handler.py", "models/user.py")
+        assert not _is_cross_module("auth/handler.py", "auth/utils.py")
+        assert not _is_cross_module("root.py", "other.py")  # no directories
+
+    def test_find_hub_discoveries_empty_graph(self):
+        from dotscope.graph import DependencyGraph
+        graph = DependencyGraph(root="/tmp")
+        assert _find_hub_discoveries(graph) == []
+
+    def test_find_volatility_surprises_empty_history(self):
+        from dotscope.history import HistoryAnalysis
+        history = HistoryAnalysis()
+        assert _find_volatility_surprises(history) == []
+
+    def test_extract_discoveries_no_data(self):
+        """With no history/graph, discoveries should be empty."""
+        plan = _make_empty_plan()
+        assert _extract_discoveries(plan) == []
+
+    def test_extract_validation_no_backtest(self):
+        """With no backtest, validation should be empty."""
+        plan = _make_empty_plan()
+        assert _extract_validation(plan) == []
+
+
+def _make_empty_plan():
+    """Create a minimal IngestPlan for testing extractors."""
+    from dotscope.ingest import IngestPlan
+    return IngestPlan(root="/tmp")

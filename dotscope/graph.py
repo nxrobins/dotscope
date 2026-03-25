@@ -7,7 +7,7 @@ import os
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from .ast_analyzer import (
     analyze_file,
@@ -25,7 +25,7 @@ class FileNode:
     language: str
     imports: List[str] = field(default_factory=list)
     imported_by: List[str] = field(default_factory=list)
-    api: ModuleAPI | None = None
+    api: Optional[ModuleAPI] = None
 
 
 @dataclass

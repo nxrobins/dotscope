@@ -20,6 +20,7 @@ Configure in Claude Desktop or similar:
 import json
 import os
 import sys
+from typing import Optional
 
 
 def main():
@@ -45,7 +46,7 @@ def main():
     @mcp.tool()
     def resolve_scope(
         scope: str,
-        budget: int | None = None,
+        budget: Optional[int] = None,
         follow_related: bool = True,
         format: str = "json",
     ) -> str:
@@ -200,7 +201,7 @@ def main():
         }, indent=2)
 
     @mcp.tool()
-    def get_context(scope: str, section: str | None = None) -> str:
+    def get_context(scope: str, section: Optional[str] = None) -> str:
         """Get architectural context for a scope without loading any files.
 
         This is the knowledge that isn't in the code itself: invariants,
@@ -372,6 +373,36 @@ def main():
             dry_run=dry_run,
         )
 
+        # Discovery data for programmatic consumers
+        from .ingest import (
+            _is_cross_module, _find_hub_discoveries, _find_volatility_surprises,
+        )
+        cross_module_contracts = []
+        if plan.history and plan.history.implicit_contracts:
+            cross_module_contracts = [
+                ic for ic in plan.history.implicit_contracts
+                if _is_cross_module(ic.trigger_file, ic.coupled_file)
+                and ic.confidence >= 0.65
+            ]
+        hubs = _find_hub_discoveries(plan.graph) if plan.graph else []
+        surprises = (
+            _find_volatility_surprises(plan.history) if plan.history else []
+        )
+
+        # Token reduction
+        real_scopes = [
+            ps for ps in plan.scopes
+            if not ps.directory.startswith("virtual/")
+        ]
+        token_reduction = None
+        if plan.total_repo_tokens > 0 and real_scopes:
+            avg = sum(
+                s.config.tokens_estimate or 0 for s in real_scopes
+            ) / max(len(real_scopes), 1)
+            token_reduction = round(
+                (1 - avg / plan.total_repo_tokens) * 100, 1
+            )
+
         return json.dumps({
             "scopes_planned": len(plan.scopes),
             "scopes": [
@@ -388,6 +419,14 @@ def main():
             ],
             "dry_run": dry_run,
             "graph_summary": plan.graph_summary,
+            "total_repo_files": plan.total_repo_files,
+            "total_repo_tokens": plan.total_repo_tokens,
+            "token_reduction_pct": token_reduction,
+            "discoveries": {
+                "implicit_contracts": len(cross_module_contracts),
+                "cross_cutting_hubs": len(hubs),
+                "volatility_surprises": len(surprises),
+            },
         }, indent=2)
 
     @mcp.tool()
