@@ -1,0 +1,39 @@
+[project]
+name = "dotscope"
+version = "0.1.0"
+description = "Directory-scoped context boundaries for AI coding agents"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "Supremum" }]
+keywords = ["ai", "coding", "agents", "context", "scope", "mcp"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+]
+dependencies = []
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.2.0"]
+tokens = ["tiktoken"]
+embeddings = ["sentence-transformers"]
+dev = ["pytest", "ruff"]
+all = ["dotscope[mcp,tokens]"]
+
+[project.scripts]
+dotscope = "dotscope.cli:main"
+dotscope-mcp = "dotscope.mcp_server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

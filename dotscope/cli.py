@@ -1,0 +1,448 @@
+"""CLI entry point for dotscope."""
+
+
+import argparse
+import os
+import sys
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        prog="dotscope",
+        description="Directory-scoped context boundaries for AI coding agents",
+    )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {_version()}")
+
+    sub = parser.add_subparsers(dest="command")
+
+    # --- resolve ---
+    p_resolve = sub.add_parser("resolve", help="Resolve a scope expression to files")
+    p_resolve.add_argument("scope", help="Scope name, path, or expression (e.g., auth+payments)")
+    p_resolve.add_argument("--budget", type=int, default=None, help="Max tokens (context + files)")
+    p_resolve.add_argument("--tokens", action="store_true", help="Show per-file token counts")
+    p_resolve.add_argument("--json", action="store_true", help="Output as JSON")
+    p_resolve.add_argument("--cursor", action="store_true", help="Output as .cursorrules format")
+    p_resolve.add_argument("--no-related", action="store_true", help="Don't follow related scopes")
+    p_resolve.add_argument("--task", default=None, help="Task description for relevance ranking")
+
+    # --- context ---
+    p_context = sub.add_parser("context", help="Print context for a scope")
+    p_context.add_argument("scope", help="Scope name or path")
+    p_context.add_argument("--section", default=None, help="Filter to a named section")
+
+    # --- match ---
+    p_match = sub.add_parser("match", help="Match a task description to scope(s)")
+    p_match.add_argument("task", help="Task description string")
+
+    # --- init ---
+    p_init = sub.add_parser("init", help="Create a .scope file")
+    p_init.add_argument("--scan", action="store_true", help="Auto-generate from directory analysis")
+    p_init.add_argument("--dir", default=".", help="Directory to create .scope in")
+
+    # --- validate ---
+    sub.add_parser("validate", help="Check all .scope files for broken paths")
+
+    # --- stats ---
+    sub.add_parser("stats", help="Token savings report across all scopes")
+
+    # --- tree ---
+    sub.add_parser("tree", help="Visual tree of all scopes and relationships")
+
+    # --- health ---
+    sub.add_parser("health", help="Scope health: staleness, coverage, drift")
+
+    # --- ingest ---
+    p_ingest = sub.add_parser("ingest", help="Reverse-engineer .scope files from an existing codebase")
+    p_ingest.add_argument("--dir", default=".", help="Repository root to ingest")
+    p_ingest.add_argument("--no-history", action="store_true", help="Skip git history mining")
+    p_ingest.add_argument("--no-docs", action="store_true", help="Skip doc absorption")
+    p_ingest.add_argument("--dry-run", action="store_true", help="Plan only, don't write files")
+    p_ingest.add_argument("--max-commits", type=int, default=500, help="Max git commits to analyze")
+
+    # --- impact ---
+    p_impact = sub.add_parser("impact", help="Predict blast radius of changes to a file")
+    p_impact.add_argument("file", help="File path to analyze impact for")
+
+    args = parser.parse_args(argv)
+
+    if args.command is None:
+        parser.print_help()
+        return
+
+    try:
+        handler = {
+            "resolve": _cmd_resolve,
+            "context": _cmd_context,
+            "match": _cmd_match,
+            "init": _cmd_init,
+            "validate": _cmd_validate,
+            "stats": _cmd_stats,
+            "tree": _cmd_tree,
+            "health": _cmd_health,
+            "ingest": _cmd_ingest,
+            "impact": _cmd_impact,
+        }[args.command]
+        handler(args)
+    except (ValueError, FileNotFoundError) as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Command handlers
+# ---------------------------------------------------------------------------
+
+def _cmd_resolve(args):
+    from .composer import compose
+    from .budget import apply_budget
+    from .discovery import find_repo_root
+    from .formatter import format_resolved
+
+    root = find_repo_root()
+    follow_related = not args.no_related
+
+    resolved = compose(args.scope, root=root, follow_related=follow_related)
+
+    if args.budget:
+        resolved = apply_budget(resolved, args.budget, task=args.task)
+
+    fmt = "json" if args.json else ("cursor" if args.cursor else "plain")
+    print(format_resolved(resolved, fmt=fmt, root=root, show_tokens=args.tokens))
+
+
+def _cmd_context(args):
+    from .discovery import find_scope, find_repo_root
+    from .context import query_context
+
+    root = find_repo_root()
+    config = find_scope(args.scope, root)
+    if config is None:
+        raise ValueError(f"Scope not found: {args.scope}")
+
+    result = query_context(config.context, args.section)
+    if result:
+        print(result)
+    else:
+        section_msg = f" (section: {args.section})" if args.section else ""
+        print(f"No context found for scope '{args.scope}'{section_msg}", file=sys.stderr)
+
+
+def _cmd_match(args):
+    from .matcher import match_task
+    from .discovery import find_repo_root, load_index, find_all_scopes
+    from .parser import parse_scope_file
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    index = load_index(root)
+    scope_files = find_all_scopes(root)
+
+    # Build scope list for matching
+    scopes = []
+    if index:
+        for name, entry in index.scopes.items():
+            scopes.append((name, entry.keywords, entry.description or ""))
+    else:
+        for sf in scope_files:
+            try:
+                config = parse_scope_file(sf)
+                name = os.path.relpath(os.path.dirname(sf), root)
+                scopes.append((name, config.tags, config.description))
+            except (ValueError, IOError):
+                continue
+
+    matches = match_task(args.task, scopes)
+
+    if not matches:
+        print("No matching scopes found.", file=sys.stderr)
+        return
+
+    for name, score in matches:
+        print(f"Matched: {name} (confidence: {score:.2f})")
+
+
+def _cmd_init(args):
+    from .scanner import scan_directory
+    from .parser import serialize_scope
+
+    target_dir = os.path.abspath(args.dir)
+    scope_path = os.path.join(target_dir, ".scope")
+
+    if os.path.exists(scope_path):
+        print(f".scope already exists at {scope_path}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.scan:
+        config = scan_directory(target_dir)
+        content = serialize_scope(config)
+    else:
+        # Interactive: create a minimal template
+        name = os.path.basename(target_dir)
+        content = f"""description: {name}
+includes:
+  - {name}/
+excludes:
+  - {name}/tests/fixtures/
+  - {name}/__pycache__/
+context: |
+  # TODO: Add architectural context here.
+  # What invariants does this module maintain?
+  # What gotchas should an agent know about?
+  # What conventions does it follow?
+"""
+
+    with open(scope_path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    print(f"Created {scope_path}")
+    if not args.scan:
+        print("Edit the context field — that's the part that can't be automated.")
+
+
+def _cmd_validate(args):
+    from .discovery import find_repo_root, find_all_scopes
+    from .parser import parse_scope_file
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    scope_files = find_all_scopes(root)
+    if not scope_files:
+        print("No .scope files found.")
+        return
+
+    errors = 0
+    warnings = 0
+
+    for sf in scope_files:
+        rel = os.path.relpath(sf, root)
+        try:
+            config = parse_scope_file(sf)
+        except ValueError as e:
+            print(f"ERROR  {rel}: {e}")
+            errors += 1
+            continue
+
+        scope_dir = os.path.dirname(sf)
+
+        from .paths import path_exists, strip_inline_comment
+
+        for inc in config.includes:
+            if not path_exists(root, inc):
+                print(f"ERROR  {rel}: include path not found: {inc}")
+                errors += 1
+
+        for related in config.related:
+            clean = strip_inline_comment(related)
+            if not path_exists(scope_dir, clean) and not path_exists(root, clean):
+                    print(f"WARN   {rel}: related scope not found: {clean}")
+                    warnings += 1
+
+        if not config.description.strip():
+            print(f"WARN   {rel}: empty description")
+            warnings += 1
+
+        if not config.context_str.strip():
+            print(f"WARN   {rel}: no context (this is the most valuable part)")
+            warnings += 1
+
+    print(f"\nChecked {len(scope_files)} scope(s): {errors} error(s), {warnings} warning(s)")
+    if errors > 0:
+        sys.exit(1)
+
+
+def _cmd_stats(args):
+    from .discovery import find_repo_root, find_all_scopes
+    from .parser import parse_scope_file
+    from .resolver import resolve
+    from .tokens import estimate_file_tokens
+    from .formatter import format_stats
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    total_files = 0
+    total_tokens = 0
+    skip_dirs = {".git", "node_modules", "__pycache__", "venv", ".venv", "dist", "build"}
+
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in skip_dirs]
+        for f in filenames:
+            full = os.path.join(dirpath, f)
+            total_files += 1
+            total_tokens += estimate_file_tokens(full)
+
+    # Resolve each scope
+    scope_stats = []
+    for sf in find_all_scopes(root):
+        try:
+            config = parse_scope_file(sf)
+            resolved = resolve(config, follow_related=False, root=root)
+            name = os.path.relpath(os.path.dirname(sf), root) + "/"
+            scope_stats.append((name, len(resolved.files), resolved.token_estimate))
+        except (ValueError, IOError):
+            continue
+
+    print(format_stats(scope_stats, total_files, total_tokens))
+
+
+def _cmd_tree(args):
+    from .discovery import find_repo_root, find_all_scopes
+    from .parser import parse_scope_file
+    from .formatter import format_tree
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    scopes = []
+    for sf in find_all_scopes(root):
+        try:
+            config = parse_scope_file(sf)
+            scopes.append((sf, config))
+        except (ValueError, IOError):
+            scopes.append((sf, None))
+
+    print(format_tree(scopes, root))
+
+
+def _cmd_health(args):
+    from .health import full_health_report
+    from .discovery import find_repo_root
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    report = full_health_report(root)
+
+    if not report.issues:
+        print(f"All {report.scopes_checked} scope(s) healthy. "
+              f"Coverage: {report.coverage_pct:.0f}% "
+              f"({report.directories_covered}/{report.directories_total} directories)")
+        return
+
+    for issue in report.issues:
+        rel = os.path.relpath(issue.scope_path, root) if issue.scope_path else "repo"
+        tag = issue.severity.upper()
+        print(f"{tag:5}  [{issue.category}] {rel}: {issue.message}")
+
+    print(f"\n{report.scopes_checked} scope(s) checked, "
+          f"{len(report.errors)} error(s), {len(report.warnings)} warning(s)")
+    print(f"Coverage: {report.coverage_pct:.0f}% "
+          f"({report.directories_covered}/{report.directories_total} directories)")
+
+
+def _cmd_ingest(args):
+    from .ingest import ingest, format_ingest_report
+
+    root = os.path.abspath(args.dir)
+    plan = ingest(
+        root,
+        mine_history=not args.no_history,
+        absorb=not args.no_docs,
+        max_commits=args.max_commits,
+        dry_run=args.dry_run,
+    )
+
+    print(format_ingest_report(plan))
+
+    if args.dry_run:
+        print("Dry run — no files written. Remove --dry-run to write scope files.")
+
+
+def _cmd_impact(args):
+    from .graph import build_graph
+    from .discovery import find_repo_root, find_all_scopes
+    from .parser import parse_scope_file
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    target = os.path.relpath(os.path.abspath(args.file), root)
+
+    # Build graph for import analysis
+    graph = build_graph(root)
+    node = graph.files.get(target)
+
+    print(f"Impact analysis for: {target}")
+    print()
+
+    # Which scope owns this file?
+    owning_scope = None
+    for sf in find_all_scopes(root):
+        try:
+            config = parse_scope_file(sf)
+            from .resolver import resolve
+            resolved = resolve(config, follow_related=False, root=root)
+            if os.path.join(root, target) in resolved.files:
+                owning_scope = os.path.relpath(sf, root)
+                print(f"Scope: {owning_scope}")
+                break
+        except (ValueError, IOError):
+            continue
+
+    if not owning_scope:
+        print("Scope: (none — file not covered by any scope)")
+
+    # What does this file import?
+    if node and node.imports:
+        print(f"\nImports ({len(node.imports)}):")
+        for imp in node.imports:
+            print(f"  → {imp}")
+
+    # What imports this file?
+    if node and node.imported_by:
+        print(f"\nImported by ({len(node.imported_by)}):")
+        for imp_by in node.imported_by:
+            print(f"  ← {imp_by}")
+
+    # Transitive impact: what depends on things that depend on this?
+    if node and node.imported_by:
+        transitive = set()
+        for direct in node.imported_by:
+            dep_node = graph.files.get(direct)
+            if dep_node:
+                for t in dep_node.imported_by:
+                    if t != target and t not in node.imported_by:
+                        transitive.add(t)
+        if transitive:
+            print(f"\nTransitive impact ({len(transitive)}):")
+            for t in sorted(transitive):
+                print(f"  ← ← {t}")
+
+    # Which scopes are affected?
+    affected_files = set()
+    if node:
+        affected_files.update(node.imported_by)
+        for direct in node.imported_by:
+            dep_node = graph.files.get(direct)
+            if dep_node:
+                affected_files.update(dep_node.imported_by)
+
+    affected_modules = set()
+    for f in affected_files:
+        parts = f.split("/")
+        if len(parts) > 1:
+            affected_modules.add(parts[0])
+
+    if affected_modules:
+        print(f"\nAffected modules: {', '.join(sorted(affected_modules))}")
+
+    total_affected = len(affected_files) + 1  # +1 for the file itself
+    risk = "LOW" if total_affected <= 3 else ("MEDIUM" if total_affected <= 10 else "HIGH")
+    print(f"\nRisk: {risk} — {total_affected} file(s) in blast radius")
+
+
+def _version():
+    from . import __version__
+    return __version__
+
+
+if __name__ == "__main__":
+    main()
