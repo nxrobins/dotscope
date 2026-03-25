@@ -1,10 +1,12 @@
 # dotscope
 
-**The context compiler for AI coding agents.**
+**Codebase knowledge as a first-class engineering artifact.**
 
-Drop `.scope` files in your codebase to define what an agent should see, what to skip, and the architectural knowledge that isn't in the code. dotscope resolves these into curated context payloads — the right files, at the right token budget, with the right knowledge.
+`.gitignore` made version control a discipline. `Dockerfile` made environments a discipline. `.scope` makes codebase knowledge a discipline — readable by humans, actionable by agents.
 
-Or point `dotscope ingest` at any existing codebase and it reverse-engineers scope files from the dependency graph, git history, and existing documentation.
+Every codebase has knowledge that isn't in the code: why the auth module uses soft deletes, why you never call that API directly, which abstractions are load-bearing and which are legacy. This knowledge lives in senior developers' heads. When they leave, it leaves. When an AI agent enters the codebase, it starts at zero.
+
+dotscope captures that knowledge. Drop `.scope` files in your repo, or run `dotscope ingest` to reverse-engineer them from your dependency graph, git history, and existing documentation. Agents read the `.scope` file before they read a single line of code — and they know what matters.
 
 ## Install
 
@@ -14,23 +16,25 @@ pip install dotscope[mcp]     # CLI + MCP server
 pip install dotscope[all]     # Everything (MCP + accurate token counting)
 ```
 
-## The Problem
-
-AI agents read your entire codebase when they only need 3 files. This wastes context window on irrelevant code, increases cost, and degrades output — the agent is reasoning over noise.
-
-Every agent session starts cold. No institutional memory. No intuition from months in the codebase. `.scope` files are the persistent engineering brain that compensates for this.
-
-## Quick Start
-
-### 1. Ingest an existing codebase
+## 30 Seconds to Scoped
 
 ```bash
+# Point at any codebase — dotscope reverse-engineers scope files automatically
 dotscope ingest .
+
+# See what the agent would see
+dotscope resolve auth
+
+# See what the agent would know
+dotscope context auth
+
+# See what breaks if you touch a file
+dotscope impact auth/tokens.py
 ```
 
-This analyzes your dependency graph, mines git history for change patterns, absorbs README/docstrings/signal comments, and produces `.scope` files for every detected module. No manual writing needed.
+That's it. Your agent now has architectural intuition.
 
-### 2. Or write a `.scope` file manually
+## What a `.scope` File Looks Like
 
 ```yaml
 # auth/.scope
@@ -57,33 +61,13 @@ tags:
   - session-management
 ```
 
-### 3. Resolve scopes
+Three things `.gitignore` isn't: it carries **knowledge** (the `context` field), it's **additive** (what to focus on, not what to skip), and it **cross-references** (related scopes for tasks that span boundaries).
 
-```bash
-dotscope resolve auth                      # File list
-dotscope resolve auth --budget 4000        # Best 4K tokens
-dotscope resolve auth+payments             # Merge two scopes
-dotscope resolve auth-tests                # Subtract test files
-dotscope resolve auth@context              # Context only, no files
-dotscope resolve auth --json               # JSON output
-```
+## Why This Exists
 
-### 4. Query architectural context
+AI coding agents waste 60-80% of their context window on irrelevant code. But the real problem isn't token waste — it's that agents have **zero institutional memory**. No intuition. No sense of what's fragile. No knowledge of decisions made six months ago that constrain what's possible today.
 
-```bash
-dotscope context auth                      # Full context
-dotscope context auth --section gotchas    # Just the gotchas
-```
-
-### 5. Check blast radius before coding
-
-```bash
-dotscope impact auth/tokens.py
-# Imports: models/user.py
-# Imported by: api/middleware.py, tests/test_auth.py
-# Affected modules: api, tests
-# Risk: MEDIUM — 5 files in blast radius
-```
+`.scope` files are externalized engineering intuition. They turn the invisible architecture visible. And they work for humans too — a new developer onboarding reads the `.scope` files and gets the same institutional knowledge the agent gets.
 
 ## MCP Server
 
@@ -118,22 +102,18 @@ Configure in Claude Desktop / any MCP client:
 | `validate_scopes()` | Check for broken paths and issues |
 | `scope_health()` | Staleness, coverage gaps, import drift |
 
-## CLI Reference
+## Scope Resolution
 
-| Command | Description |
-|---------|-------------|
-| `dotscope ingest [--dir PATH]` | Reverse-engineer .scope files from a codebase |
-| `dotscope resolve <expr>` | Resolve scope expression to files |
-| `dotscope context <scope>` | Print architectural context |
-| `dotscope match "<task>"` | Match task to scope(s) |
-| `dotscope impact <file>` | Blast radius prediction |
-| `dotscope init [--scan]` | Create .scope file |
-| `dotscope validate` | Check .scope files for broken paths |
-| `dotscope stats` | Token savings report |
-| `dotscope tree` | Visual scope tree |
-| `dotscope health` | Staleness, coverage, drift detection |
+```bash
+dotscope resolve auth                      # File list
+dotscope resolve auth --budget 4000        # Best 4K tokens
+dotscope resolve auth+payments             # Merge two scopes
+dotscope resolve auth-tests                # Subtract test files
+dotscope resolve auth@context              # Context only, no files
+dotscope resolve auth --json               # JSON output
+```
 
-## Scope Composition
+### Scope Algebra
 
 Combine scopes with operators:
 
@@ -144,17 +124,20 @@ Combine scopes with operators:
 | `&` | `auth&api` | Only files in both scopes |
 | `@context` | `auth@context` | Context only, no files |
 
-## Token Budgeting
-
-Request a budget instead of dumping all files:
+### Token Budgeting
 
 ```bash
 dotscope resolve auth --budget 4000 --json
 ```
 
-The resolver includes context first (architectural knowledge), then ranks files by relevance and loads them until the budget is hit. Reports what was truncated.
+Context loads first (architectural knowledge). Then files rank by relevance until the budget is hit. You always get the knowledge; you get as much code as fits.
 
-## Structured Context
+## Architectural Context
+
+```bash
+dotscope context auth                      # Full context
+dotscope context auth --section gotchas    # Just the gotchas
+```
 
 Use `## Section` headers in context blocks to create queryable sections:
 
@@ -170,15 +153,27 @@ context: |
   New endpoints go through the rate limiter middleware.
 ```
 
-Query specific sections: `dotscope context payments --section gotchas`
+## Impact Analysis
+
+```bash
+dotscope impact auth/tokens.py
+# Imports: models/user.py
+# Imported by: api/middleware.py, tests/test_auth.py
+# Affected modules: api, tests
+# Risk: MEDIUM — 5 files in blast radius
+```
+
+Before an agent touches a file, it knows the blast radius. Before a human reviews a PR, they know what else might break.
 
 ## Ingest Pipeline
 
-`dotscope ingest` enters any codebase by combining three signal sources:
+`dotscope ingest` enters any codebase — no manual `.scope` writing needed. Three signal sources:
 
 1. **Dependency graph** — parses imports across Python/JS/TS/Go, detects module boundaries via directory cohesion
 2. **Git history** — mines change coupling (files that always change together), hotspots (high churn), implicit contracts (co-change patterns)
-3. **Doc absorption** — scans README, ARCHITECTURE.md, docstrings, and signal comments (WARNING, HACK, INVARIANT, NOTE)
+3. **Doc absorption** — scans README, ARCHITECTURE.md, docstrings, and signal comments (`WARNING`, `HACK`, `INVARIANT`, `NOTE`)
+
+The human then edits the `context` field — that's the part that can't be automated. Everything else is scaffolding.
 
 ## Health Monitoring
 
@@ -187,9 +182,26 @@ dotscope health
 ```
 
 Detects:
-- **Staleness** — files modified since .scope was last updated
-- **Coverage gaps** — directories with source files but no .scope
+- **Staleness** — files modified since `.scope` was last updated
+- **Coverage gaps** — directories with source files but no `.scope`
 - **Import drift** — imports in scoped files not reflected in includes
+
+Scope files that drift from reality are worse than no scope files. `dotscope health` keeps them honest.
+
+## CLI Reference
+
+| Command | Description |
+|---------|-------------|
+| `dotscope ingest [--dir PATH]` | Reverse-engineer `.scope` files from a codebase |
+| `dotscope resolve <expr>` | Resolve scope expression to files |
+| `dotscope context <scope>` | Print architectural context |
+| `dotscope match "<task>"` | Match task to scope(s) |
+| `dotscope impact <file>` | Blast radius prediction |
+| `dotscope init [--scan]` | Create `.scope` file |
+| `dotscope validate` | Check `.scope` files for broken paths |
+| `dotscope stats` | Token savings report |
+| `dotscope tree` | Visual scope tree |
+| `dotscope health` | Staleness, coverage, drift detection |
 
 ## `.scopes` Index
 
@@ -208,6 +220,16 @@ defaults:
   max_tokens: 8000
   include_related: false
 ```
+
+## The Lineage
+
+`.gitignore` told version control what to skip.
+`.env` told applications what to configure.
+`Dockerfile` told infrastructure what to build.
+`AGENTS.md` told AI agents how to behave.
+`.scope` tells AI agents what to understand.
+
+Each one made an invisible engineering concern into a first-class artifact. Each one created a new discipline. dotscope is the first primitive of agentic engineering.
 
 ## License
 
