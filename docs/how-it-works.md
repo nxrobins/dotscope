@@ -217,6 +217,55 @@ dotscope debug --last
 
 Four diagnosis categories: resolution gap (dotscope didn't serve something needed), constraint gap (a rule should have existed), agent ignored context (right info served, agent didn't use it), context conflict (contradictory guidance).
 
+## Architecture
+
+dotscope is structured as an agentic compiler. The codebase separates data definitions (the Nouns), analysis operations (the Verbs), and persistence (the Memory).
+
+### models/ — What the compiler knows
+
+Five domain files, each owning a distinct category of data:
+
+- **core.py** — Static architecture: `ScopeConfig`, `FileAnalysis`, `DependencyGraph`, `FileNode`, `ResolvedImport`. What the codebase *is* right now.
+- **history.py** — Empirical behavior: `ImplicitContract`, `FileHistory`, `ChangeCoupling`, `HistoryAnalysis`. How the codebase behaves over time.
+- **intent.py** — Human rulebook: `IntentDirective`, `Assertion`, `CheckResult`, `ProposedFix`, `Severity`. How the codebase *must* be treated.
+- **state.py** — Persistent memory: `SessionLog`, `ObservationLog`, `BenchReport`, `RegressionCase`, `BisectionResult`. The schemas for `.dotscope/` event logs.
+- **passes.py** — Transient outputs: `IngestPlan`, `PlannedScope`, `VirtualScope`. Data transfer objects that live only during a single operation.
+
+No model file imports from any functional module. Data definitions are the foundation everything else builds on.
+
+### passes/ — What the compiler does
+
+Analysis and enforcement operations that produce or consume models:
+
+- **ast_analyzer.py** — Populates `models.core` with structural analysis from Python AST
+- **graph_builder.py** — Builds `DependencyGraph` from import analysis
+- **history_miner.py** — Mines git log to produce `HistoryAnalysis`
+- **budget_allocator.py** — Applies token budgets with assertion enforcement
+- **backtest.py** — Replays commits against scopes to measure recall
+- **virtual.py** — Detects cross-cutting scopes from graph hub analysis
+- **sentinel/** — The enforcement engine. Runs 6 checks (boundary, contracts, anti-pattern, direction, stability, intent), builds constraints for prophylactic injection, manages acknowledgment decay.
+
+### storage/ — How the compiler remembers
+
+Infrastructure that reads and writes `models.state` to disk:
+
+- **session_manager.py** — Creates sessions, records observations, manages `.dotscope/sessions/` and `.dotscope/observations/`
+- **cache.py** — Caches analysis data (history, graph hubs) for MCP server startup
+- **git_hooks.py** — Post-commit hook installation and management
+- **onboarding.py** — Stage-aware milestone tracking
+- **timing.py** — Operation instrumentation for benchmarking
+- **near_miss.py** — Near-miss detection persistence
+
+### Root level — The interfaces
+
+The root `dotscope/` directory contains only entry points and orchestrators:
+
+- **cli.py** — Human terminal interface (all CLI commands)
+- **mcp_server.py** — Agent protocol interface (all MCP tools)
+- **composer.py** — Scope algebra orchestrator (union, subtract, intersect)
+- **resolver.py** — File resolution orchestrator
+- **intent.py** — CLI logic for managing `intent.yaml`
+
 ## What's in `.dotscope/`
 
 Runtime state. Gitignored. Fully rebuildable via `dotscope rebuild`.

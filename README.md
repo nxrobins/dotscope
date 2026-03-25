@@ -129,6 +129,31 @@ dotscope impact auth/tokens.py
 - [The .scope File](docs/scope-file.md) — fields, assertions, anti-patterns, intent
 - [MCP Server Setup](docs/mcp-setup.md) — setup, tools, troubleshooting
 
+## Architecture
+
+```
+dotscope/
+├── models/              # What the compiler knows
+│   ├── core.py          #   Static structure (AST, graph, scopes)
+│   ├── history.py       #   Empirical behavior (contracts, stability)
+│   ├── intent.py        #   Human rules (intents, assertions, checks)
+│   ├── state.py         #   Persistent memory (sessions, observations)
+│   └── passes.py        #   Transient outputs (ingest plans, virtual scopes)
+├── passes/              # What the compiler does
+│   ├── graph_builder.py #   Dependency analysis
+│   ├── history_miner.py #   Git history mining
+│   ├── budget_allocator.py  # Token budgeting with assertions
+│   └── sentinel/        #   Enforcement engine (6 checks, constraints, decay)
+├── storage/             # How the compiler remembers
+│   ├── session_manager.py   # Session + observation persistence
+│   ├── cache.py         #   Cached analysis data
+│   └── git_hooks.py     #   Post-commit hook management
+├── cli.py               # Human interface
+└── mcp_server.py        # Agent interface
+```
+
+The Nouns live in `models/`. The Verbs live in `passes/`. The Memory lives in `storage/`. The Interfaces are at the root. A contributor opening the repo sees architecture, not a script.
+
 ## Details
 
 Python 3.9+. Zero dependencies. Cross-platform. 266 tests. `.scope` files are plain YAML. `.dotscope/` is gitignored and rebuildable. [MIT](LICENSE).
