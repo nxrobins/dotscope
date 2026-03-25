@@ -81,15 +81,11 @@ def apply_budget(
 def _rank_files(
     files: List[str],
     task: Optional[str] = None,
+    utility_scores: Optional[dict] = None,
 ) -> List[tuple]:
-    """Rank files by relevance. Returns list of (path, score).
-
-    Ranking heuristics:
-    - Smaller files score higher (more focused, less noise)
-    - If task is provided, files with task keywords in their name score higher
-    - Core source files score higher than test/config files
-    """
+    """Rank files by relevance, layering historical utility over static heuristics."""
     import os
+    from .utility import effective_score as _effective_score
 
     task_words = set()
     if task:
@@ -101,15 +97,12 @@ def _rank_files(
         basename = os.path.basename(path).lower()
         rel_parts = path.lower().split(os.sep)
 
-        # Penalize test/fixture/migration files
         if any(p in ("tests", "test", "fixtures", "migrations", "__pycache__") for p in rel_parts):
             score *= 0.5
 
-        # Penalize config/generated files
         if basename.endswith((".generated.py", ".generated.ts", ".lock", ".min.js")):
             score *= 0.3
 
-        # Boost files matching task keywords
         if task_words:
             name_words = set(
                 w for w in basename.replace("_", " ").replace("-", " ").replace(".", " ").split()
@@ -119,17 +112,18 @@ def _rank_files(
             if overlap:
                 score *= 1.0 + (overlap * 0.5)
 
-        # Prefer smaller files (less noise)
         tokens = estimate_file_tokens(path)
         if tokens > 0:
-            # Files under 200 tokens get a boost, very large files get penalized
             if tokens < 200:
                 score *= 1.2
             elif tokens > 2000:
                 score *= 0.8
 
+        # Layer utility data on top of heuristics
+        utility = utility_scores.get(path) if utility_scores else None
+        score = _effective_score(score, utility, is_explicit_include=True)
+
         scored.append((path, score, tokens))
 
-    # Sort by score descending, then by token count ascending (prefer small files at same score)
     scored.sort(key=lambda x: (-x[1], x[2]))
     return [(path, score) for path, score, _ in scored]

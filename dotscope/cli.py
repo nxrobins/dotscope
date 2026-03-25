@@ -78,6 +78,24 @@ def main(argv=None):
     hook_sub.add_parser("uninstall", help="Remove post-commit observer hook")
     hook_sub.add_parser("status", help="Check if hook is installed")
 
+    # --- utility ---
+    p_utility = sub.add_parser("utility", help="Show utility scores for a scope")
+    p_utility.add_argument("scope", help="Scope name")
+
+    # --- virtual ---
+    sub.add_parser("virtual", help="Detect and show virtual (cross-cutting) scopes")
+
+    # --- lessons ---
+    p_lessons = sub.add_parser("lessons", help="Show lessons for a scope")
+    p_lessons.add_argument("scope", help="Scope name")
+
+    # --- invariants ---
+    p_invariants = sub.add_parser("invariants", help="Show observed invariants for a scope")
+    p_invariants.add_argument("scope", help="Scope name")
+
+    # --- rebuild ---
+    sub.add_parser("rebuild", help="Rebuild derived state from event logs")
+
     args = parser.parse_args(argv)
 
     if args.command is None:
@@ -99,6 +117,11 @@ def main(argv=None):
             "backtest": _cmd_backtest,
             "observe": _cmd_observe,
             "hook": _cmd_hook,
+            "utility": _cmd_utility,
+            "virtual": _cmd_virtual,
+            "lessons": _cmd_lessons,
+            "invariants": _cmd_invariants,
+            "rebuild": _cmd_rebuild,
         }[args.command]
         handler(args)
     except (ValueError, FileNotFoundError) as e:
@@ -484,6 +507,162 @@ def _cmd_backtest(args):
 
     report = backtest_scopes(root, configs, n_commits=args.commits)
     print(format_backtest_report(report))
+
+
+def _cmd_utility(args):
+    from .discovery import find_repo_root
+    from .sessions import SessionManager
+    from .utility import compute_utility_scores
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    mgr = SessionManager(root)
+    sessions = mgr.get_sessions(limit=200)
+    observations = mgr.get_observations(limit=200)
+
+    if not observations:
+        print("No observations yet. Install the hook and make some commits first.")
+        print("  dotscope hook install")
+        return
+
+    scores = compute_utility_scores(sessions, observations)
+    # Filter to scope
+    scope_prefix = args.scope + "/"
+    relevant = {k: v for k, v in scores.items() if scope_prefix in k or args.scope in k}
+
+    if not relevant:
+        print(f"No utility data for scope '{args.scope}'")
+        return
+
+    print(f"Utility scores for {args.scope} ({len(relevant)} files):\n")
+    for path, score in sorted(relevant.items(), key=lambda x: -x[1].utility_ratio):
+        bar = "█" * int(score.utility_ratio * 10) + "░" * (10 - int(score.utility_ratio * 10))
+        print(f"  {os.path.basename(path)}: {bar} {score.utility_ratio:.0%} "
+              f"({score.touch_count}/{score.resolve_count})")
+
+
+def _cmd_virtual(args):
+    from .discovery import find_repo_root
+    from .graph import build_graph
+    from .virtual import detect_virtual_scopes, format_virtual_scopes
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    graph = build_graph(root)
+    scopes = detect_virtual_scopes(graph)
+    print(format_virtual_scopes(scopes, root))
+
+
+def _cmd_lessons(args):
+    from .discovery import find_repo_root
+    from .sessions import SessionManager
+    from .lessons import generate_lessons
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    mgr = SessionManager(root)
+    sessions = mgr.get_sessions(limit=200)
+    observations = mgr.get_observations(limit=200)
+
+    if not observations:
+        print("No observations yet. Install the hook and make some commits first.")
+        return
+
+    lessons = generate_lessons(sessions, observations, module=args.scope)
+    if not lessons:
+        print(f"No lessons for scope '{args.scope}' yet.")
+        return
+
+    print(f"Lessons for {args.scope}:\n")
+    for lesson in lessons:
+        conf = "█" * int(lesson.confidence * 5) + "░" * (5 - int(lesson.confidence * 5))
+        print(f"  [{conf}] {lesson.lesson_text}")
+        print(f"         {lesson.observation}")
+        print()
+
+
+def _cmd_invariants(args):
+    from .discovery import find_repo_root
+    from .graph import build_graph
+    from .lessons import detect_invariants
+    from .history import analyze_history
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    graph = build_graph(root)
+    history = analyze_history(root, max_commits=500)
+    all_modules = [m.directory for m in graph.modules]
+
+    invariants = detect_invariants(
+        graph.edges, args.scope, all_modules, history.commits_analyzed
+    )
+
+    if not invariants:
+        print(f"No invariants detected for scope '{args.scope}'")
+        return
+
+    high = [inv for inv in invariants if inv.confidence >= 0.8]
+    low = [inv for inv in invariants if inv.confidence < 0.8]
+
+    if high:
+        print(f"Strong boundaries for {args.scope}:\n")
+        for inv in high:
+            print(f"  {inv.boundary}: no imports ({inv.commit_count} commits observed)")
+
+    if low:
+        print("\nWeak boundaries:\n")
+        for inv in low[:5]:
+            print(f"  {inv.boundary}: no imports (low confidence, {inv.commit_count} commits)")
+
+
+def _cmd_rebuild(args):
+    from .discovery import find_repo_root
+    from .sessions import SessionManager
+    from .utility import rebuild_utility
+    from .lessons import generate_lessons, save_lessons, detect_invariants, save_invariants
+    from .graph import build_graph
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    mgr = SessionManager(root)
+    mgr.ensure_initialized()
+    sessions = mgr.get_sessions(limit=1000)
+    observations = mgr.get_observations(limit=1000)
+    dot_dir = mgr.dot_dir
+
+    print("Rebuilding utility scores...", file=sys.stderr)
+    scores = rebuild_utility(dot_dir, sessions, observations)
+    print(f"  {len(scores)} file scores computed")
+
+    print("Rebuilding lessons...", file=sys.stderr)
+    graph = build_graph(root)
+    all_modules = [m.directory for m in graph.modules]
+    for mod in all_modules:
+        lessons = generate_lessons(sessions, observations, module=mod)
+        if lessons:
+            save_lessons(dot_dir, mod, lessons)
+            print(f"  {mod}: {len(lessons)} lesson(s)")
+
+    print("Rebuilding invariants...", file=sys.stderr)
+    from .history import analyze_history
+    history = analyze_history(root, max_commits=500)
+    for mod in all_modules:
+        invariants = detect_invariants(graph.edges, mod, all_modules, history.commits_analyzed)
+        if invariants:
+            save_invariants(dot_dir, mod, invariants)
+            print(f"  {mod}: {len(invariants)} invariant(s)")
+
+    print("Done.")
 
 
 def _version():

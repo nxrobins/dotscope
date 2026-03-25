@@ -97,6 +97,18 @@ def ingest(
         if planned:
             plan.scopes.append(planned)
 
+    # Step 4b: Detect virtual (cross-cutting) scopes
+    print("Detecting virtual scopes...", file=sys.stderr)
+    from .virtual import detect_virtual_scopes
+    virtual_scopes = detect_virtual_scopes(graph)
+    for vs in virtual_scopes:
+        plan.scopes.append(PlannedScope(
+            directory=f"virtual/{vs.description.split('(')[0].strip().split(':')[-1].strip()}",
+            config=vs,
+            confidence=0.7,
+            signals=["graph: cross-cutting hub detection"],
+        ))
+
     # Step 5: Backtest against git history and auto-correct
     if mine_history and plan.scopes:
         print("Backtesting scopes against git history...", file=sys.stderr)

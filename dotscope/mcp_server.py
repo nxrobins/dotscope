@@ -428,6 +428,124 @@ def main():
             ],
         }, indent=2)
 
+    @mcp.tool()
+    def scope_observations(scope: str, limit: int = 20) -> str:
+        """View observation history for a scope (recall/precision trends).
+
+        Shows how well this scope's predictions matched actual agent behavior.
+
+        Args:
+            scope: Scope name
+            limit: Max observations to return
+        """
+        from .sessions import SessionManager
+        from .discovery import find_repo_root
+
+        root = find_repo_root()
+        if root is None:
+            return json.dumps({"error": "Could not find repository root"})
+
+        mgr = SessionManager(root)
+        sessions = [s for s in mgr.get_sessions(limit=200) if scope in s.scope_expr]
+        session_ids = {s.session_id for s in sessions}
+        observations = [
+            o for o in mgr.get_observations(limit=200)
+            if o.session_id in session_ids
+        ][:limit]
+
+        return json.dumps({
+            "scope": scope,
+            "total_sessions": len(sessions),
+            "total_observations": len(observations),
+            "observations": [
+                {
+                    "commit": o.commit_hash[:8],
+                    "recall": o.recall,
+                    "precision": o.precision,
+                    "gaps": o.touched_not_predicted[:5],
+                }
+                for o in observations
+            ],
+        }, indent=2)
+
+    @mcp.tool()
+    def scope_lessons(scope: str) -> str:
+        """Get machine-generated lessons for a scope without full resolution.
+
+        Returns patterns learned from observation data: files consistently
+        needed but missing, files included but never used, hotspots.
+
+        Args:
+            scope: Scope name
+        """
+        from .sessions import SessionManager
+        from .lessons import generate_lessons
+        from .discovery import find_repo_root
+
+        root = find_repo_root()
+        if root is None:
+            return json.dumps({"error": "Could not find repository root"})
+
+        mgr = SessionManager(root)
+        sessions = mgr.get_sessions(limit=200)
+        observations = mgr.get_observations(limit=200)
+        lessons = generate_lessons(sessions, observations, module=scope)
+
+        return json.dumps({
+            "scope": scope,
+            "lessons": [
+                {
+                    "trigger": item.trigger,
+                    "lesson": item.lesson_text,
+                    "confidence": item.confidence,
+                }
+                for item in lessons
+            ],
+        }, indent=2)
+
+    @mcp.tool()
+    def suggest_scope_changes(scope: str) -> str:
+        """Suggest changes to a scope based on observation data.
+
+        Recommends includes to add (frequently needed but missing)
+        and includes to deprioritize (resolved but never modified).
+
+        Args:
+            scope: Scope name
+        """
+        from .sessions import SessionManager
+        from .utility import compute_utility_scores
+        from .discovery import find_repo_root
+
+        root = find_repo_root()
+        if root is None:
+            return json.dumps({"error": "Could not find repository root"})
+
+        mgr = SessionManager(root)
+        sessions = mgr.get_sessions(limit=200)
+        observations = mgr.get_observations(limit=200)
+
+        if not observations:
+            return json.dumps({"error": "No observations yet"})
+
+        scores = compute_utility_scores(sessions, observations)
+
+        add = []
+        deprioritize = []
+
+        for path, score in scores.items():
+            if scope in path or any(scope in s.scope_expr for s in sessions if path in s.predicted_files):
+                if score.resolve_count >= 5 and score.utility_ratio == 0:
+                    deprioritize.append({"path": path, "resolved": score.resolve_count})
+                if score.touch_count >= 3 and score.resolve_count == 0:
+                    add.append({"path": path, "touched": score.touch_count})
+
+        return json.dumps({
+            "scope": scope,
+            "suggest_add": add,
+            "suggest_deprioritize": deprioritize,
+        }, indent=2)
+
     mcp.run(transport="stdio")
 
 
