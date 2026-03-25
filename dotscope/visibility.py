@@ -11,7 +11,8 @@ Five features that surface existing data through two channels:
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from datetime import datetime, timezone
+from typing import Dict, List, Optional, Set
 
 from .models import ObservationLog, SessionLog
 
@@ -22,62 +23,106 @@ from .models import ObservationLog, SessionLog
 
 
 @dataclass
-class SessionTracker:
-    """Accumulates stats across MCP tool calls within a session."""
-
+class SessionStats:
+    """Raw stats accumulated during an MCP session."""
     scopes_resolved: int = 0
     tokens_served: int = 0
     tokens_available: int = 0
     context_fields_used: int = 0
-    implicit_contracts_applied: int = 0
-    _start_time: float = field(default_factory=time.time)
+    attribution_hints_served: int = 0
+    health_warnings_surfaced: int = 0
+    unique_scopes: Set[str] = field(default_factory=set)
+    started_at: Optional[str] = None
+    last_activity: Optional[str] = None
 
-    def record_resolve(
-        self,
-        token_count: int,
-        total_repo_tokens: int,
-        context_has_contracts: bool,
-    ) -> None:
-        self.scopes_resolved += 1
-        self.tokens_served += token_count
-        if total_repo_tokens > self.tokens_available:
-            self.tokens_available = total_repo_tokens
-        if context_has_contracts:
-            self.implicit_contracts_applied += 1
-        self.context_fields_used += 1
+
+class SessionTracker:
+    """Accumulates stats across MCP tool calls within a session."""
+
+    def __init__(self) -> None:
+        self._stats = SessionStats()
+
+    def record_resolve(self, scope_name: str, response: dict) -> None:
+        """Called after every resolve_scope response is built."""
+        now = datetime.now(timezone.utc).isoformat()
+        if not self._stats.started_at:
+            self._stats.started_at = now
+        self._stats.last_activity = now
+
+        self._stats.scopes_resolved += 1
+        self._stats.unique_scopes.add(scope_name)
+        self._stats.tokens_served += response.get("token_count", 0)
+        self._stats.tokens_available = max(
+            self._stats.tokens_available,
+            response.get("_repo_tokens", 0),
+        )
+
+        hints = response.get("attribution_hints", [])
+        self._stats.attribution_hints_served += len(hints)
+
+        if response.get("context"):
+            self._stats.context_fields_used += 1
+
+        warnings = response.get("health_warnings", [])
+        self._stats.health_warnings_surfaced += len(warnings)
 
     def summary(self) -> dict:
-        reduction = 0
-        if self.tokens_available > 0:
-            reduction = round(
-                (1 - self.tokens_served / max(self.tokens_available, 1)) * 100
+        """Return session summary as dict for MCP response."""
+        s = self._stats
+        reduction_pct = 0.0
+        if s.tokens_available > 0:
+            reduction_pct = round(
+                (1 - s.tokens_served / s.tokens_available) * 100, 1
             )
         return {
-            "scopes_resolved": self.scopes_resolved,
-            "tokens_served": self.tokens_served,
-            "tokens_available": self.tokens_available,
-            "reduction_pct": max(reduction, 0),
-            "context_fields_used": self.context_fields_used,
-            "implicit_contracts_applied": self.implicit_contracts_applied,
-            "observations_pending": self.scopes_resolved > 0,
+            "scopes_resolved": s.scopes_resolved,
+            "unique_scopes": len(s.unique_scopes),
+            "tokens_served": s.tokens_served,
+            "tokens_available": s.tokens_available,
+            "reduction_pct": max(reduction_pct, 0.0),
+            "attribution_hints_served": s.attribution_hints_served,
+            "health_warnings_surfaced": s.health_warnings_surfaced,
+            "started_at": s.started_at,
+            "last_activity": s.last_activity,
         }
 
     def format_terminal(self) -> str:
-        """Compact one-liner for stderr."""
-        if self.scopes_resolved == 0:
+        """Format summary for stderr output."""
+        s = self._stats
+        if s.scopes_resolved == 0:
             return ""
-        s = self.summary()
+
+        reduction_pct = 0
+        if s.tokens_available > 0:
+            reduction_pct = round(
+                (1 - s.tokens_served / s.tokens_available) * 100
+            )
+
+        scope_word = "scope" if s.scopes_resolved == 1 else "scopes"
         lines = [
             "-- dotscope session " + "-" * 34,
-            f"  {s['scopes_resolved']} scopes resolved"
-            f" · {s['tokens_served']:,} tokens served"
-            f" ({s['reduction_pct']}% reduction)",
-            f"  {s['context_fields_used']} context fields referenced"
-            f" · {s['implicit_contracts_applied']} implicit contract(s) applied",
-            "  Session tracked -> run `dotscope sessions` to review",
-            "-" * 55,
+            f"  {s.scopes_resolved} {scope_word} resolved"
+            f" . {s.tokens_served:,} tokens served"
+            f" ({reduction_pct}% reduction)",
         ]
+        if s.attribution_hints_served:
+            hint_word = "hint" if s.attribution_hints_served == 1 else "hints"
+            lines.append(
+                f"  {s.attribution_hints_served} attribution {hint_word} served"
+            )
+        if s.health_warnings_surfaced:
+            lines.append(
+                f"  {s.health_warnings_surfaced} health warnings surfaced"
+            )
+        lines.append(
+            "  Session tracked -> run `dotscope sessions` to review"
+        )
+        lines.append("-" * 55)
         return "\n".join(lines)
+
+    def reset(self) -> None:
+        """Clear all session stats."""
+        self._stats = SessionStats()
 
 
 # ---------------------------------------------------------------------------

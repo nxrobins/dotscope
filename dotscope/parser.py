@@ -74,7 +74,11 @@ def parse_scopes_index(path: str) -> ScopesIndex:
                     description=entry_data.get("description"),
                 )
 
-    return ScopesIndex(version=version, scopes=scopes, defaults=defaults)
+    total_repo_tokens = int(data.get("total_repo_tokens", 0))
+    return ScopesIndex(
+        version=version, scopes=scopes, defaults=defaults,
+        total_repo_tokens=total_repo_tokens,
+    )
 
 
 def serialize_scope(config: ScopeConfig) -> str:

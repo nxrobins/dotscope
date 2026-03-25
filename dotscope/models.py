@@ -70,6 +70,7 @@ class ScopesIndex:
     version: int = 1
     scopes: Dict[str, ScopeEntry] = field(default_factory=dict)
     defaults: Dict[str, object] = field(default_factory=dict)
+    total_repo_tokens: int = 0
 
     @property
     def max_tokens(self) -> int:

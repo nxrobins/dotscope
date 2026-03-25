@@ -47,6 +47,30 @@ def main():
     from .visibility import SessionTracker
     tracker = SessionTracker()
 
+    # Read total_repo_tokens from index for session reduction stats
+    _repo_tokens = 0
+    try:
+        from .discovery import find_repo_root
+        from .parser import parse_scopes_index
+        _root = find_repo_root()
+        if _root:
+            _idx_path = os.path.join(_root, ".scopes")
+            if os.path.exists(_idx_path):
+                _idx = parse_scopes_index(_idx_path)
+                _repo_tokens = _idx.total_repo_tokens
+    except Exception:
+        pass
+
+    # Print session summary on server shutdown
+    import atexit
+
+    def _print_session_summary():
+        summary = tracker.format_terminal()
+        if summary:
+            print(summary, file=sys.stderr)
+
+    atexit.register(_print_session_summary)
+
     @mcp.tool()
     def resolve_scope(
         scope: str,
@@ -138,10 +162,11 @@ def main():
                     resolved.context
                 )
 
-                # Track for session summary
-                token_count = data.get("token_count", 0)
-                has_contracts = "implicit contract" in resolved.context.lower()
-                tracker.record_resolve(token_count, 0, has_contracts)
+                # Track for session summary (inject _repo_tokens, then strip)
+                data["_repo_tokens"] = _repo_tokens
+                module = scope.split("+")[0].split("-")[0].split("&")[0].split("@")[0]
+                tracker.record_resolve(module, data)
+                data.pop("_repo_tokens", None)
 
                 # Features requiring observation data
                 if dot_dir and dot_dir.exists():

@@ -12,32 +12,84 @@ from dotscope.visibility import (
 from dotscope.models import ObservationLog
 
 
+def _make_response(token_count=1420, repo_tokens=47000, context="JWT tokens...",
+                    hints=None, warnings=None):
+    """Build a realistic resolve_scope response dict for testing."""
+    return {
+        "token_count": token_count,
+        "_repo_tokens": repo_tokens,
+        "context": context,
+        "attribution_hints": hints or [{"hint": "soft deletes", "source": "hand_authored"}],
+        "health_warnings": warnings or [],
+    }
+
+
 class TestSessionTracker:
     def test_empty_session(self):
         t = SessionTracker()
         s = t.summary()
         assert s["scopes_resolved"] == 0
-        assert s["observations_pending"] is False
+        assert s["unique_scopes"] == 0
+        assert s["started_at"] is None
 
-    def test_tracks_resolves(self):
+    def test_single_resolve(self):
         t = SessionTracker()
-        t.record_resolve(1500, 50000, True)
-        t.record_resolve(2000, 50000, False)
+        t.record_resolve("auth/", _make_response())
+        s = t.summary()
+        assert s["scopes_resolved"] == 1
+        assert s["unique_scopes"] == 1
+        assert s["tokens_served"] == 1420
+        assert s["tokens_available"] == 47000
+        assert s["reduction_pct"] == 97.0
+        assert s["attribution_hints_served"] == 1
+        assert s["started_at"] is not None
+
+    def test_multiple_resolves_same_scope(self):
+        t = SessionTracker()
+        for _ in range(3):
+            t.record_resolve("auth/", _make_response())
+        s = t.summary()
+        assert s["scopes_resolved"] == 3
+        assert s["unique_scopes"] == 1
+        assert s["tokens_served"] == 4260
+
+    def test_multiple_different_scopes(self):
+        t = SessionTracker()
+        t.record_resolve("auth/", _make_response())
+        t.record_resolve("api/", _make_response(token_count=2000))
         s = t.summary()
         assert s["scopes_resolved"] == 2
-        assert s["tokens_served"] == 3500
-        assert s["tokens_available"] == 50000
-        assert s["reduction_pct"] == 93
-        assert s["implicit_contracts_applied"] == 1
-        assert s["context_fields_used"] == 2
+        assert s["unique_scopes"] == 2
 
-    def test_terminal_format(self):
+    def test_terminal_format_nonempty(self):
         t = SessionTracker()
-        assert t.format_terminal() == ""  # Empty when no resolves
-        t.record_resolve(1000, 10000, False)
+        t.record_resolve("auth/", _make_response())
         output = t.format_terminal()
-        assert "1 scopes resolved" in output
-        assert "1,000 tokens served" in output
+        assert "1 scope resolved" in output
+        assert "1,420 tokens" in output
+        assert "97% reduction" in output
+        assert "1 attribution hint" in output
+
+    def test_terminal_format_empty_session(self):
+        t = SessionTracker()
+        assert t.format_terminal() == ""
+
+    def test_health_warnings_tracked(self):
+        t = SessionTracker()
+        t.record_resolve("auth/", _make_response(
+            warnings=[{"issue": "accuracy_degraded"}],
+        ))
+        s = t.summary()
+        assert s["health_warnings_surfaced"] == 1
+
+    def test_reset(self):
+        t = SessionTracker()
+        t.record_resolve("auth/", _make_response())
+        t.reset()
+        s = t.summary()
+        assert s["scopes_resolved"] == 0
+        assert s["unique_scopes"] == 0
+        assert s["started_at"] is None
 
 
 class TestAttributionHints:

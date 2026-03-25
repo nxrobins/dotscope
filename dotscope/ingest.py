@@ -160,7 +160,7 @@ def ingest(
         plan.backtest_report = report
 
     # Build .scopes index
-    plan.index = _build_index(plan.scopes)
+    plan.index = _build_index(plan.scopes, plan.total_repo_tokens)
 
     # Step 6: Write to disk
     if not dry_run:
@@ -397,7 +397,9 @@ def _default_excludes(directory: str, files: List[str]) -> List[str]:
     return excludes
 
 
-def _build_index(scopes: List[PlannedScope]) -> ScopesIndex:
+def _build_index(
+    scopes: List[PlannedScope], total_repo_tokens: int = 0,
+) -> ScopesIndex:
     """Build a .scopes index from planned scopes."""
     entries = {}
     for ps in scopes:
@@ -420,6 +422,7 @@ def _build_index(scopes: List[PlannedScope]) -> ScopesIndex:
         version=1,
         scopes=entries,
         defaults={"max_tokens": 8000, "include_related": False},
+        total_repo_tokens=total_repo_tokens,
     )
 
 
@@ -452,7 +455,10 @@ def _write_scopes(plan: IngestPlan) -> None:
 
 def _serialize_index(index: ScopesIndex) -> str:
     """Serialize a ScopesIndex to .scopes YAML format."""
-    lines = [f"version: {index.version}", "", "scopes:"]
+    lines = [f"version: {index.version}"]
+    if index.total_repo_tokens:
+        lines.append(f"total_repo_tokens: {index.total_repo_tokens}")
+    lines.extend(["", "scopes:"])
 
     for name, entry in sorted(index.scopes.items()):
         lines.append(f"  {name}:")
