@@ -1,18 +1,21 @@
-"""Dependency graph analysis: parse imports, build graph, detect module boundaries.
+"""Dependency graph analysis: AST-powered import parsing, module boundary detection.
 
-Uses import/require/use statements to build a file-level dependency graph,
-then applies community detection to find natural scope boundaries.
+Builds a file-level dependency graph with transitive closure support.
 """
 
-
 import os
-import re
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Set, Tuple
 
-from .constants import SKIP_DIRS
+from .ast_analyzer import (
+    analyze_file,
+    resolve_js_import,
+    resolve_python_import,
+)
+from .constants import LANG_MAP, SKIP_DIRS
+from .models import ModuleAPI
 
 
 @dataclass
@@ -20,22 +23,22 @@ class FileNode:
     """A file in the dependency graph."""
     path: str  # Relative to root
     language: str
-    imports: List[str] = field(default_factory=list)  # Resolved relative paths
+    imports: List[str] = field(default_factory=list)
     imported_by: List[str] = field(default_factory=list)
-    tokens: int = 0
+    api: ModuleAPI | None = None
 
 
 @dataclass
 class ModuleBoundary:
     """A detected module boundary (candidate scope)."""
-    directory: str  # Relative to root
+    directory: str
     files: List[str] = field(default_factory=list)
-    internal_edges: int = 0  # Imports within this module
-    external_edges: int = 0  # Imports crossing module boundary
-    external_deps: List[str] = field(default_factory=list)  # Other modules this depends on
-    depended_on_by: List[str] = field(default_factory=list)  # Modules that depend on this
-    cohesion: float = 0.0  # internal_edges / (internal + external), higher = better boundary
-    churn: int = 0  # From git history (populated later)
+    internal_edges: int = 0
+    external_edges: int = 0
+    external_deps: List[str] = field(default_factory=list)
+    depended_on_by: List[str] = field(default_factory=list)
+    cohesion: float = 0.0
+    churn: int = 0
     hotspot_files: List[str] = field(default_factory=list)
 
 
@@ -44,34 +47,43 @@ class DependencyGraph:
     """Full dependency graph of a codebase."""
     root: str
     files: Dict[str, FileNode] = field(default_factory=dict)
-    edges: List[Tuple[str, str]] = field(default_factory=list)  # (from, to)
+    edges: List[Tuple[str, str]] = field(default_factory=list)
     modules: List[ModuleBoundary] = field(default_factory=list)
+    apis: Dict[str, ModuleAPI] = field(default_factory=dict)
 
 
 def build_graph(root: str) -> DependencyGraph:
-    """Build a full dependency graph from a codebase.
+    """Build a dependency graph using AST analysis.
 
     1. Walk all source files
-    2. Parse imports from each file
-    3. Resolve imports to actual file paths
-    4. Detect module boundaries using directory structure + import cohesion
+    2. AST-analyze each file for imports + API surface
+    3. Resolve imports to file paths
+    4. Detect module boundaries using directory cohesion
     """
     root = os.path.abspath(root)
     graph = DependencyGraph(root=root)
 
-    # Collect all source files
     source_files = _collect_source_files(root)
 
-    # Parse imports from each file
+    # AST analyze each file
     for rel_path, language in source_files:
         abs_path = os.path.join(root, rel_path)
-        raw_imports = _parse_imports(abs_path, language)
-        resolved = _resolve_imports(raw_imports, rel_path, root, language)
+        api = analyze_file(abs_path, language)
+
+        resolved_imports = []
+        if api:
+            graph.apis[rel_path] = api
+            for imp in api.imports:
+                resolved = _resolve_import(imp, rel_path, root, language)
+                if resolved:
+                    resolved_imports.append(resolved)
+                    imp.resolved_path = resolved
 
         node = FileNode(
             path=rel_path,
             language=language,
-            imports=resolved,
+            imports=resolved_imports,
+            api=api,
         )
         graph.files[rel_path] = node
 
@@ -82,20 +94,70 @@ def build_graph(root: str) -> DependencyGraph:
             if imp in graph.files:
                 graph.files[imp].imported_by.append(path)
 
-    # Detect module boundaries
     graph.modules = _detect_modules(graph)
-
     return graph
 
 
+def transitive_deps(graph: DependencyGraph, file: str) -> Set[str]:
+    """BFS for all transitive dependencies of a file (cycle-safe)."""
+    visited = set()
+    queue = deque()
+
+    node = graph.files.get(file)
+    if not node:
+        return visited
+
+    for imp in node.imports:
+        queue.append(imp)
+
+    while queue:
+        current = queue.popleft()
+        if current in visited:
+            continue
+        visited.add(current)
+        dep_node = graph.files.get(current)
+        if dep_node:
+            for imp in dep_node.imports:
+                if imp not in visited:
+                    queue.append(imp)
+
+    return visited
+
+
+def transitive_dependents(graph: DependencyGraph, file: str) -> Set[str]:
+    """BFS for all transitive dependents of a file (who ultimately depends on this)."""
+    visited = set()
+    queue = deque()
+
+    node = graph.files.get(file)
+    if not node:
+        return visited
+
+    for imp_by in node.imported_by:
+        queue.append(imp_by)
+
+    while queue:
+        current = queue.popleft()
+        if current in visited:
+            continue
+        visited.add(current)
+        dep_node = graph.files.get(current)
+        if dep_node:
+            for imp_by in dep_node.imported_by:
+                if imp_by not in visited:
+                    queue.append(imp_by)
+
+    return visited
+
+
+# ---------------------------------------------------------------------------
+# Internals
+# ---------------------------------------------------------------------------
+
 def _collect_source_files(root: str) -> List[Tuple[str, str]]:
-    """Walk the tree and collect (relative_path, language) for source files."""
+    """Walk the tree and collect (relative_path, language)."""
+    lang_map = {k: v.lower() for k, v in LANG_MAP.items()}
     results = []
-    lang_map = {
-        ".py": "python", ".js": "javascript", ".ts": "typescript",
-        ".tsx": "typescript", ".jsx": "javascript", ".go": "go",
-        ".rs": "rust", ".rb": "ruby", ".java": "java", ".kt": "kotlin",
-    }
 
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
@@ -108,138 +170,28 @@ def _collect_source_files(root: str) -> List[Tuple[str, str]]:
     return sorted(results)
 
 
-def _parse_imports(filepath: str, language: str) -> List[str]:
-    """Parse import statements from a file. Returns raw import strings."""
-    try:
-        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read()
-    except (IOError, OSError):
-        return []
-
+def _resolve_import(imp, source_file: str, root: str, language: str):
+    """Resolve an import to a relative file path."""
     if language == "python":
-        return _parse_python_imports(content)
+        return resolve_python_import(imp, os.path.join(root, source_file), root)
     elif language in ("javascript", "typescript"):
-        return _parse_js_imports(content)
-    elif language == "go":
-        return _parse_go_imports(content)
-    return []
-
-
-def _parse_python_imports(content: str) -> List[str]:
-    """Extract Python import targets."""
-    imports = []
-    for line in content.splitlines():
-        line = line.strip()
-        # from foo.bar import baz
-        m = re.match(r"from\s+([\w.]+)\s+import", line)
-        if m:
-            imports.append(m.group(1))
-            continue
-        # import foo.bar
-        m = re.match(r"import\s+([\w.]+)", line)
-        if m:
-            imports.append(m.group(1))
-    return imports
-
-
-def _parse_js_imports(content: str) -> List[str]:
-    """Extract JS/TS import targets."""
-    imports = []
-    # import ... from '...'  or  require('...')
-    for m in re.finditer(r"""(?:from|require\()\s*['"]([^'"]+)['"]""", content):
-        target = m.group(1)
-        if target.startswith("."):  # Only relative imports
-            imports.append(target)
-    return imports
-
-
-def _parse_go_imports(content: str) -> List[str]:
-    """Extract Go import targets."""
-    imports = []
-    in_block = False
-    for line in content.splitlines():
-        line = line.strip()
-        if line == "import (":
-            in_block = True
-            continue
-        if in_block and line == ")":
-            in_block = False
-            continue
-        if in_block:
-            m = re.match(r'"([^"]+)"', line)
-            if m:
-                imports.append(m.group(1))
-        elif line.startswith("import "):
-            m = re.match(r'import\s+"([^"]+)"', line)
-            if m:
-                imports.append(m.group(1))
-    return imports
-
-
-def _resolve_imports(
-    raw_imports: List[str], source_file: str, root: str, language: str
-) -> List[str]:
-    """Resolve raw import strings to relative file paths within the project."""
-    resolved = []
-    source_dir = os.path.dirname(source_file)
-
-    for imp in raw_imports:
-        candidates = _import_to_paths(imp, source_dir, root, language)
-        for candidate in candidates:
-            full = os.path.join(root, candidate)
-            if os.path.exists(full):
-                resolved.append(candidate)
-                break
-
-    return resolved
-
-
-def _import_to_paths(
-    imp: str, source_dir: str, root: str, language: str
-) -> List[str]:
-    """Convert an import string to candidate file paths."""
-    if language == "python":
-        # foo.bar.baz -> foo/bar/baz.py, foo/bar/baz/__init__.py
-        parts = imp.split(".")
-        base = os.path.join(*parts)
-        return [
-            base + ".py",
-            os.path.join(base, "__init__.py"),
-        ]
-    elif language in ("javascript", "typescript"):
-        # Relative: ./foo/bar -> resolve from source directory
-        if imp.startswith("."):
-            resolved = os.path.normpath(os.path.join(source_dir, imp))
-            exts = [".ts", ".tsx", ".js", ".jsx"]
-            candidates = [resolved + ext for ext in exts]
-            candidates.append(os.path.join(resolved, "index.ts"))
-            candidates.append(os.path.join(resolved, "index.js"))
-            return candidates
-    return []
+        return resolve_js_import(imp, os.path.join(root, source_file), root)
+    return None
 
 
 def _detect_modules(graph: DependencyGraph) -> List[ModuleBoundary]:
-    """Detect natural module boundaries from the dependency graph.
+    """Detect module boundaries using directory structure + import cohesion.
 
-    Strategy: Use top-level directories as candidate boundaries,
-    then compute cohesion (ratio of internal to external edges).
-    Directories with high cohesion are good scope boundaries.
+    Uses transitive coupling for more accurate cohesion scoring.
     """
-    # Group files by top-level directory
     dir_files: Dict[str, List[str]] = defaultdict(list)
     for rel_path in graph.files:
         parts = Path(rel_path).parts
         if len(parts) > 1:
-            top_dir = parts[0]
-        else:
-            top_dir = "."  # Root-level files
-        dir_files[top_dir].append(rel_path)
+            dir_files[parts[0]].append(rel_path)
 
     modules = []
     for directory, files in sorted(dir_files.items()):
-        if directory == ".":
-            continue  # Skip root-level files for now
-
         file_set = set(files)
         internal = 0
         external = 0
@@ -247,24 +199,23 @@ def _detect_modules(graph: DependencyGraph) -> List[ModuleBoundary]:
         dep_by: Set[str] = set()
 
         for f in files:
-            node = graph.files.get(f)
-            if not node:
-                continue
-
-            for imp in node.imports:
-                if imp in file_set:
+            # Use transitive deps for richer cohesion
+            all_deps = transitive_deps(graph, f)
+            for dep in all_deps:
+                if dep in file_set:
                     internal += 1
                 else:
                     external += 1
-                    imp_parts = Path(imp).parts
-                    if len(imp_parts) > 1:
-                        ext_deps.add(imp_parts[0])
+                    dep_parts = Path(dep).parts
+                    if len(dep_parts) > 1:
+                        ext_deps.add(dep_parts[0])
 
-            for imp_by in node.imported_by:
-                if imp_by not in file_set:
-                    imp_parts = Path(imp_by).parts
-                    if len(imp_parts) > 1:
-                        dep_by.add(imp_parts[0])
+            all_dependents = transitive_dependents(graph, f)
+            for dep_by_file in all_dependents:
+                if dep_by_file not in file_set:
+                    dep_parts = Path(dep_by_file).parts
+                    if len(dep_parts) > 1:
+                        dep_by.add(dep_parts[0])
 
         total = internal + external
         cohesion = internal / total if total > 0 else 1.0
@@ -279,13 +230,12 @@ def _detect_modules(graph: DependencyGraph) -> List[ModuleBoundary]:
             cohesion=round(cohesion, 3),
         ))
 
-    # Sort by file count descending (largest modules first)
     modules.sort(key=lambda m: -len(m.files))
     return modules
 
 
 def format_graph_summary(graph: DependencyGraph) -> str:
-    """Format a human-readable summary of the dependency graph."""
+    """Human-readable summary of the dependency graph."""
     lines = [
         f"Dependency Graph: {len(graph.files)} files, {len(graph.edges)} edges",
         f"Detected {len(graph.modules)} module(s):",

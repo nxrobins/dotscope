@@ -1,0 +1,55 @@
+description: dotscope — Python module (23 files)
+includes:
+  - dotscope/
+excludes:
+  - dotscope/__pycache__/
+  - "*.pyc"
+context: |
+  dotscope — Directory-scoped context boundaries for AI coding agents.
+  Documentation absorber: extract architectural knowledge from existing docs.
+  
+  Scans for and extracts knowledge from:
+  - README.md, ARCHITECTURE.md, CONTRIBUTING.md
+  - Docstrings (module-level and class-level)
+  - Inline comments with signals: NOTE, HACK, TODO, WARNING, FIXME, XXX, IMPORTANT
+  - Type hints and function signatures (contract-like information)
+  
+  AST-powered code analysis. Structural understanding of source files.
+  
+  Python: uses stdlib `ast` module — zero dependencies.
+  JS/TS: enhanced regex (no heavy AST dep for v1).
+  Go: enhanced regex.
+  
+  Scope backtesting: validate generated scopes against actual git history.
+  
+  Replays recent commits and measures whether each scope's includes would have
+  covered the files that were actually changed. Self-corrects by suggesting
+  missing includes.
+  
+  Token budgeting: rank files, fill to budget, progressive loading.
+  
+  Context is always included first. Then files are ranked and loaded
+  until the budget is exhausted.
+  
+  CLI entry point for dotscope.
+  Scope composition algebra.
+  
+  Supports expressions like:
+      auth+payments     — merge (union of files, concatenate context)
+      auth-tests        — subtract (remove files matching subtracted scope)
+      auth&api          — intersect (only files in both)
+      auth@context      — modifier (context only, no files)
+  
+  Operators bind left-to-right, no precedence. @ is a suffix modifier.
+  
+  Shared constants — single source of truth for all modules.
+  INVARIANT: s
+  ## Recent Changes
+  - Initial release: dotscope v0.1.0
+  This module is used by: tests
+  Changes here may affect downstream consumers.
+related:
+  - tests/.scope
+tags:
+  - dotscope
+tokens_estimate: 42229

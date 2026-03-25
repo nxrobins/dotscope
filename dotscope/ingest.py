@@ -30,6 +30,7 @@ class IngestPlan:
     index: Optional[ScopesIndex] = None
     graph_summary: str = ""
     history_summary: str = ""
+    backtest_summary: str = ""
 
 
 @dataclass
@@ -83,11 +84,11 @@ def ingest(
         from .history import format_history_summary
         plan.history_summary = format_history_summary(history)
 
-    # Step 3: Doc absorption
+    # Step 3: Doc absorption (with AST data if available)
     docs = AbsorptionResult()
     if absorb:
         print("Absorbing documentation...", file=sys.stderr)
-        docs = absorb_docs(root)
+        docs = absorb_docs(root, apis=graph.apis if graph.apis else None)
 
     # Step 4: Synthesize scope files
     print("Synthesizing scope files...", file=sys.stderr)
@@ -96,10 +97,42 @@ def ingest(
         if planned:
             plan.scopes.append(planned)
 
+    # Step 5: Backtest against git history and auto-correct
+    if mine_history and plan.scopes:
+        print("Backtesting scopes against git history...", file=sys.stderr)
+        from .backtest import backtest_scopes, auto_correct_scope, format_backtest_report
+
+        configs = [ps.config for ps in plan.scopes]
+        report = backtest_scopes(root, configs, n_commits=min(max_commits, 50))
+
+        # Auto-correct: up to 2 rounds
+        for correction_round in range(2):
+            any_corrected = False
+            for i, result in enumerate(report.results):
+                if result.recall < 1.0 and result.missing_includes:
+                    updated, changed = auto_correct_scope(
+                        plan.scopes[i].config, result, root
+                    )
+                    if changed:
+                        plan.scopes[i].config = updated
+                        plan.scopes[i].signals.append(
+                            f"backtest: auto-corrected {len(result.missing_includes)} missing include(s)"
+                        )
+                        any_corrected = True
+
+            if not any_corrected:
+                break
+
+            # Re-run backtest after corrections
+            configs = [ps.config for ps in plan.scopes]
+            report = backtest_scopes(root, configs, n_commits=min(max_commits, 50))
+
+        plan.backtest_summary = format_backtest_report(report)
+
     # Build .scopes index
     plan.index = _build_index(plan.scopes)
 
-    # Step 5: Write to disk
+    # Step 6: Write to disk
     if not dry_run:
         _write_scopes(plan)
 
@@ -206,15 +239,38 @@ def _synthesize_scope(
         context_parts.append(f"This module is used by: {', '.join(module.depended_on_by)}")
         context_parts.append("Changes here may affect downstream consumers.")
 
-    # Hotspot warning
-    module_hotspots = [
-        (f, c) for f, c in history.hotspots
-        if f.startswith(directory + "/")
-    ]
-    if module_hotspots:
-        top_hot = module_hotspots[0]
-        context_parts.append("## Hotspots")
-        context_parts.append(f"Highest churn: {top_hot[0]} ({top_hot[1]} commits)")
+    # Stability per file (from weighted history)
+    stability_lines = []
+    for f in module.files:
+        fh = history.file_histories.get(f)
+        if fh and fh.stability and fh.commit_count >= 3:
+            lines_info = f", {fh.total_lines_changed} lines" if fh.total_lines_changed else ""
+            stability_lines.append(
+                f"- {os.path.basename(f)}: {fh.stability} ({fh.commit_count} commits{lines_info})"
+            )
+    if stability_lines:
+        context_parts.append("## Stability")
+        context_parts.extend(stability_lines[:10])
+
+    # Transitive dependency chain (if deeper than 1 hop)
+    from .graph import transitive_deps as _transitive_deps
+    deep_deps = set()
+    for f in module.files:
+        for dep in _transitive_deps(graph, f):
+            dep_parts = dep.split("/")
+            if len(dep_parts) > 1 and dep_parts[0] != directory:
+                deep_deps.add(dep)
+    if deep_deps:
+        direct = set()
+        for dep in module.external_deps:
+            direct.update(
+                d for d in deep_deps if d.startswith(dep + "/")
+            )
+        transitive_only = deep_deps - direct
+        if transitive_only:
+            context_parts.append("## Transitive Dependencies")
+            for dep in sorted(transitive_only)[:5]:
+                context_parts.append(f"- {dep} (indirect)")
 
     # If no context was gathered, add a TODO
     if not context_parts:
@@ -401,6 +457,10 @@ def format_ingest_report(plan: IngestPlan) -> str:
 
     if plan.history_summary:
         lines.append(plan.history_summary)
+        lines.append("")
+
+    if plan.backtest_summary:
+        lines.append(plan.backtest_summary)
         lines.append("")
 
     lines.append(f"Planned {len(plan.scopes)} scope file(s):")

@@ -368,6 +368,54 @@ def main():
             "risk": risk,
         }, indent=2)
 
+    @mcp.tool()
+    def backtest_scopes_tool(commits: int = 50) -> str:
+        """Validate existing scopes against git history.
+
+        Replays recent commits and measures whether each scope's includes
+        would have covered the files actually changed. Reports recall
+        per scope and suggests missing includes.
+
+        Args:
+            commits: Number of recent commits to test against
+        """
+        from .backtest import backtest_scopes as _backtest
+        from .discovery import find_repo_root, find_all_scopes
+        from .parser import parse_scope_file
+
+        root = find_repo_root()
+        if root is None:
+            return json.dumps({"error": "Could not find repository root"})
+
+        configs = []
+        for sf in find_all_scopes(root):
+            try:
+                configs.append(parse_scope_file(sf))
+            except (ValueError, IOError):
+                continue
+
+        if not configs:
+            return json.dumps({"error": "No .scope files found"})
+
+        report = _backtest(root, configs, n_commits=commits)
+        return json.dumps({
+            "total_commits": report.total_commits,
+            "overall_recall": report.overall_recall,
+            "results": [
+                {
+                    "scope": r.scope_path,
+                    "recall": r.recall,
+                    "commits_tested": r.total_commits,
+                    "fully_covered": r.fully_covered,
+                    "missing_includes": [
+                        {"path": m.path, "appearances": m.appearances}
+                        for m in r.missing_includes
+                    ],
+                }
+                for r in report.results
+            ],
+        }, indent=2)
+
     mcp.run(transport="stdio")
 
 

@@ -176,3 +176,113 @@ class HealthReport:
     @property
     def warnings(self) -> List[HealthIssue]:
         return [i for i in self.issues if i.severity == "warning"]
+
+
+# ---------------------------------------------------------------------------
+# AST analysis models
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ResolvedImport:
+    """A fully analyzed import statement."""
+    raw: str
+    resolved_path: Optional[str] = None
+    names: List[str] = field(default_factory=list)
+    is_relative: bool = False
+    is_star: bool = False
+    is_conditional: bool = False
+
+
+@dataclass
+class ExportedSymbol:
+    """A symbol exported by a module."""
+    name: str
+    kind: str  # "function", "class", "constant", "variable"
+    is_public: bool = True
+
+
+@dataclass
+class ClassInfo:
+    """A class definition extracted from AST."""
+    name: str
+    bases: List[str] = field(default_factory=list)
+    methods: List[str] = field(default_factory=list)
+    decorators: List[str] = field(default_factory=list)
+    is_abstract: bool = False
+    is_public: bool = True
+
+
+@dataclass
+class FunctionInfo:
+    """A function definition extracted from AST."""
+    name: str
+    params: List[str] = field(default_factory=list)
+    return_type: Optional[str] = None
+    decorators: List[str] = field(default_factory=list)
+    is_public: bool = True
+
+
+@dataclass
+class ModuleAPI:
+    """Full structural analysis of a source file."""
+    path: str
+    language: str
+    imports: List[ResolvedImport] = field(default_factory=list)
+    exports: List[ExportedSymbol] = field(default_factory=list)
+    classes: List[ClassInfo] = field(default_factory=list)
+    functions: List[FunctionInfo] = field(default_factory=list)
+    docstring: Optional[str] = None
+    all_list: Optional[List[str]] = None  # __all__ if defined
+    is_entry_point: bool = False
+
+    @property
+    def public_api(self) -> List[str]:
+        """Names that constitute the public API."""
+        if self.all_list is not None:
+            return self.all_list
+        names = []
+        for cls in self.classes:
+            if cls.is_public:
+                names.append(cls.name)
+        for fn in self.functions:
+            if fn.is_public:
+                names.append(fn.name)
+        for exp in self.exports:
+            if exp.is_public and exp.name not in names:
+                names.append(exp.name)
+        return names
+
+    @property
+    def import_paths(self) -> List[str]:
+        """Resolved import paths (for graph building)."""
+        return [i.resolved_path for i in self.imports if i.resolved_path]
+
+
+# ---------------------------------------------------------------------------
+# Backtest models
+# ---------------------------------------------------------------------------
+
+@dataclass
+class MissingSuggestion:
+    """A file that should be added to a scope's includes."""
+    path: str
+    appearances: int
+    would_improve_recall: bool = True
+
+
+@dataclass
+class BacktestResult:
+    """Backtest result for a single scope."""
+    scope_path: str
+    total_commits: int = 0
+    fully_covered: int = 0
+    recall: float = 0.0
+    missing_includes: List[MissingSuggestion] = field(default_factory=list)
+
+
+@dataclass
+class BacktestReport:
+    """Full backtest report across all scopes."""
+    results: List[BacktestResult] = field(default_factory=list)
+    total_commits: int = 0
+    overall_recall: float = 0.0

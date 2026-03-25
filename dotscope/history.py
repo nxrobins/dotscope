@@ -16,12 +16,29 @@ from typing import Dict, List, Set, Tuple
 
 
 @dataclass
+class FileChange:
+    """A file changed in a commit, with line counts."""
+    path: str
+    insertions: int = 0
+    deletions: int = 0
+
+    @property
+    def magnitude(self) -> int:
+        return self.insertions + self.deletions
+
+
+@dataclass
 class CommitInfo:
     """A single git commit."""
     hash: str
     timestamp: str
     message: str
-    files: List[str]
+    files: List[str] = field(default_factory=list)
+    changes: List[FileChange] = field(default_factory=list)
+
+    @property
+    def total_lines(self) -> int:
+        return sum(c.magnitude for c in self.changes)
 
 
 @dataclass
@@ -29,8 +46,9 @@ class FileHistory:
     """History stats for a single file."""
     path: str
     commit_count: int = 0
+    total_lines_changed: int = 0
     last_modified: str = ""
-    authors: List[str] = field(default_factory=list)
+    stability: str = ""  # "stable", "volatile", "tweaked"
 
 
 @dataclass
@@ -87,29 +105,52 @@ def analyze_history(
 
     analysis = HistoryAnalysis(commits_analyzed=len(commits))
 
-    # Build per-file stats
-    file_commits: Dict[str, List[str]] = defaultdict(list)  # file → [commit hashes]
+    # Build per-file stats with line-change weighting
+    file_commits: Dict[str, List[str]] = defaultdict(list)
+    file_lines: Dict[str, int] = defaultdict(int)  # total lines changed per file
     for commit in commits:
         for f in commit.files:
             file_commits[f].append(commit.hash)
+        for change in commit.changes:
+            file_lines[change.path] += change.magnitude
 
     for path, commit_hashes in file_commits.items():
+        total_lines = file_lines.get(path, 0)
+        commit_count = len(commit_hashes)
+        # Stability: high commits + low lines = "tweaked", low commits + high lines = "volatile"
+        if commit_count == 0:
+            stability = "stable"
+        elif total_lines == 0:
+            stability = "tweaked"
+        else:
+            avg_change = total_lines / commit_count
+            if avg_change < 10:
+                stability = "tweaked"
+            elif avg_change > 50 or commit_count > 15:
+                stability = "volatile"
+            else:
+                stability = "stable"
+
         analysis.file_histories[path] = FileHistory(
             path=path,
-            commit_count=len(commit_hashes),
+            commit_count=commit_count,
+            total_lines_changed=total_lines,
+            stability=stability,
         )
 
-    # Hotspots: files with highest churn
-    churn = [(path, len(hashes)) for path, hashes in file_commits.items()]
+    # Hotspots: weighted by lines changed (not just commit count)
+    churn = [
+        (path, file_lines.get(path, len(hashes)))
+        for path, hashes in file_commits.items()
+    ]
     churn.sort(key=lambda x: -x[1])
     analysis.hotspots = churn[:30]
 
-    # Module-level churn
-    for path, count in churn:
+    for path, weight in churn:
         parts = path.split("/")
         if len(parts) > 1:
             module = parts[0]
-            analysis.module_churn[module] = analysis.module_churn.get(module, 0) + count
+            analysis.module_churn[module] = analysis.module_churn.get(module, 0) + weight
 
     # Change coupling: files that co-occur in commits
     analysis.change_couplings = _compute_change_coupling(
@@ -128,14 +169,14 @@ def analyze_history(
 
 
 def _parse_git_log(root: str, max_commits: int) -> List[CommitInfo]:
-    """Parse git log into structured commits."""
+    """Parse git log with --numstat for line-change data."""
     try:
         result = subprocess.run(
             [
                 "git", "log",
                 f"--max-count={max_commits}",
                 "--pretty=format:%H|%aI|%s",
-                "--name-only",
+                "--numstat",
             ],
             cwd=root,
             capture_output=True,
@@ -150,28 +191,44 @@ def _parse_git_log(root: str, max_commits: int) -> List[CommitInfo]:
     commits = []
     current_commit = None
     current_files = []
+    current_changes = []
 
     for line in result.stdout.splitlines():
         if "|" in line and len(line.split("|")) >= 3:
-            # Save previous commit
             if current_commit:
                 current_commit.files = current_files
+                current_commit.changes = current_changes
                 commits.append(current_commit)
                 current_files = []
+                current_changes = []
 
             parts = line.split("|", 2)
             current_commit = CommitInfo(
                 hash=parts[0],
                 timestamp=parts[1],
                 message=parts[2],
-                files=[],
             )
         elif line.strip() and current_commit:
-            current_files.append(line.strip())
+            # numstat format: "insertions\tdeletions\tfilepath"
+            numstat_parts = line.split("\t")
+            if len(numstat_parts) == 3:
+                filepath = numstat_parts[2]
+                current_files.append(filepath)
+                try:
+                    ins = int(numstat_parts[0]) if numstat_parts[0] != "-" else 0
+                    dels = int(numstat_parts[1]) if numstat_parts[1] != "-" else 0
+                    current_changes.append(FileChange(
+                        path=filepath, insertions=ins, deletions=dels,
+                    ))
+                except ValueError:
+                    current_changes.append(FileChange(path=filepath))
+            else:
+                # Fallback for non-numstat lines
+                current_files.append(line.strip())
 
-    # Don't forget last commit
     if current_commit:
         current_commit.files = current_files
+        current_commit.changes = current_changes
         commits.append(current_commit)
 
     return commits

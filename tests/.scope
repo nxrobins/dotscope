@@ -1,0 +1,84 @@
+description: tests — Python module (17 files)
+includes:
+  - tests/
+  - dotscope/absorber.py
+  - dotscope/ast_analyzer.py
+  - dotscope/backtest.py
+  - dotscope/budget.py
+  - dotscope/cli.py
+  - dotscope/composer.py
+  - dotscope/context.py
+  - dotscope/graph.py
+  - dotscope/health.py
+  - dotscope/history.py
+  - dotscope/ingest.py
+  - dotscope/matcher.py
+  - dotscope/models.py
+  - dotscope/parser.py
+  - dotscope/resolver.py
+  - dotscope/scanner.py
+excludes:
+  - tests/__pycache__/
+  - "*.pyc"
+context: |
+  Shared test fixtures: temp projects with .scope files.
+  Tests for the documentation absorber.
+  Tests for AST-powered code analysis.
+  Tests for scope backtesting.
+  Tests for token budgeting.
+  Tests for CLI commands.
+  Tests for scope composition algebra.
+  Tests for structured context.
+  Tests for dependency graph analysis.
+  Tests for scope health monitoring.
+  Tests for git history mining.
+  Tests for the ingest pipeline.
+  Tests for task-to-scope matching.
+  Tests for the .scope file parser.
+  Tests for the scope resolver.
+  Tests for auto-scanner.
+  WARNING: Do not call this without a lock\n"
+  WARNING: All endpoints require auth middleware\n"
+  INVARIANT: s\n"
+  INVARIANT: s\n"
+  INVARIANT: s\nDon't do X.\n## Gotchas\nWatch out for Y.")
+  INVARIANT: s\nDon't do X.\n## Gotchas\nWatch out for Y.")
+  INVARIANT: s\nSome text.")
+  INVARIANT: amounts must be in cents
+  NOTE: This uses a custom allocator\n"
+  NOTE: Rate limiting is applied globally\n"
+  From README.md — auth/.scope:
+  description: Authentication and session management
+  includes:
+    - auth/
+    - models/user.py
+  excludes:
+    - auth/tests/fixtures/
+  context: |
+    Auth uses JWT tokens with 15-min access / 7-day refresh rotation.
+    Session store is Redis (config/redis.py).
+  
+    ## Invariants
+    Never call .delete() on User — use .deactivate().
+  
+    ## Gotchas
+    OAuth provider config is fragile — check auth/README.md first.
+  related:
+    - payments/.scope
+    - api/.scope
+  tags:
+    - security
+    - session-management
+  ```
+  tmp_project(tmp_path) [@pytest.fixture]
+  scope_text() [@pytest.fixture]
+  ## Recent Changes
+  - Initial release: dotscope v0.1.0
+  ## Dependencies
+  This module imports from: dotscope
+related:
+  - dotscope/.scope
+tags:
+  - tests
+  - dotscope
+tokens_estimate: 12284

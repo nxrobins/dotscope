@@ -1,0 +1,13 @@
+version: 1
+
+scopes:
+  dotscope:
+    path: dotscope/.scope
+    keywords: [dotscope, python, module, files]
+  tests:
+    path: tests/.scope
+    keywords: [tests, dotscope, python, module, files]
+
+defaults:
+  max_tokens: 8000
+  include_related: false

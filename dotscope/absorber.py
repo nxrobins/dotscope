@@ -102,22 +102,27 @@ _COMMENT_SIGNALS = [
 ]
 
 
-def absorb_docs(root: str) -> AbsorptionResult:
+def absorb_docs(root: str, apis: Optional[Dict] = None) -> AbsorptionResult:
     """Scan a codebase and absorb all architectural documentation.
 
-    Collects fragments from doc files, docstrings, and signal comments,
-    then clusters them by which module they're relevant to.
+    Collects fragments from doc files, docstrings, signal comments,
+    and AST-extracted API surfaces, then clusters by module.
+
+    Args:
+        root: Repository root
+        apis: Optional dict of {rel_path: ModuleAPI} from AST analysis.
+              If provided, uses AST data for docstrings and API surfaces.
     """
     root = os.path.abspath(root)
     result = AbsorptionResult()
 
-    # 1. Absorb top-level and module-level doc files
     _absorb_doc_files(root, result)
 
-    # 2. Absorb module-level docstrings
-    _absorb_docstrings(root, result)
+    if apis:
+        _absorb_from_ast(root, apis, result)
+    else:
+        _absorb_docstrings(root, result)
 
-    # 3. Absorb signal comments (WARNING, NOTE, HACK, etc.)
     _absorb_signal_comments(root, result)
 
     # 4. Cluster fragments by module
@@ -127,6 +132,81 @@ def absorb_docs(root: str) -> AbsorptionResult:
         result.by_module[frag.relevance_module].append(frag)
 
     return result
+
+
+def _absorb_from_ast(root: str, apis: Dict, result: AbsorptionResult) -> None:
+    """Extract documentation from AST-analyzed modules."""
+    for rel_path, api in apis.items():
+        parts = rel_path.split(os.sep)
+        module = parts[0] if len(parts) > 1 else "_root"
+
+        # Module docstring (from AST, more reliable than regex)
+        if api.docstring and len(api.docstring) > 20:
+            result.fragments.append(DocFragment(
+                source=rel_path,
+                content=api.docstring,
+                kind="docstring",
+                relevance_module=module,
+                priority=4,
+            ))
+
+        # Public API surface
+        public_fns = [f for f in api.functions if f.is_public]
+        public_classes = [c for c in api.classes if c.is_public]
+
+        if public_fns or public_classes:
+            api_lines = []
+            for cls in public_classes:
+                bases = f"({', '.join(cls.bases)})" if cls.bases else ""
+                decorators = ", ".join(f"@{d}" for d in cls.decorators[:3])
+                dec_str = f" [{decorators}]" if decorators else ""
+                methods = [m for m in cls.methods if not m.startswith("_")]
+                api_lines.append(
+                    f"{cls.name}{bases}{dec_str} — {len(methods)} public method(s)"
+                )
+
+            for fn in public_fns:
+                params = ", ".join(fn.params[:5])
+                ret = f" -> {fn.return_type}" if fn.return_type else ""
+                decorators = ", ".join(f"@{d}" for d in fn.decorators[:2])
+                dec_str = f" [{decorators}]" if decorators else ""
+                api_lines.append(f"{fn.name}({params}){ret}{dec_str}")
+
+            if api_lines:
+                content = "\n".join(api_lines)
+                result.fragments.append(DocFragment(
+                    source=rel_path,
+                    content=content,
+                    kind="api_surface",
+                    relevance_module=module,
+                    priority=8,
+                ))
+
+        # Class hierarchies
+        for cls in public_classes:
+            if cls.bases:
+                result.fragments.append(DocFragment(
+                    source=rel_path,
+                    content=f"{cls.name} inherits from {', '.join(cls.bases)}",
+                    kind="class_hierarchy",
+                    relevance_module=module,
+                    priority=7,
+                ))
+
+        # Decorator patterns (framework-significant ones)
+        significant_decorators = {"dataclass", "abstractmethod", "property",
+                                  "staticmethod", "classmethod", "app.route",
+                                  "pytest.fixture", "lru_cache", "cached_property"}
+        for fn in api.functions:
+            for dec in fn.decorators:
+                if any(sig in dec for sig in significant_decorators):
+                    result.fragments.append(DocFragment(
+                        source=rel_path,
+                        content=f"@{dec} on {fn.name}",
+                        kind="decorator_pattern",
+                        relevance_module=module,
+                        priority=6,
+                    ))
 
 
 def _absorb_doc_files(root: str, result: AbsorptionResult) -> None:

@@ -63,6 +63,10 @@ def main(argv=None):
     p_impact = sub.add_parser("impact", help="Predict blast radius of changes to a file")
     p_impact.add_argument("file", help="File path to analyze impact for")
 
+    # --- backtest ---
+    p_backtest = sub.add_parser("backtest", help="Validate scopes against git history")
+    p_backtest.add_argument("--commits", type=int, default=50, help="Number of commits to test against")
+
     args = parser.parse_args(argv)
 
     if args.command is None:
@@ -81,6 +85,7 @@ def main(argv=None):
             "health": _cmd_health,
             "ingest": _cmd_ingest,
             "impact": _cmd_impact,
+            "backtest": _cmd_backtest,
         }[args.command]
         handler(args)
     except (ValueError, FileNotFoundError) as e:
@@ -356,77 +361,40 @@ def _cmd_ingest(args):
 
 
 def _cmd_impact(args):
-    from .graph import build_graph
-    from .discovery import find_repo_root, find_all_scopes
-    from .parser import parse_scope_file
+    from .graph import build_graph, transitive_dependents
+    from .discovery import find_repo_root
 
     root = find_repo_root()
     if root is None:
         raise ValueError("Could not find repository root")
 
     target = os.path.relpath(os.path.abspath(args.file), root)
-
-    # Build graph for import analysis
     graph = build_graph(root)
     node = graph.files.get(target)
 
     print(f"Impact analysis for: {target}")
     print()
 
-    # Which scope owns this file?
-    owning_scope = None
-    for sf in find_all_scopes(root):
-        try:
-            config = parse_scope_file(sf)
-            from .resolver import resolve
-            resolved = resolve(config, follow_related=False, root=root)
-            if os.path.join(root, target) in resolved.files:
-                owning_scope = os.path.relpath(sf, root)
-                print(f"Scope: {owning_scope}")
-                break
-        except (ValueError, IOError):
-            continue
-
-    if not owning_scope:
-        print("Scope: (none — file not covered by any scope)")
-
-    # What does this file import?
     if node and node.imports:
-        print(f"\nImports ({len(node.imports)}):")
+        print(f"Direct imports ({len(node.imports)}):")
         for imp in node.imports:
             print(f"  → {imp}")
 
-    # What imports this file?
     if node and node.imported_by:
-        print(f"\nImported by ({len(node.imported_by)}):")
+        print(f"\nDirect dependents ({len(node.imported_by)}):")
         for imp_by in node.imported_by:
             print(f"  ← {imp_by}")
 
-    # Transitive impact: what depends on things that depend on this?
-    if node and node.imported_by:
-        transitive = set()
-        for direct in node.imported_by:
-            dep_node = graph.files.get(direct)
-            if dep_node:
-                for t in dep_node.imported_by:
-                    if t != target and t not in node.imported_by:
-                        transitive.add(t)
-        if transitive:
-            print(f"\nTransitive impact ({len(transitive)}):")
-            for t in sorted(transitive):
-                print(f"  ← ← {t}")
+    all_dependents = transitive_dependents(graph, target)
+    transitive_only = all_dependents - set(node.imported_by if node else [])
 
-    # Which scopes are affected?
-    affected_files = set()
-    if node:
-        affected_files.update(node.imported_by)
-        for direct in node.imported_by:
-            dep_node = graph.files.get(direct)
-            if dep_node:
-                affected_files.update(dep_node.imported_by)
+    if transitive_only:
+        print(f"\nTransitive dependents ({len(transitive_only)}):")
+        for t in sorted(transitive_only):
+            print(f"  ← ← {t}")
 
     affected_modules = set()
-    for f in affected_files:
+    for f in all_dependents:
         parts = f.split("/")
         if len(parts) > 1:
             affected_modules.add(parts[0])
@@ -434,9 +402,34 @@ def _cmd_impact(args):
     if affected_modules:
         print(f"\nAffected modules: {', '.join(sorted(affected_modules))}")
 
-    total_affected = len(affected_files) + 1  # +1 for the file itself
-    risk = "LOW" if total_affected <= 3 else ("MEDIUM" if total_affected <= 10 else "HIGH")
-    print(f"\nRisk: {risk} — {total_affected} file(s) in blast radius")
+    total = 1 + len(all_dependents)
+    risk = "LOW" if total <= 3 else ("MEDIUM" if total <= 10 else "HIGH")
+    print(f"\nBlast radius: {total} file(s), risk: {risk}")
+
+
+def _cmd_backtest(args):
+    from .backtest import backtest_scopes, format_backtest_report
+    from .discovery import find_repo_root, find_all_scopes
+    from .parser import parse_scope_file
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    scope_files = find_all_scopes(root)
+    if not scope_files:
+        print("No .scope files found. Run 'dotscope ingest' first.")
+        return
+
+    configs = []
+    for sf in scope_files:
+        try:
+            configs.append(parse_scope_file(sf))
+        except (ValueError, IOError):
+            continue
+
+    report = backtest_scopes(root, configs, n_commits=args.commits)
+    print(format_backtest_report(report))
 
 
 def _version():
