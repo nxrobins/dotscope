@@ -1,68 +1,95 @@
 # How It Works
 
-dotscope builds `.scope` files by analyzing three things about your codebase: its dependency graph, its git history, and its existing documentation. Then it validates what it built against your commit history and tells you how accurate it is. After that, it watches what actually happens during agent sessions and corrects itself.
+dotscope builds `.scope` files by analyzing your dependency graph, git history, and existing docs. It validates them against your commit history. Then it watches what agents actually do, learns from every commit, enforces your codebase's rules, and tells you what it prevented.
 
 ## The Ingest Pipeline
 
 `dotscope ingest .` runs five steps:
 
-**1. Dependency graph.** Static analysis of imports and references across all files. Produces a directed graph of which files depend on which. This determines module boundaries, identifies cross-cutting hubs (files imported by many modules), and computes transitive blast radius for any file.
+**1. Dependency graph.** Static analysis of imports across all files. Produces a directed graph: module boundaries, cross-cutting hubs (files imported by many modules), and transitive blast radius for any file. Python uses AST parsing; JS/TS/Go use enhanced regex.
 
-**2. History mining.** Analyzes your git log (last 200 commits by default) to extract patterns that aren't visible in the code itself: which files change together (implicit contracts), how volatile each file is (stability profiles), and which areas of the codebase are hotspots for churn.
+**2. History mining.** Analyzes your git log (up to 500 commits) for patterns invisible in the code: implicit contracts (files that always change together), stability profiles, churn hotspots, and function-level co-change data.
 
-**3. Document absorption.** Reads READMEs, docstrings, and signal comments (lines containing `SCOPE:`, `CONTEXT:`, `GOTCHA:`, or similar markers). Extracts the knowledge that a human put into prose but that an agent would otherwise never see.
+**3. Document absorption.** Reads READMEs, docstrings, and signal comments (`SCOPE:`, `CONTEXT:`, `GOTCHA:` markers). Extracts knowledge a human wrote but an agent would never see.
 
-**4. Scope generation.** For each module (top-level directory with Python files), synthesizes a `.scope` file. The `includes` list comes from the dependency graph. The `context` field is assembled from implicit contracts, stability profiles, absorbed documentation, dependency information, and recent changes — in that priority order.
+**4. Scope generation.** For each module, synthesizes a `.scope` file. Includes come from the dependency graph. Context is assembled from implicit contracts, stability profiles, absorbed docs, dependency info, and recent changes — in that priority order.
 
-**5. Backtest validation.** Replays recent commits against the generated scopes: for each historical commit, would the scope have pointed the agent at the right files? Reports overall recall, per-scope recall, and token reduction ratio. If a scope scores poorly, auto-correction adjusts its includes and reruns the test.
+**5. Backtest validation.** Replays recent commits: would the scope have pointed the agent at the right files? Reports recall per scope and token reduction. Auto-corrects low-scoring scopes and reruns.
 
-After ingest, structured analysis data is cached in `.dotscope/` (history, graph hubs) so the MCP server can use it at runtime without re-computing.
-
-## The .scopes Index
-
-Ingest also writes a `.scopes` file at the project root. This is the index that maps scope names to paths and stores project-wide metadata like `total_repo_tokens`. The MCP server reads this on startup to know what's available.
+After ingest, structured data is cached in `.dotscope/` (history, graph hubs, invariants) so the MCP server can use it at runtime without re-computing.
 
 ## Scope Resolution
 
-When an agent calls `resolve_scope` (via MCP) or a developer runs `dotscope resolve`, the resolver:
+When an agent calls `resolve_scope`:
 
-1. Parses the scope expression (supports algebra: `auth+payments` for union, `auth&payments` for intersection, `auth-tests` for difference)
-2. Loads the matching `.scope` file(s)
-3. Applies any token budget constraint (`--budget 4000` returns the highest-utility subset)
-4. Returns files, context, attribution hints, accuracy data, health warnings, and near-misses
+1. Parse the scope expression (algebra: `auth+payments`, `auth-tests`, `auth&api`, `auth@context`)
+2. Load the `.scope` file(s)
+3. Inject lessons and invariants from the observation store into context
+4. Apply token budget (files ranked by historical utility, then keyword relevance, then size)
+5. Build filtered constraints (contracts, anti-patterns, boundaries, intents — relevant to this scope)
+6. Return files, context, constraints, attribution hints, accuracy, health warnings, near-misses
 
-Token budgeting uses utility scores that improve over time through the observation loop.
+## Enforcement
 
-## Scope Algebra
+dotscope knows your codebase's rules. It surfaces them at three points:
 
-Scope expressions let agents and developers combine scopes:
+**Prophylactic (at resolve time).** Every `resolve_scope` response includes a `constraints` field: implicit contracts, anti-patterns, dependency boundaries, stability warnings, and architectural intents. The agent knows the rules before writing code. Filtered to the resolved scope and capped at 5 per category to stay under 400 tokens.
 
+**Diagnostic (before commit).** The agent calls `dotscope_check` with its diff. Returns structured holds (must address) and notes (informational), with fix proposals: predicted functions that need changes, or exact replacement diffs for anti-pattern violations.
+
+**Gate (at commit time).** The post-commit hook runs the same checks. Terminal output shows holds and notes. Holds block the commit; notes are informational.
+
+Six check categories:
+
+| Category | Severity | What it catches |
+|----------|----------|-----------------|
+| Boundary violation | HOLD | Agent modified files outside its resolved scope |
+| Implicit contract | HOLD | Coupled file modified without its pair |
+| Anti-pattern | HOLD | Prohibited pattern in added lines |
+| Dependency direction | NOTE | New import reversing established flow |
+| Stability concern | NOTE | Large change to a stable file |
+| Architectural intent | HOLD or NOTE | Change violating declared direction |
+
+## Architectural Intent
+
+`intent.yaml` at the project root declares where the codebase is headed:
+
+```yaml
+intents:
+  - directive: decouple
+    modules: [auth/, payments/]
+    reason: "Auth should not depend on payment internals"
+  - directive: freeze
+    modules: [core/]
+    reason: "Stable module. Changes require acknowledgment."
+  - directive: deprecate
+    files: [utils/legacy.py]
+    replacement: utils/helpers.py
 ```
-auth                  # Single scope
-auth+payments         # Union: files from both
-auth&payments         # Intersection: files in both
-auth-tests            # Difference: auth minus test files
-auth@context          # Projection: context only, no files
-auth@files            # Projection: files only, no context
+
+Four directives: `decouple` (new coupling is NOTE), `deprecate` (new usage is HOLD), `freeze` (any change is HOLD), `consolidate` (moving away from target is NOTE).
+
+Intents flow through constraints (at resolve), checks (before commit), and the session summary (counterfactuals when respected).
+
+## Acknowledge Flow
+
+Sometimes breaking a rule is correct:
+
+```bash
+dotscope check --acknowledge contract_auth_tokens_api_a1b2c3
 ```
 
-These compose. `(auth+payments)@context` returns the combined context from both scopes without file lists.
-
-## Virtual Scopes
-
-When ingest detects a file that is imported across many modules (a cross-cutting hub), it generates a virtual scope for that file. Virtual scopes don't correspond to a directory — they represent a single high-impact file and its transitive dependents. This ensures agents get context about shared infrastructure even when working within a single module.
+Acknowledgments are recorded. 3+ acknowledgments of the same constraint within 30 days decay its confidence by 0.1 per excess. Below 0.5, the constraint becomes a NOTE instead of HOLD. Floor at 0.3 — core rules survive.
 
 ## The Feedback Loop
 
-Most context tools are static: generate once, hope for the best. dotscope closes a feedback loop that makes scopes improve with use.
+**Prediction.** Every `resolve_scope` call is logged with the files served and constraints applied.
 
-**Prediction.** Every `resolve_scope` call is a prediction: "these are the files and context the agent needs for this task." The session tracker records what was served.
+**Observation.** After the agent commits, the post-commit hook compares what was touched against what was predicted. Produces accuracy scores and identifies gaps.
 
-**Observation.** After the agent commits (`dotscope hook install` sets up a post-commit hook), dotscope compares what the agent actually touched against what the scope predicted. This produces an accuracy score and identifies missing files.
+**Learning.** Observations update utility scores per file. High-utility files rank higher in budget allocation. Lessons are generated from patterns. Invariants are detected from graph + history.
 
-**Learning.** Observation data updates utility scores for every file in every scope. Files that are consistently touched get higher utility. Files that are included but never touched get lower utility. The next `resolve_scope` call with a budget will rank files differently.
-
-**Correction.** Over time, scopes that start as documentation become intelligence. The post-commit hook prints a delta so you can watch it happen:
+**Correction.** Scopes improve automatically. The post-commit delta shows it happening:
 
 ```
 dotscope: observation recorded for auth/
@@ -71,34 +98,57 @@ dotscope: observation recorded for auth/
   Utility scores updated
 ```
 
-## Backtest Validation
+## Counterfactual Session Summary
 
-`dotscope backtest --commits 500` replays historical commits against current scopes without modifying anything. It answers: "If these scopes had existed during the last 500 commits, how often would the agent have had the right files?"
+At session end, dotscope shows what it prevented — not just what it served:
 
-Reports two metrics: **recall** (did the scope include the files that were actually changed?) and **token reduction** (how much smaller is the scope compared to feeding the agent the entire repo?). These are the numbers that build trust.
+```
+── dotscope session ──────────────────────────────
+  3 scopes resolved · 4,200 tokens served (91% reduction)
 
-## Health Monitoring
+  What dotscope prevented:
+    Agent used .deactivate() instead of .delete() on User
+      ← auth/ scope context
+    Agent included webhook_handler.py alongside billing.py
+      ← implicit contract (73% co-change)
 
-`dotscope health` checks every scope for staleness, accuracy degradation, and uncovered files. Health warnings also surface automatically during `resolve_scope` calls — the agent will mention them if a scope it's using has degraded.
+  What dotscope provided:
+    4 attribution hints served
+    3 constraints applied
+───────────────────────────────────────────────────
+```
 
-Health nudges fire on resolve only, never on ingest. If you just regenerated a scope, warning about its staleness would be noise.
+Three counterfactual types: anti-patterns avoided, contracts honored, intents respected. Only surfaces when the constraint was actually served to the agent. Gated by 3+ observations.
 
-## Near-Miss Detection
+## Onboarding
 
-After a commit, dotscope checks whether the agent avoided a mistake that the scope context warned about. If the scope says "never call .delete() on User, use .deactivate()" and the commit diff contains `.deactivate()` but not `.delete()`, that's a near-miss. These surface in both the terminal and the next `resolve_scope` response.
+dotscope tracks milestones in `.dotscope/onboarding.json` and prints one next step at a time:
+
+| After | Prompt |
+|-------|--------|
+| First ingest | `Run dotscope check --backtest` |
+| First backtest | `Add dotscope to your agent` |
+| First MCP session | `Install the post-commit hook` |
+| Hook installed | Stop prompting |
+
+Complexity is gated: counterfactuals appear after 3+ observations, health nudges after 7+ days. Each prompt appears once.
 
 ## What's in `.dotscope/`
 
-The `.dotscope/` directory stores runtime state. It's gitignored and fully rebuildable.
+The `.dotscope/` directory stores runtime state. Gitignored. Fully rebuildable via `dotscope rebuild`.
 
 ```
 .dotscope/
-  history.json          # Cached implicit contracts, stabilities, hotspots
-  graph_hubs.json       # Cached cross-cutting hub analysis
-  observations.jsonl    # Observation events from post-commit hooks
-  near_misses.jsonl     # Detected near-misses
-  last_session.json     # Scopes resolved in most recent agent session
-  utility_scores.json   # Per-file utility scores (updated on every observation)
+  history.json           # Cached implicit contracts, stabilities, hotspots
+  graph_hubs.json        # Cached cross-cutting hub analysis
+  invariants.json        # Contracts, function co-changes, file stabilities (for enforcement)
+  sessions/              # Per-session JSON files (predictions)
+  observations/          # Observation events from post-commit hooks
+  near_misses.jsonl      # Detected near-misses
+  utility_scores.json    # Per-file utility scores
+  acknowledgments.jsonl  # Acknowledged holds with reasons
+  onboarding.json        # Milestone tracking for stage-aware prompts
+  last_session.json      # Scopes resolved in most recent session
 ```
 
-`dotscope rebuild` regenerates everything in `.dotscope/` from the event log if you ever need to start fresh.
+`dotscope rebuild` regenerates everything from the event logs.
