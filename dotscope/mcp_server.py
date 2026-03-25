@@ -74,7 +74,17 @@ def main():
         if summary:
             print(summary, file=sys.stderr)
 
+    def _save_session_scopes():
+        try:
+            from .near_miss import save_session_scopes
+            scopes = list(tracker._stats.unique_scopes)
+            if scopes and _root:
+                save_session_scopes(_root, scopes)
+        except Exception:
+            pass
+
     atexit.register(_print_session_summary)
+    atexit.register(_save_session_scopes)
 
     @mcp.tool()
     def resolve_scope(
@@ -200,34 +210,20 @@ def main():
                         data["accuracy"] = accuracy
 
                     # Feature 4: Health nudges
-                    nudges = check_health_nudges(observations, scope)
+                    nudges = check_health_nudges(
+                        observations, scope, repo_root=root,
+                    )
                     if nudges:
                         data["health_warnings"] = nudges
 
-                    # Feature 5: Near-misses (from most recent observation)
-                    if observations:
-                        latest_obs = observations[-1]
-                        if latest_obs.touched_not_predicted == []:
-                            # Agent got all files right — check for near-misses
-                            try:
-                                import subprocess
-                                from .visibility import detect_near_misses
-                                diff_result = subprocess.run(
-                                    ["git", "diff", latest_obs.commit_hash + "~1",
-                                     latest_obs.commit_hash],
-                                    cwd=root, capture_output=True, text=True,
-                                    timeout=5,
-                                )
-                                if diff_result.returncode == 0:
-                                    nms = detect_near_misses(
-                                        resolved.context,
-                                        diff_result.stdout,
-                                        scope,
-                                    )
-                                    if nms:
-                                        data["near_misses"] = nms
-                            except Exception:
-                                pass
+                    # Feature 5: Near-misses (from persistent storage)
+                    try:
+                        from .near_miss import load_recent_near_misses
+                        nms = load_recent_near_misses(root, module)
+                        if nms:
+                            data["near_misses"] = nms
+                    except Exception:
+                        pass
 
                 output = json.dumps(data, indent=2)
             except Exception:

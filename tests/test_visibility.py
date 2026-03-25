@@ -314,7 +314,8 @@ class TestHealthNudges:
         nudges = check_health_nudges(obs, "payments")
         assert len(nudges) == 1
         assert nudges[0]["issue"] == "accuracy_degraded"
-        assert nudges[0]["current_accuracy"] < nudges[0]["previous_accuracy"]
+        assert "message" in nudges[0]
+        assert "suggestion" in nudges[0]
 
 
 class TestNearMissDetection:

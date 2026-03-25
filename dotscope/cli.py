@@ -487,34 +487,46 @@ def _cmd_observe(args):
         except Exception:
             pass  # Utility update is best-effort
 
-        # Near-miss detection on successful predictions
-        if not obs.touched_not_predicted:
-            try:
-                import subprocess
-                from .visibility import detect_near_misses
-                from .discovery import find_scope
-                from .parser import parse_scope_file
+        # Near-miss detection using structured warning pairs
+        try:
+            import subprocess
+            from .near_miss import (
+                detect_near_misses as detect_nms,
+                store_near_misses, load_session_scopes,
+            )
+            from .discovery import find_scope
+            from .parser import parse_scope_file
 
-                scope_name = scope_expr.split("+")[0].split("-")[0].split("@")[0]
-                scope_cfg = find_scope(scope_name, root=root)
-                if scope_cfg:
-                    config = parse_scope_file(scope_cfg)
-                    diff_result = subprocess.run(
-                        ["git", "diff", obs.commit_hash + "~1", obs.commit_hash],
-                        cwd=root, capture_output=True, text=True, timeout=5,
-                    )
-                    if diff_result.returncode == 0:
-                        nms = detect_near_misses(
-                            config.context_str, diff_result.stdout, scope_expr,
+            # Get scopes from session or current observation
+            scope_name = scope_expr.split("+")[0].split("-")[0].split("@")[0]
+            session_scopes = load_session_scopes(root) or [scope_name]
+
+            # Build context map for all session scopes
+            scope_contexts = {}
+            for sn in session_scopes:
+                cfg_path = find_scope(sn, root=root)
+                if cfg_path:
+                    cfg = parse_scope_file(cfg_path)
+                    scope_contexts[sn] = cfg.context_str
+
+            if scope_contexts:
+                diff_result = subprocess.run(
+                    ["git", "diff", obs.commit_hash + "~1", obs.commit_hash],
+                    cwd=root, capture_output=True, text=True, timeout=5,
+                )
+                if diff_result.returncode == 0 and diff_result.stdout:
+                    nms = detect_nms(diff_result.stdout, scope_contexts)
+                    for nm in nms:
+                        print(
+                            f"\ndotscope: near-miss detected\n"
+                            f"  {nm.event}\n"
+                            f"  Scope context: \"{nm.context_used}\"\n"
+                            f"  {nm.potential_impact}",
+                            file=sys.stderr,
                         )
-                        for nm in nms:
-                            print(
-                                f"\ndotscope: near-miss detected\n"
-                                f"  {nm['scope_context_used']}\n"
-                                f"  {nm['potential_impact']}",
-                                file=sys.stderr,
-                            )
-            except Exception:
+                    if nms:
+                        store_near_misses(root, nms)
+        except Exception:
                 pass  # Near-miss detection is best-effort
     else:
         # No session matched — check if any scopes exist

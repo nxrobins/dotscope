@@ -354,36 +354,125 @@ def build_accuracy(
 # ---------------------------------------------------------------------------
 
 
+ACCURACY_DROP_THRESHOLD = 0.15
+STALENESS_DAYS = 30
+UNCOVERED_FILES_MIN = 3
+
+
 def check_health_nudges(
     observations: List[ObservationLog],
     scope: str,
-    threshold_drop: float = 0.15,
+    repo_root: str = "",
+    threshold_drop: float = ACCURACY_DROP_THRESHOLD,
 ) -> List[dict]:
-    """Generate health warnings when scope accuracy degrades."""
-    if len(observations) < 3:
-        return []
-
+    """Generate health warnings for a scope on resolve."""
     warnings = []
-    recalls = [o.recall for o in observations]
 
-    # Split into halves
-    mid = len(recalls) // 2
-    if mid < 1:
-        return []
+    # 1. Accuracy degradation
+    if len(observations) >= 3:
+        recalls = [o.recall for o in observations]
+        mid = len(recalls) // 2
+        if mid >= 1:
+            older_avg = sum(recalls[:mid]) / mid
+            recent_avg = sum(recalls[mid:]) / len(recalls[mid:])
+            if older_avg - recent_avg >= threshold_drop:
+                warnings.append({
+                    "scope": scope,
+                    "issue": "accuracy_degraded",
+                    "message": (
+                        f"{scope}/ accuracy has dropped"
+                        f" from {older_avg:.0%} to {recent_avg:.0%}"
+                    ),
+                    "suggestion": f"dotscope health {scope}",
+                })
 
-    older_avg = sum(recalls[:mid]) / mid
-    recent_avg = sum(recalls[mid:]) / len(recalls[mid:])
+    # 2. Staleness (scope file age + commits since)
+    if repo_root:
+        scope_path = os.path.join(repo_root, scope, ".scope")
+        if os.path.exists(scope_path):
+            mtime = os.path.getmtime(scope_path)
+            days_since = int((time.time() - mtime) / 86400)
+            if days_since > STALENESS_DAYS:
+                commits = _count_commits_since(repo_root, scope, mtime)
+                if commits > 0:
+                    warnings.append({
+                        "scope": scope,
+                        "issue": "stale",
+                        "message": (
+                            f"{scope}/ hasn't been updated in {days_since} days"
+                            f" . {commits} commits have touched this module"
+                        ),
+                        "suggestion": f"dotscope ingest {scope}/",
+                    })
 
-    if older_avg - recent_avg >= threshold_drop:
-        warnings.append({
-            "scope": scope,
-            "issue": "accuracy_degraded",
-            "current_accuracy": round(recent_avg, 2),
-            "previous_accuracy": round(older_avg, 2),
-            "suggestion": f"Re-run ingest on {scope}/ to incorporate recent changes",
-        })
+    # 3. Uncovered files
+    if repo_root:
+        uncovered = _count_uncovered_files(repo_root, scope)
+        if uncovered > UNCOVERED_FILES_MIN:
+            warnings.append({
+                "scope": scope,
+                "issue": "uncovered_files",
+                "message": (
+                    f"{scope}/ has {uncovered} files"
+                    f" not covered by scope includes"
+                ),
+                "suggestion": f"dotscope ingest {scope}/",
+            })
 
     return warnings
+
+
+def _count_commits_since(repo_root: str, scope: str, since_ts: float) -> int:
+    """Count commits touching files in this scope's directory since a timestamp."""
+    import subprocess
+    from datetime import datetime, timezone
+    since_dt = datetime.fromtimestamp(since_ts, tz=timezone.utc)
+    try:
+        result = subprocess.run(
+            ["git", "log", "--oneline",
+             f"--since={since_dt.isoformat()}",
+             "--", f"{scope}/"],
+            capture_output=True, text=True, cwd=repo_root, timeout=10,
+        )
+        return len(result.stdout.strip().splitlines()) if result.stdout.strip() else 0
+    except Exception:
+        return 0
+
+
+def _count_uncovered_files(repo_root: str, scope: str) -> int:
+    """Count source files in a scope directory not covered by includes."""
+    scope_dir = os.path.join(repo_root, scope)
+    if not os.path.isdir(scope_dir):
+        return 0
+
+    source_exts = {".py", ".js", ".ts", ".go", ".rs", ".rb", ".java"}
+    count = 0
+    for dirpath, _dirs, filenames in os.walk(scope_dir):
+        # Skip hidden dirs and common non-source dirs
+        rel = os.path.relpath(dirpath, repo_root)
+        if any(part.startswith(".") or part in ("node_modules", "__pycache__", "venv")
+               for part in rel.split(os.sep)):
+            continue
+        for fn in filenames:
+            if os.path.splitext(fn)[1] in source_exts:
+                count += 1
+
+    # Subtract the files that ARE in includes (rough: count files under scope/)
+    # The includes typically have "scope/" which covers all, so uncovered = 0 in that case
+    # Only flag if the scope file exists but doesn't include the directory
+    scope_path = os.path.join(repo_root, scope, ".scope")
+    if os.path.exists(scope_path):
+        try:
+            from .parser import parse_scope_file
+            config = parse_scope_file(scope_path)
+            # If the scope includes the directory itself, all files are covered
+            if any(inc.rstrip("/") == scope or inc.startswith(scope + "/")
+                   for inc in config.includes):
+                return 0
+        except Exception:
+            pass
+
+    return count
 
 
 # ---------------------------------------------------------------------------
