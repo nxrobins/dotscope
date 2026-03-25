@@ -198,6 +198,7 @@ class TestObservationDelta:
         delta = format_observation_delta(obs, "auth")
         assert "auth/" in delta
         assert "2/2" in delta
+        assert "Utility scores updated" in delta
 
     def test_formats_degraded_prediction(self):
         obs = ObservationLog(
@@ -213,6 +214,35 @@ class TestObservationDelta:
         delta = format_observation_delta(obs, "payments")
         assert "degraded" in delta
         assert "Missing:" in delta
+        assert "dotscope health" in delta
+
+    def test_missing_truncated_at_four(self):
+        obs = ObservationLog(
+            commit_hash="abc12345",
+            session_id="sess1",
+            actual_files_modified=[f"m/f{i}.py" for i in range(7)],
+            predicted_not_touched=[],
+            touched_not_predicted=[f"m/f{i}.py" for i in range(6)],
+            recall=0.14,
+            precision=1.0,
+            timestamp=time.time(),
+        )
+        delta = format_observation_delta(obs, "mymod")
+        assert "+2 more" in delta  # 6 missing, show 4 + "+2 more"
+
+    def test_borderline_not_degraded(self):
+        """70% recall should not be flagged as degraded."""
+        obs = ObservationLog(
+            commit_hash="abc",
+            session_id="s1",
+            actual_files_modified=["a/x.py", "a/y.py", "a/z.py"],
+            touched_not_predicted=["a/z.py"],
+            recall=0.7,
+            precision=1.0,
+            timestamp=time.time(),
+        )
+        delta = format_observation_delta(obs, "auth")
+        assert "degraded" not in delta
 
 
 class TestAccuracy:

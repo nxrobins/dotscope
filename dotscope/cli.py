@@ -449,6 +449,7 @@ def _cmd_impact(args):
 
 
 def _cmd_observe(args):
+    from pathlib import Path
     from .sessions import SessionManager
     from .discovery import find_repo_root
     from .visibility import format_observation_delta
@@ -471,9 +472,20 @@ def _cmd_observe(args):
 
         delta = format_observation_delta(obs, scope_expr)
         try:
-            print(delta)
+            print(delta, file=sys.stderr)
         except UnicodeEncodeError:
-            print(delta.encode("ascii", errors="replace").decode("ascii"))
+            print(delta.encode("ascii", errors="replace").decode("ascii"),
+                  file=sys.stderr)
+
+        # Update utility scores after observation
+        try:
+            from .utility import compute_utility_scores, save_utility_scores
+            all_sessions = mgr.get_sessions(limit=500)
+            all_obs = mgr.get_observations(limit=500)
+            scores = compute_utility_scores(all_sessions, all_obs)
+            save_utility_scores(Path(root) / ".dotscope", scores)
+        except Exception:
+            pass  # Utility update is best-effort
 
         # Near-miss detection on successful predictions
         if not obs.touched_not_predicted:
@@ -483,7 +495,8 @@ def _cmd_observe(args):
                 from .discovery import find_scope
                 from .parser import parse_scope_file
 
-                scope_cfg = find_scope(scope_expr.split("+")[0].split("-")[0], root=root)
+                scope_name = scope_expr.split("+")[0].split("-")[0].split("@")[0]
+                scope_cfg = find_scope(scope_name, root=root)
                 if scope_cfg:
                     config = parse_scope_file(scope_cfg)
                     diff_result = subprocess.run(
@@ -495,13 +508,36 @@ def _cmd_observe(args):
                             config.context_str, diff_result.stdout, scope_expr,
                         )
                         for nm in nms:
-                            print(f"\ndotscope: near-miss detected")
-                            print(f"  {nm['scope_context_used']}")
-                            print(f"  {nm['potential_impact']}")
+                            print(
+                                f"\ndotscope: near-miss detected\n"
+                                f"  {nm['scope_context_used']}\n"
+                                f"  {nm['potential_impact']}",
+                                file=sys.stderr,
+                            )
             except Exception:
                 pass  # Near-miss detection is best-effort
     else:
-        print(f"No matching session for commit {args.commit[:8]}")
+        # No session matched — check if any scopes exist
+        try:
+            from .discovery import load_index
+            idx = load_index(root)
+            if idx:
+                print(
+                    "dotscope: observation recorded\n"
+                    "  Changed files don't match any recent session\n"
+                    "  This is normal for work done outside agent sessions",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    "dotscope: observation recorded\n"
+                    "  No .scopes index found"
+                    " -- consider running `dotscope ingest .`",
+                    file=sys.stderr,
+                )
+        except Exception:
+            print(f"No matching session for commit {args.commit[:8]}",
+                  file=sys.stderr)
 
 
 def _cmd_hook(args):

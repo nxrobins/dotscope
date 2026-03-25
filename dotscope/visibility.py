@@ -8,6 +8,7 @@ Five features that surface existing data through two channels:
 5. Near-Miss Detection — disasters that didn't happen
 """
 
+import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -276,10 +277,8 @@ def format_observation_delta(
 
     pct = observation.recall
     suffix = ""
-    if pct < 0.6:
+    if pct < 0.7:
         suffix = " <- degraded"
-    elif pct >= 0.95:
-        suffix = ""
 
     lines.append(
         f"  {scope_name}/ predicted {predicted_correct}/{actual_count}"
@@ -287,12 +286,18 @@ def format_observation_delta(
     )
 
     if observation.touched_not_predicted:
-        missing = ", ".join(observation.touched_not_predicted[:5])
-        lines.append(f"  Missing: {missing}")
-        if pct < 0.6:
+        missing_names = [
+            os.path.basename(f) for f in observation.touched_not_predicted[:4]
+        ]
+        if len(observation.touched_not_predicted) > 4:
+            missing_names.append(
+                f"+{len(observation.touched_not_predicted) - 4} more"
+            )
+        lines.append(f"  Missing: {', '.join(missing_names)}")
+        if pct < 0.8:
             lines.append(f"  Run `dotscope health {scope_name}` to diagnose")
 
-    lines.append("  Learning applied -> utility scores updated")
+    lines.append("  Utility scores updated")
     return "\n".join(lines)
 
 
