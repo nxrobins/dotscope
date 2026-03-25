@@ -151,6 +151,12 @@ dotscope backtest --commits 500            # Validate against history
 dotscope hook install                      # Start the feedback loop
 ```
 
+## Docs
+
+- [How It Works](docs/how-it-works.md) — ingest pipeline, feedback loop, backtest validation
+- [The .scope File](docs/scope-file.md) — fields, editing, signal comments, the .scopes index
+- [MCP Server Setup](docs/mcp-setup.md) — Claude Desktop, Claude Code, Cursor, troubleshooting
+
 ## Details
 
 **Zero dependencies** in the base install. Python 3.9+. Cross-platform (macOS, Linux, Windows). Optional extras: `mcp` for the agent server.
