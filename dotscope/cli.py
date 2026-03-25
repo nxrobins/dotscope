@@ -118,6 +118,20 @@ def main(argv=None):
     p_intent_rm = intent_sub.add_parser("remove", help="Remove an intent by ID")
     p_intent_rm.add_argument("id", help="Intent ID to remove")
 
+    # --- test-compiler ---
+    p_tc = sub.add_parser("test-compiler", help="Replay frozen sessions as regression tests")
+    p_tc.add_argument("--scope", default=None, help="Filter to a specific scope")
+
+    # --- bench ---
+    p_bench = sub.add_parser("bench", help="Performance and accuracy benchmarks")
+    p_bench.add_argument("--json", dest="json_output", action="store_true", help="JSON output")
+
+    # --- debug ---
+    p_debug = sub.add_parser("debug", help="Bisect a bad session to find root cause")
+    p_debug.add_argument("session_id", nargs="?", default=None, help="Session ID to debug")
+    p_debug.add_argument("--last", action="store_true", help="Debug most recent bad session")
+    p_debug.add_argument("--list", dest="list_bad", action="store_true", help="List bad sessions")
+
     args = parser.parse_args(argv)
 
     if args.command is None:
@@ -146,6 +160,9 @@ def main(argv=None):
             "rebuild": _cmd_rebuild,
             "check": _cmd_check,
             "intent": _cmd_intent,
+            "test-compiler": _cmd_test_compiler,
+            "bench": _cmd_bench,
+            "debug": _cmd_debug,
         }[args.command]
         handler(args)
     except (ValueError, FileNotFoundError) as e:
@@ -944,6 +961,94 @@ def _cmd_check_backtest(root, n_commits, json_output):
             print(f"\n{ns}")
     except Exception:
         pass
+
+
+def _cmd_test_compiler(args):
+    from .discovery import find_repo_root
+    from .regression import load_regressions, replay_regression, format_replay_report
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    cases = load_regressions(root)
+    if args.scope:
+        cases = [c for c in cases if args.scope in c.scope_expr]
+
+    if not cases:
+        print("No regression cases found.")
+        print("Sessions are auto-frozen after successful observations (recall >= 80%).")
+        return
+
+    results = []
+    for case in cases:
+        try:
+            result = replay_regression(case, root)
+            results.append(result)
+        except Exception as e:
+            print(f"  {case.id}: error — {e}", file=sys.stderr)
+
+    print(format_replay_report(results))
+    regressions = sum(1 for r in results if r.is_regression)
+    if regressions:
+        sys.exit(1)
+
+
+def _cmd_bench(args):
+    import json as json_mod
+    from .discovery import find_repo_root
+    from .bench import run_bench, format_bench_report
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    report = run_bench(root)
+
+    if hasattr(args, "json_output") and args.json_output:
+        from dataclasses import asdict
+        print(json_mod.dumps(asdict(report), indent=2))
+    else:
+        print(format_bench_report(report))
+
+
+def _cmd_debug(args):
+    from .discovery import find_repo_root
+    from .debug import debug_session, list_bad_sessions, format_debug_report
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    if hasattr(args, "list_bad") and args.list_bad:
+        bad = list_bad_sessions(root)
+        if not bad:
+            print("No sessions with low recall found.")
+            return
+        for s in bad:
+            gaps = ", ".join(s["gaps"][:2]) if s["gaps"] else "none"
+            print(f"  {s['session_id'][:12]}  {s['scope']}  recall: {s['recall']:.0%}  gaps: {gaps}")
+        return
+
+    session_id = args.session_id
+    if hasattr(args, "last") and args.last:
+        bad = list_bad_sessions(root, limit=1)
+        if bad:
+            session_id = bad[0]["session_id"]
+        else:
+            print("No sessions with low recall found.")
+            return
+
+    if not session_id:
+        print("Usage: dotscope debug <session_id> or dotscope debug --last")
+        return
+
+    result = debug_session(session_id, root)
+    if result is None:
+        print(f"Session {session_id} not found or has good recall (>= 80%).")
+        return
+
+    print(format_debug_report(result))
 
 
 def _cmd_intent(args):

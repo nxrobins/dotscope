@@ -16,6 +16,7 @@ def apply_budget(
     max_tokens: int,
     task: Optional[str] = None,
     utility_scores: Optional[dict] = None,
+    required_files: Optional[set] = None,
 ) -> ResolvedScope:
     """Apply a token budget to a resolved scope.
 
@@ -57,15 +58,32 @@ def apply_budget(
     # Rank and score files (utility data flows through when available)
     scored_files = _rank_files(resolved.files, task, utility_scores)
 
+    # Required files get infinite utility — selected first, unconditionally
+    required = required_files or set()
+    if required:
+        scored_files = _boost_required(scored_files, required)
+
     # Fill within budget
     selected_files: List[str] = []
     total_file_tokens = 0
 
-    for path, _score in scored_files:
+    for path, score in scored_files:
         file_tokens = estimate_file_tokens(path)
         if total_file_tokens + file_tokens <= remaining:
             selected_files.append(path)
             total_file_tokens += file_tokens
+        elif path in required:
+            # Required file doesn't fit — hard error
+            from .assertions import ContextExhaustionError
+            raise ContextExhaustionError(
+                assertion_type="ensure_includes",
+                detail=f"Budget ({max_tokens}) cannot fit required file: {path} ({file_tokens} tokens)",
+                file=path,
+                file_tokens=file_tokens,
+                budget=max_tokens,
+                tokens_used=context_tokens + total_file_tokens,
+                suggestion=f"Increase budget to at least {context_tokens + total_file_tokens + file_tokens}",
+            )
         # Don't break early — a smaller file later might still fit
 
     truncated = len(selected_files) < len(resolved.files)
@@ -129,3 +147,18 @@ def _rank_files(
 
     scored.sort(key=lambda x: (-x[1], x[2]))
     return [(path, score) for path, score, _ in scored]
+
+
+def _boost_required(
+    scored_files: List[tuple],
+    required: set,
+) -> List[tuple]:
+    """Boost required files to infinite utility so they're selected first."""
+    boosted = []
+    for path, score in scored_files:
+        if path in required:
+            boosted.append((path, float("inf")))
+        else:
+            boosted.append((path, score))
+    boosted.sort(key=lambda x: -x[1])
+    return boosted

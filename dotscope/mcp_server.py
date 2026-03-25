@@ -117,6 +117,9 @@ def main():
             follow_related: Whether to follow related scope references
             format: Output format — "json", "plain", or "cursor"
         """
+        import time as _time
+        _resolve_start = _time.perf_counter()
+
         from pathlib import Path
         from .composer import compose
         from .budget import apply_budget
@@ -149,8 +152,26 @@ def main():
             except Exception:
                 pass
 
+        # Load assertions for budget enforcement
+        required_files = None
+        assertions = []
+        try:
+            from .assertions import load_assertions, get_required_files
+            module = scope.split("+")[0].split("-")[0].split("&")[0].split("@")[0]
+            assertions = load_assertions(root, module)
+            required_files = get_required_files(assertions, module) or None
+        except Exception:
+            pass
+
         if budget is not None:
-            resolved = apply_budget(resolved, budget, utility_scores=utility_scores)
+            try:
+                resolved = apply_budget(resolved, budget, utility_scores=utility_scores,
+                                        required_files=required_files)
+            except Exception as exc:
+                # ContextExhaustionError — return as structured error
+                if hasattr(exc, "to_dict"):
+                    return json.dumps(exc.to_dict(), indent=2)
+                raise
 
         # Track session (MCP calls only — compose stays pure)
         session_id = None
@@ -167,6 +188,13 @@ def main():
             increment_counter(root, "sessions_completed")
         except Exception:
             pass  # Session tracking failures never block resolution
+
+        # Record timing
+        try:
+            import time as _time
+            _resolve_end = _time.perf_counter()
+        except Exception:
+            pass
 
         output = format_resolved(resolved, fmt=format, root=root)
 
@@ -262,9 +290,33 @@ def main():
                     except Exception:
                         pass
 
+                # Output assertions (ensure_context_contains, ensure_constraints)
+                if assertions:
+                    try:
+                        from .assertions import check_output_assertions
+                        module = scope.split("+")[0].split("-")[0].split("&")[0].split("@")[0]
+                        err = check_output_assertions(
+                            resolved.context,
+                            data.get("constraints", []),
+                            assertions, module,
+                        )
+                        if err:
+                            return json.dumps(err.to_dict(), indent=2)
+                    except Exception:
+                        pass
+
                 output = json.dumps(data, indent=2)
             except Exception:
                 pass  # Visibility metadata is best-effort, never blocks
+
+        # Record timing
+        try:
+            elapsed_ms = (_time.perf_counter() - _resolve_start) * 1000
+            from .timing import record_timing
+            if root:
+                record_timing(root, "resolve", elapsed_ms)
+        except Exception:
+            pass
 
         return output
 
@@ -829,6 +881,45 @@ def main():
                 for r in report.notes
             ],
             "files_checked": report.files_checked,
+        }, indent=2)
+
+    @mcp.tool()
+    def dotscope_debug(
+        session_id: Optional[str] = None,
+    ) -> str:
+        """Debug why an agent session produced a bad outcome.
+
+        Bisects the context, files, and constraints that were served
+        to identify the root cause. Returns diagnosis and recommendations.
+
+        If no session_id, debugs the most recent session with low recall.
+        """
+        from .debug import debug_session, list_bad_sessions
+        from .discovery import find_repo_root
+
+        root = find_repo_root()
+        if root is None:
+            return json.dumps({"error": "Could not find repository root"})
+
+        if not session_id:
+            bad = list_bad_sessions(root, limit=1)
+            if bad:
+                session_id = bad[0]["session_id"]
+            else:
+                return json.dumps({"error": "No sessions with low recall found"})
+
+        result = debug_session(session_id, root)
+        if result is None:
+            return json.dumps({"error": f"Session {session_id} not found or recall >= 80%"})
+
+        return json.dumps({
+            "session_id": result.session_id,
+            "diagnosis": result.diagnosis,
+            "files_that_mattered": result.files_that_mattered,
+            "files_that_didnt_help": result.files_that_didnt_help,
+            "missing_files": result.missing_files,
+            "constraints_violated": result.constraints_violated,
+            "recommendations": result.recommendations,
         }, indent=2)
 
     @mcp.tool()
