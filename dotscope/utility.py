@@ -108,7 +108,7 @@ def save_utility_scores(dot_dir: Path, scores: Dict[str, FileUtilityScore]) -> N
         for path, s in scores.items()
     }
 
-    (utility_dir / "file_scores.json").write_text(json.dumps(data, indent=2))
+    (utility_dir / "file_scores.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 def load_utility_scores(dot_dir: Path) -> Dict[str, FileUtilityScore]:
@@ -118,7 +118,7 @@ def load_utility_scores(dot_dir: Path) -> Dict[str, FileUtilityScore]:
         return {}
 
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         return {
             k: FileUtilityScore(path=k, **v)
             for k, v in data.items()

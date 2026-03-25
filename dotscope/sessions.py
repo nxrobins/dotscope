@@ -36,11 +36,11 @@ class SessionManager:
 
         version_file = self.dot_dir / "schema_version"
         if not version_file.exists():
-            version_file.write_text("1")
+            version_file.write_text("1", encoding="utf-8")
 
         gitignore = self.dot_dir / ".gitignore"
         if not gitignore.exists():
-            gitignore.write_text("*\n")
+            gitignore.write_text("*\n", encoding="utf-8")
 
     def create_session(
         self,
@@ -70,7 +70,7 @@ class SessionManager:
             "task": session.task,
             "predicted_files": session.predicted_files,
             "context_hash": session.context_hash,
-        }, indent=2))
+        }, indent=2), encoding="utf-8")
 
         return session_id
 
@@ -117,7 +117,7 @@ class SessionManager:
             "recall": obs.recall,
             "precision": obs.precision,
             "timestamp": obs.timestamp,
-        }, indent=2))
+        }, indent=2), encoding="utf-8")
 
         return obs
 
@@ -128,7 +128,7 @@ class SessionManager:
             if len(sessions) >= limit:
                 break
             try:
-                data = json.loads(p.read_text())
+                data = json.loads(p.read_text(encoding="utf-8"))
                 sessions.append(SessionLog(**data))
             except (json.JSONDecodeError, TypeError):
                 continue
@@ -141,7 +141,7 @@ class SessionManager:
             if len(observations) >= limit:
                 break
             try:
-                data = json.loads(p.read_text())
+                data = json.loads(p.read_text(encoding="utf-8"))
                 observations.append(ObservationLog(**data))
             except (json.JSONDecodeError, TypeError):
                 continue
@@ -176,7 +176,7 @@ class SessionManager:
             if os.path.getmtime(p) < cutoff:
                 break
             try:
-                data = json.loads(p.read_text())
+                data = json.loads(p.read_text(encoding="utf-8"))
                 session = SessionLog(**data)
             except (json.JSONDecodeError, TypeError):
                 continue

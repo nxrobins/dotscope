@@ -30,15 +30,15 @@ def install_hook(repo_root: str) -> str:
     hook_path.parent.mkdir(parents=True, exist_ok=True)
 
     if hook_path.exists():
-        existing = hook_path.read_text()
+        existing = hook_path.read_text(encoding="utf-8")
         if _HOOK_MARKER in existing:
             return str(hook_path)  # Already installed
 
         # Append to existing hook
-        with open(hook_path, "a") as f:
+        with open(hook_path, "a", encoding="utf-8") as f:
             f.write(f"\n{_HOOK_CONTENT}")
     else:
-        hook_path.write_text(_HOOK_CONTENT)
+        hook_path.write_text(_HOOK_CONTENT, encoding="utf-8")
 
     # Make executable
     hook_path.chmod(hook_path.stat().st_mode | stat.S_IEXEC)
@@ -56,7 +56,7 @@ def uninstall_hook(repo_root: str) -> bool:
     if not hook_path.exists():
         return False
 
-    content = hook_path.read_text()
+    content = hook_path.read_text(encoding="utf-8")
     if _HOOK_MARKER not in content:
         return False
 
@@ -77,7 +77,7 @@ def uninstall_hook(repo_root: str) -> bool:
     if not remaining or remaining == "#!/bin/sh":
         hook_path.unlink()
     else:
-        hook_path.write_text(remaining + "\n")
+        hook_path.write_text(remaining + "\n", encoding="utf-8")
 
     return True
 
@@ -87,4 +87,4 @@ def is_hook_installed(repo_root: str) -> bool:
     hook_path = Path(repo_root) / ".git" / "hooks" / "post-commit"
     if not hook_path.exists():
         return False
-    return _HOOK_MARKER in hook_path.read_text()
+    return _HOOK_MARKER in hook_path.read_text(encoding="utf-8")

@@ -201,7 +201,7 @@ def save_lessons(dot_dir: Path, module: str, lessons: List[Lesson]) -> None:
         }
         for item in lessons
     ]
-    (lessons_dir / f"{module}.json").write_text(json.dumps(data, indent=2))
+    (lessons_dir / f"{module}.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 def load_lessons(dot_dir: Path, module: str) -> List[Lesson]:
@@ -210,7 +210,7 @@ def load_lessons(dot_dir: Path, module: str) -> List[Lesson]:
     if not path.exists():
         return []
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         return [Lesson(**item) for item in data]
     except (json.JSONDecodeError, TypeError):
         return []
@@ -232,7 +232,7 @@ def save_invariants(dot_dir: Path, module: str, invariants: List[ObservedInvaria
         }
         for inv in invariants
     ]
-    (inv_dir / f"{module}.json").write_text(json.dumps(data, indent=2))
+    (inv_dir / f"{module}.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 def load_invariants(dot_dir: Path, module: str) -> List[ObservedInvariant]:
@@ -241,7 +241,7 @@ def load_invariants(dot_dir: Path, module: str) -> List[ObservedInvariant]:
     if not path.exists():
         return []
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         return [ObservedInvariant(**item) for item in data]
     except (json.JSONDecodeError, TypeError):
         return []
