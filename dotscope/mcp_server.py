@@ -79,6 +79,18 @@ def main():
         if budget is not None:
             resolved = apply_budget(resolved, budget)
 
+        # Track session (MCP calls only — compose stays pure)
+        session_id = None
+        try:
+            from .sessions import SessionManager
+            mgr = SessionManager(root)
+            mgr.ensure_initialized()
+            task_str = f"resolve {scope}" + (f" (budget={budget})" if budget else "")
+            session_id = mgr.create_session(scope, task_str, resolved.files, resolved.context)
+            resolved.context = f"# dotscope-session: {session_id}\n{resolved.context}"
+        except Exception:
+            pass  # Session tracking failures never block resolution
+
         return format_resolved(resolved, fmt=format, root=root)
 
     @mcp.tool()

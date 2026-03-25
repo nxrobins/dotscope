@@ -184,13 +184,16 @@ class HealthReport:
 
 @dataclass
 class ResolvedImport:
-    """A fully analyzed import statement."""
+    """A single import statement, resolved to its structural meaning."""
     raw: str
-    resolved_path: Optional[str] = None
+    module: str = ""                       # Top-level module (e.g., "auth")
+    resolved_path: Optional[str] = None    # Target file path, or None if external
     names: List[str] = field(default_factory=list)
     is_relative: bool = False
     is_star: bool = False
     is_conditional: bool = False
+    is_type_only: bool = False             # Inside TYPE_CHECKING block
+    line: int = 0
 
 
 @dataclass
@@ -203,41 +206,50 @@ class ExportedSymbol:
 
 @dataclass
 class ClassInfo:
-    """A class definition extracted from AST."""
+    """Structural summary of a class definition."""
     name: str
     bases: List[str] = field(default_factory=list)
     methods: List[str] = field(default_factory=list)
+    method_count: int = 0
     decorators: List[str] = field(default_factory=list)
     is_abstract: bool = False
     is_public: bool = True
+    line: int = 0
 
 
 @dataclass
 class FunctionInfo:
-    """A function definition extracted from AST."""
+    """Structural summary of a function definition."""
     name: str
     params: List[str] = field(default_factory=list)
+    arg_count: int = 0
     return_type: Optional[str] = None
     decorators: List[str] = field(default_factory=list)
     is_public: bool = True
+    is_async: bool = False
+    complexity: int = 0                    # Count of if/for/while/try in body
+    line: int = 0
 
 
 @dataclass
-class ModuleAPI:
-    """Full structural analysis of a source file."""
+class FileAnalysis:
+    """Complete structural analysis of a single source file."""
     path: str
     language: str
     imports: List[ResolvedImport] = field(default_factory=list)
     exports: List[ExportedSymbol] = field(default_factory=list)
     classes: List[ClassInfo] = field(default_factory=list)
     functions: List[FunctionInfo] = field(default_factory=list)
+    decorators_used: List[str] = field(default_factory=list)  # All unique decorators
+    is_init: bool = False                  # True for __init__.py
+    reexports: List[str] = field(default_factory=list)  # Imported then re-exported
+    node_count: int = 0                    # Total AST nodes (complexity proxy)
     docstring: Optional[str] = None
-    all_list: Optional[List[str]] = None  # __all__ if defined
+    all_list: Optional[List[str]] = None
     is_entry_point: bool = False
 
     @property
     def public_api(self) -> List[str]:
-        """Names that constitute the public API."""
         if self.all_list is not None:
             return self.all_list
         names = []
@@ -254,8 +266,39 @@ class ModuleAPI:
 
     @property
     def import_paths(self) -> List[str]:
-        """Resolved import paths (for graph building)."""
         return [i.resolved_path for i in self.imports if i.resolved_path]
+
+
+# Keep ModuleAPI as alias for backward compatibility during migration
+ModuleAPI = FileAnalysis
+
+
+# ---------------------------------------------------------------------------
+# Observation layer models
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SessionLog:
+    """Records a single scope resolution event (the prediction)."""
+    session_id: str
+    timestamp: float
+    scope_expr: str
+    task: Optional[str] = None
+    predicted_files: List[str] = field(default_factory=list)
+    context_hash: str = ""
+
+
+@dataclass
+class ObservationLog:
+    """Records what actually happened after a resolution (the outcome)."""
+    commit_hash: str
+    session_id: str
+    actual_files_modified: List[str] = field(default_factory=list)
+    predicted_not_touched: List[str] = field(default_factory=list)
+    touched_not_predicted: List[str] = field(default_factory=list)
+    recall: float = 0.0
+    precision: float = 0.0
+    timestamp: float = 0.0
 
 
 # ---------------------------------------------------------------------------

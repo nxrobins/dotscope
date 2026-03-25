@@ -67,6 +67,17 @@ def main(argv=None):
     p_backtest = sub.add_parser("backtest", help="Validate scopes against git history")
     p_backtest.add_argument("--commits", type=int, default=50, help="Number of commits to test against")
 
+    # --- observe ---
+    p_observe = sub.add_parser("observe", help="Record observation for a commit (called by post-commit hook)")
+    p_observe.add_argument("commit", help="Commit hash to observe")
+
+    # --- hook ---
+    p_hook = sub.add_parser("hook", help="Manage post-commit hook")
+    hook_sub = p_hook.add_subparsers(dest="hook_action")
+    hook_sub.add_parser("install", help="Install post-commit observer hook")
+    hook_sub.add_parser("uninstall", help="Remove post-commit observer hook")
+    hook_sub.add_parser("status", help="Check if hook is installed")
+
     args = parser.parse_args(argv)
 
     if args.command is None:
@@ -86,6 +97,8 @@ def main(argv=None):
             "ingest": _cmd_ingest,
             "impact": _cmd_impact,
             "backtest": _cmd_backtest,
+            "observe": _cmd_observe,
+            "hook": _cmd_hook,
         }[args.command]
         handler(args)
     except (ValueError, FileNotFoundError) as e:
@@ -405,6 +418,47 @@ def _cmd_impact(args):
     total = 1 + len(all_dependents)
     risk = "LOW" if total <= 3 else ("MEDIUM" if total <= 10 else "HIGH")
     print(f"\nBlast radius: {total} file(s), risk: {risk}")
+
+
+def _cmd_observe(args):
+    from .sessions import SessionManager
+    from .discovery import find_repo_root
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    mgr = SessionManager(root)
+    obs = mgr.record_observation(args.commit)
+
+    if obs:
+        print(f"Observed: {obs.commit_hash[:8]} → session {obs.session_id}")
+        print(f"  Recall: {obs.recall:.0%}  Precision: {obs.precision:.0%}")
+        if obs.touched_not_predicted:
+            print(f"  Scope gaps: {', '.join(obs.touched_not_predicted[:5])}")
+    else:
+        print(f"No matching session for commit {args.commit[:8]}")
+
+
+def _cmd_hook(args):
+    from .hooks import install_hook, uninstall_hook, is_hook_installed
+    from .discovery import find_repo_root
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    if args.hook_action == "install":
+        path = install_hook(root)
+        print(f"Hook installed: {path}")
+    elif args.hook_action == "uninstall":
+        removed = uninstall_hook(root)
+        print("Hook removed." if removed else "No hook found.")
+    elif args.hook_action == "status":
+        installed = is_hook_installed(root)
+        print(f"Hook: {'installed' if installed else 'not installed'}")
+    else:
+        print("Usage: dotscope hook {install|uninstall|status}")
 
 
 def _cmd_backtest(args):

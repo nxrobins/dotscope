@@ -13,41 +13,68 @@ from typing import Optional
 from .models import (
     ClassInfo,
     ExportedSymbol,
+    FileAnalysis,
     FunctionInfo,
-    ModuleAPI,
     ResolvedImport,
 )
 
+# Cache: (path, mtime) → FileAnalysis
+_analysis_cache: dict[tuple[str, float], FileAnalysis] = {}
 
-def analyze_file(filepath: str, language: str) -> Optional[ModuleAPI]:
-    """Analyze a source file and extract its full structural API."""
+
+def analyze_file(filepath: str, language: str) -> Optional[FileAnalysis]:
+    """Analyze a source file and extract its full structural API.
+
+    Results are cached by (path, mtime) to avoid re-parsing unchanged files.
+    """
+    try:
+        mtime = os.path.getmtime(filepath)
+        cache_key = (filepath, mtime)
+        if cache_key in _analysis_cache:
+            return _analysis_cache[cache_key]
+    except OSError:
+        pass
+
     try:
         with open(filepath, "r", encoding="utf-8", errors="replace") as f:
             source = f.read()
     except (IOError, OSError):
         return None
 
+    result = None
     if language == "python":
-        return _analyze_python(filepath, source)
+        result = _analyze_python(filepath, source)
     elif language in ("javascript", "typescript"):
-        return _analyze_js(filepath, source)
+        result = _analyze_js(filepath, source)
     elif language == "go":
-        return _analyze_go(filepath, source)
-    return None
+        result = _analyze_go(filepath, source)
+
+    if result:
+        try:
+            _analysis_cache[(filepath, os.path.getmtime(filepath))] = result
+        except OSError:
+            pass
+
+    return result
 
 
 # ---------------------------------------------------------------------------
 # Python AST analysis
 # ---------------------------------------------------------------------------
 
-def _analyze_python(filepath: str, source: str) -> Optional[ModuleAPI]:
+def _analyze_python(filepath: str, source: str) -> Optional[FileAnalysis]:
     """Full AST walk of a Python file."""
     try:
         tree = ast.parse(source, filename=filepath)
     except SyntaxError:
         return None
 
-    api = ModuleAPI(path=filepath, language="python")
+    api = FileAnalysis(
+        path=filepath,
+        language="python",
+        is_init=os.path.basename(filepath) == "__init__.py",
+        node_count=len(list(ast.walk(tree))),
+    )
 
     # Module docstring
     if (
@@ -58,57 +85,66 @@ def _analyze_python(filepath: str, source: str) -> Optional[ModuleAPI]:
     ):
         api.docstring = tree.body[0].value.value
 
+    # Detect TYPE_CHECKING blocks
+    type_checking_lines = _find_type_checking_lines(tree)
+    all_decorators = set()
+
     for node in ast.walk(tree):
-        # Imports
         if isinstance(node, ast.Import):
             for alias in node.names:
+                top_module = alias.name.split(".")[0]
                 api.imports.append(ResolvedImport(
                     raw=alias.name,
+                    module=top_module,
                     names=[alias.asname or alias.name],
                     is_relative=False,
-                    is_star=False,
                     is_conditional=_is_conditional(node, tree),
+                    is_type_only=getattr(node, "lineno", 0) in type_checking_lines,
+                    line=getattr(node, "lineno", 0),
                 ))
         elif isinstance(node, ast.ImportFrom):
-            module = node.module or ""
+            mod_str = node.module or ""
+            top_module = mod_str.split(".")[0] if mod_str else ""
             is_star = any(a.name == "*" for a in node.names)
             names = [a.name for a in node.names]
             api.imports.append(ResolvedImport(
-                raw=f"{'.' * node.level}{module}",
+                raw=f"{'.' * node.level}{mod_str}",
+                module=top_module,
                 names=names,
                 is_relative=node.level > 0,
                 is_star=is_star,
                 is_conditional=_is_conditional(node, tree),
+                is_type_only=getattr(node, "lineno", 0) in type_checking_lines,
+                line=getattr(node, "lineno", 0),
             ))
 
-    # Top-level definitions only (not nested)
     for node in tree.body:
         if isinstance(node, ast.ClassDef):
-            api.classes.append(_extract_class(node))
+            cls = _extract_class(node)
+            api.classes.append(cls)
+            all_decorators.update(cls.decorators)
             api.exports.append(ExportedSymbol(
-                name=node.name,
-                kind="class",
+                name=node.name, kind="class",
                 is_public=not node.name.startswith("_"),
             ))
 
-        elif isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
-            api.functions.append(_extract_function(node))
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            fn = _extract_function(node)
+            api.functions.append(fn)
+            all_decorators.update(fn.decorators)
             api.exports.append(ExportedSymbol(
-                name=node.name,
-                kind="function",
+                name=node.name, kind="function",
                 is_public=not node.name.startswith("_"),
             ))
 
         elif isinstance(node, ast.Assign):
             for target in node.targets:
                 if isinstance(target, ast.Name):
-                    # Detect __all__
                     if target.id == "__all__" and isinstance(node.value, (ast.List, ast.Tuple)):
                         api.all_list = [
                             elt.value for elt in node.value.elts
                             if isinstance(elt, ast.Constant) and isinstance(elt.value, str)
                         ]
-                    # Top-level constant/variable
                     if target.id.isupper() or not target.id.startswith("_"):
                         api.exports.append(ExportedSymbol(
                             name=target.id,
@@ -116,10 +152,18 @@ def _analyze_python(filepath: str, source: str) -> Optional[ModuleAPI]:
                             is_public=not target.id.startswith("_"),
                         ))
 
-        # Detect entry point
         elif isinstance(node, ast.If):
             if _is_main_guard(node):
                 api.is_entry_point = True
+
+    api.decorators_used = sorted(all_decorators)
+
+    # Detect re-exports: names in __all__ that are also imported
+    if api.all_list:
+        imported_names = set()
+        for imp in api.imports:
+            imported_names.update(imp.names)
+        api.reexports = [n for n in api.all_list if n in imported_names]
 
     return api
 
@@ -147,9 +191,11 @@ def _extract_class(node: ast.ClassDef) -> ClassInfo:
         name=node.name,
         bases=bases,
         methods=methods,
+        method_count=len(methods),
         decorators=decorators,
         is_abstract=is_abstract,
         is_public=not node.name.startswith("_"),
+        line=getattr(node, "lineno", 0),
     )
 
 
@@ -177,9 +223,13 @@ def _extract_function(node) -> FunctionInfo:
     return FunctionInfo(
         name=node.name,
         params=params,
+        arg_count=len(node.args.args),
         return_type=return_type,
         decorators=decorators,
         is_public=not node.name.startswith("_"),
+        is_async=isinstance(node, ast.AsyncFunctionDef),
+        complexity=_compute_complexity(node),
+        line=getattr(node, "lineno", 0),
     )
 
 
@@ -193,6 +243,34 @@ def _decorator_name(node) -> str:
         elif isinstance(node, ast.Attribute):
             return f"{ast.unparse(node)}"
         return "unknown"
+
+
+def _find_type_checking_lines(tree) -> set:
+    """Find line numbers inside TYPE_CHECKING blocks."""
+    lines = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.If):
+            test = node.test
+            is_tc = False
+            if isinstance(test, ast.Name) and test.id == "TYPE_CHECKING":
+                is_tc = True
+            elif isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING":
+                is_tc = True
+            if is_tc:
+                for child in ast.walk(node):
+                    if hasattr(child, "lineno"):
+                        lines.add(child.lineno)
+    return lines
+
+
+def _compute_complexity(node) -> int:
+    """Count branching nodes in a function body as complexity proxy."""
+    count = 0
+    for child in ast.walk(node):
+        if isinstance(child, (ast.If, ast.For, ast.While, ast.Try,
+                               ast.ExceptHandler, ast.With, ast.Assert)):
+            count += 1
+    return count
 
 
 def _is_conditional(node, tree) -> bool:
@@ -225,9 +303,9 @@ def _is_main_guard(node: ast.If) -> bool:
 # JS/TS analysis (enhanced regex)
 # ---------------------------------------------------------------------------
 
-def _analyze_js(filepath: str, source: str) -> Optional[ModuleAPI]:
+def _analyze_js(filepath: str, source: str) -> Optional[FileAnalysis]:
     """Enhanced regex-based JS/TS analysis."""
-    api = ModuleAPI(path=filepath, language="javascript")
+    api = FileAnalysis(path=filepath, language="javascript")
 
     for line in source.splitlines():
         stripped = line.strip()
@@ -312,9 +390,9 @@ def _analyze_js(filepath: str, source: str) -> Optional[ModuleAPI]:
 # Go analysis (enhanced regex)
 # ---------------------------------------------------------------------------
 
-def _analyze_go(filepath: str, source: str) -> Optional[ModuleAPI]:
+def _analyze_go(filepath: str, source: str) -> Optional[FileAnalysis]:
     """Enhanced regex-based Go analysis."""
-    api = ModuleAPI(path=filepath, language="go")
+    api = FileAnalysis(path=filepath, language="go")
 
     in_import_block = False
     for line in source.splitlines():
