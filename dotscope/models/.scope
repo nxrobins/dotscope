@@ -1,0 +1,45 @@
+description: Data models — the single source of truth for all types
+includes:
+  - dotscope/models/core.py
+  - dotscope/models/history.py
+  - dotscope/models/intent.py
+  - dotscope/models/state.py
+  - dotscope/models/passes.py
+context: |
+  Five domain files. Each owns a distinct category of data.
+  Models NEVER import from functional modules — they are the foundation.
+
+  ## core.py — Static Architecture
+  ScopeConfig, FileAnalysis, DependencyGraph, FileNode, ResolvedImport,
+  ExportedSymbol, ClassInfo, FunctionInfo, ModuleBoundary.
+  What the codebase IS right now.
+
+  ## history.py — Empirical Behavior
+  ImplicitContract, FileHistory, ChangeCoupling, HistoryAnalysis.
+  How the codebase behaves over time. Mined from git.
+
+  ## intent.py — Human Rulebook
+  IntentDirective, Assertion, ContextExhaustionError, CheckResult,
+  ProposedFix, Severity, CheckCategory, Constraint, WarningPair, NearMiss.
+  How the codebase MUST be treated. Enforcement targets.
+
+  ## state.py — Persistent Memory
+  SessionLog, ObservationLog, BenchReport, RegressionCase, BisectionResult,
+  FileUtilityScore, Lesson, ObservedInvariant, Counterfactual, SessionStats.
+  Schemas for .dotscope/ JSON event logs.
+
+  ## passes.py — Transient Outputs
+  IngestPlan, PlannedScope, VirtualScope.
+  DTOs that live only during a single operation.
+
+  ## Gotchas
+  The old dotscope/models.py is a backward-compat re-export facade.
+  New code should import from dotscope.models (the package), not the file.
+related:
+  - dotscope/passes/.scope
+  - dotscope/storage/.scope
+tags:
+  - models
+  - dataclasses
+  - types
+tokens_estimate: 4500

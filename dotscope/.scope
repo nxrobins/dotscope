@@ -1,55 +1,63 @@
-description: dotscope — Python module (23 files)
+description: Root interfaces and orchestrators
 includes:
-  - dotscope/
+  - dotscope/cli.py
+  - dotscope/mcp_server.py
+  - dotscope/composer.py
+  - dotscope/resolver.py
+  - dotscope/intent.py
+  - dotscope/ingest.py
+  - dotscope/formatter.py
+  - dotscope/discovery.py
+  - dotscope/parser.py
+  - dotscope/visibility.py
 excludes:
   - dotscope/__pycache__/
-  - "*.pyc"
+  - dotscope/models/
+  - dotscope/passes/
+  - dotscope/storage/
 context: |
-  dotscope — Directory-scoped context boundaries for AI coding agents.
-  Documentation absorber: extract architectural knowledge from existing docs.
-  
-  Scans for and extracts knowledge from:
-  - README.md, ARCHITECTURE.md, CONTRIBUTING.md
-  - Docstrings (module-level and class-level)
-  - Inline comments with signals: NOTE, HACK, TODO, WARNING, FIXME, XXX, IMPORTANT
-  - Type hints and function signatures (contract-like information)
-  
-  AST-powered code analysis. Structural understanding of source files.
-  
-  Python: uses stdlib `ast` module — zero dependencies.
-  JS/TS: enhanced regex (no heavy AST dep for v1).
-  Go: enhanced regex.
-  
-  Scope backtesting: validate generated scopes against actual git history.
-  
-  Replays recent commits and measures whether each scope's includes would have
-  covered the files that were actually changed. Self-corrects by suggesting
-  missing includes.
-  
-  Token budgeting: rank files, fill to budget, progressive loading.
-  
-  Context is always included first. Then files are ranked and loaded
-  until the budget is exhausted.
-  
-  CLI entry point for dotscope.
-  Scope composition algebra.
-  
-  Supports expressions like:
-      auth+payments     — merge (union of files, concatenate context)
-      auth-tests        — subtract (remove files matching subtracted scope)
-      auth&api          — intersect (only files in both)
-      auth@context      — modifier (context only, no files)
-  
-  Operators bind left-to-right, no precedence. @ is a suffix modifier.
-  
-  Shared constants — single source of truth for all modules.
-  INVARIANT: s
-  ## Recent Changes
-  - Initial release: dotscope v0.1.0
-  This module is used by: tests
-  Changes here may affect downstream consumers.
+  The root dotscope/ directory holds interfaces and orchestrators.
+  Heavy lifting is delegated to passes/. State to storage/. Types to models/.
+
+  ## cli.py — Human Interface
+  All CLI commands. Dispatches to functional modules. 20+ commands including
+  resolve, check, intent, ingest, test-compiler, bench, debug, health.
+
+  ## mcp_server.py — Agent Interface
+  FastMCP server. 16 tools: resolve_scope, dotscope_check, dotscope_debug,
+  dotscope_acknowledge, match_scope, session_summary, etc.
+  Every resolve_scope call is tracked. Constraints injected prophylactically.
+
+  ## composer.py — Scope Algebra
+  Parses expressions like auth+payments-tests&api@context.
+  Operators: + (union), - (subtract), & (intersect), @ (modifier).
+
+  ## resolver.py — File Resolution
+  Resolves a ScopeConfig to concrete files by expanding glob patterns,
+  applying excludes, and computing token estimates.
+
+  ## ingest.py — Codebase Ingestion Orchestrator
+  Coordinates the full ingest pipeline: graph → history → docs → synthesis →
+  backtest → auto-correct → write. The largest orchestrator.
+
+  ## parser.py — YAML Parser
+  Minimal YAML subset parser. Zero dependencies. Handles the specific
+  patterns .scope and .scopes files use.
+
+  ## visibility.py — DX Features
+  SessionTracker, attribution hints, health nudges, counterfactual
+  integration. The glue between observation data and agent-facing output.
+
+  ## Gotchas
+  Many root files are backward-compat stubs (graph.py, history.py, etc.)
+  that re-export from passes/ or storage/. New code should import from
+  the canonical location (passes.graph_builder, not graph).
 related:
-  - tests/.scope
+  - dotscope/models/.scope
+  - dotscope/passes/.scope
+  - dotscope/storage/.scope
 tags:
-  - dotscope
-tokens_estimate: 42229
+  - cli
+  - mcp
+  - interfaces
+tokens_estimate: 18000

@@ -1,0 +1,51 @@
+description: Infrastructure — disk I/O, hooks, caching, state persistence
+includes:
+  - dotscope/storage/session_manager.py
+  - dotscope/storage/cache.py
+  - dotscope/storage/git_hooks.py
+  - dotscope/storage/onboarding.py
+  - dotscope/storage/timing.py
+  - dotscope/storage/near_miss.py
+excludes:
+  - dotscope/storage/__pycache__/
+context: |
+  Storage reads and writes models.state to disk. Pure infrastructure.
+
+  ## session_manager.py
+  SessionManager class. Creates sessions (.dotscope/sessions/),
+  records observations (.dotscope/observations/). Matches commits
+  to sessions by timestamp overlap.
+
+  ## cache.py
+  Caches history analysis and graph hubs after ingest so the MCP
+  server can load them at startup without re-computing.
+
+  ## git_hooks.py
+  Post-commit hook: calls `dotscope observe HEAD` after every commit.
+  Cross-platform: POSIX shell script or Python fallback for Windows.
+  Marks hook_installed in onboarding state.
+
+  ## onboarding.py
+  Milestone tracking in .dotscope/onboarding.json. Gating rules:
+  counterfactuals after 3+ observations, health nudges after 7+ days.
+  Next-step prompts: ingest → backtest → MCP → hook → stop.
+
+  ## timing.py
+  Appends operation timing (resolve, check, ingest) to timings.jsonl.
+  Used by dotscope bench.
+
+  ## near_miss.py
+  Persistent storage for near-miss detections and session scopes.
+
+  ## Gotchas
+  All file I/O uses encoding="utf-8" for Windows compatibility.
+  Session files are JSON, observation files are JSONL (append-only).
+  .dotscope/ is gitignored and fully rebuildable via `dotscope rebuild`.
+related:
+  - dotscope/models/.scope
+tags:
+  - storage
+  - sessions
+  - hooks
+  - caching
+tokens_estimate: 3800

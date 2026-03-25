@@ -1,0 +1,53 @@
+description: Analysis engine — the active verbs of the compiler
+includes:
+  - dotscope/passes/ast_analyzer.py
+  - dotscope/passes/graph_builder.py
+  - dotscope/passes/history_miner.py
+  - dotscope/passes/budget_allocator.py
+  - dotscope/passes/backtest.py
+  - dotscope/passes/virtual.py
+  - dotscope/passes/sentinel/
+excludes:
+  - dotscope/passes/__pycache__/
+context: |
+  Passes produce or consume models. They are the operations of the compiler.
+
+  ## ast_analyzer.py
+  Python AST analysis: imports (relative, star, conditional, TYPE_CHECKING),
+  function signatures, class hierarchies, decorators, public/private detection.
+  Populates models.core.FileAnalysis.
+
+  ## graph_builder.py
+  Builds DependencyGraph from import analysis. Module boundary detection
+  by directory cohesion. Transitive dependents computation. Cross-cutting
+  hub identification.
+
+  ## history_miner.py
+  Mines git log with --numstat for line-change data. Computes change
+  coupling, implicit contracts (P(B|A) >= 0.7), file stability
+  (stable/volatile/tweaked), hotspots, and recent summaries per module.
+
+  ## budget_allocator.py
+  Token budgeting. Context loads first. Files ranked by utility score
+  (from observations) × relevance × size. Asserted files get infinite
+  utility — ContextExhaustionError if budget can't fit them.
+
+  ## sentinel/ — Enforcement Engine
+  6 checks: boundary, contracts, antipattern, direction, stability, intent.
+  constraints.py: prophylactic injection into resolve responses.
+  acknowledge.py: confidence decay (min floor 0.3).
+  Three modes: prophylactic (at resolve), diagnostic (dotscope_check),
+  gate (pre-commit hook).
+
+  ## Gotchas
+  Sentinel checks import from models.intent, never from each other.
+  Budget allocator raises ContextExhaustionError (not returns error).
+  AST analyzer is Python-only; JS/TS/Go use regex in graph_builder.
+related:
+  - dotscope/models/.scope
+tags:
+  - analysis
+  - enforcement
+  - ast
+  - graph
+tokens_estimate: 8200

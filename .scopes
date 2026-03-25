@@ -1,12 +1,27 @@
 version: 1
+total_repo_tokens: 42000
 
 scopes:
+  models:
+    path: dotscope/models/.scope
+    keywords: [models, dataclasses, types, core, history, intent, state]
+    description: Data models — the single source of truth for all types
+  passes:
+    path: dotscope/passes/.scope
+    keywords: [analysis, ast, graph, budget, enforcement, sentinel, checks]
+    description: Analysis engine — the active verbs of the compiler
+  storage:
+    path: dotscope/storage/.scope
+    keywords: [storage, sessions, hooks, cache, onboarding, timing]
+    description: Infrastructure — disk I/O, hooks, caching, state persistence
   dotscope:
     path: dotscope/.scope
-    keywords: [dotscope, python, module, files]
+    keywords: [cli, mcp, resolve, ingest, compose, parse, format, visibility]
+    description: Root interfaces and orchestrators
   tests:
     path: tests/.scope
-    keywords: [tests, dotscope, python, module, files]
+    keywords: [tests, pytest, enforcement, experience, rigor, e2e]
+    description: Test suite — 266 tests across all features
 
 defaults:
   max_tokens: 8000
