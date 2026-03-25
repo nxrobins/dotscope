@@ -423,6 +423,22 @@ def _cmd_ingest(args):
 
     if args.dry_run:
         print("Dry run — no files written. Remove --dry-run to write scope files.")
+    else:
+        # Onboarding: mark milestone + show next step + vc tip
+        try:
+            from .onboarding import (
+                mark_milestone, next_step, version_control_tip, mark_vc_tip_shown,
+            )
+            mark_milestone(root, "first_ingest")
+            tip = version_control_tip(mark_milestone(root, "first_ingest"))
+            if tip:
+                print(f"\n{tip}")
+                mark_vc_tip_shown(root)
+            ns = next_step(mark_milestone(root, "first_ingest"))
+            if ns:
+                print(f"\n{ns}")
+        except Exception:
+            pass
 
 
 def _cmd_impact(args):
@@ -493,6 +509,14 @@ def _cmd_observe(args):
             if s.session_id == obs.session_id:
                 scope_expr = s.scope_expr
                 break
+
+        # Onboarding: mark first observation + increment counter
+        try:
+            from .onboarding import mark_milestone, increment_counter
+            mark_milestone(root, "first_observation")
+            increment_counter(root, "observations_recorded")
+        except Exception:
+            pass
 
         delta = format_observation_delta(obs, scope_expr)
         try:
@@ -910,6 +934,16 @@ def _cmd_check_backtest(root, n_commits, json_output):
     print(f"  {clean} commits clean, {total_holds} hold(s), {total_notes} note(s)")
     if total_holds:
         print(f"  dotscope would have caught {total_holds} issue(s) before they shipped")
+
+    # Onboarding: mark backtest milestone + show next step
+    try:
+        from .onboarding import mark_milestone, next_step
+        state = mark_milestone(root, "first_backtest")
+        ns = next_step(state)
+        if ns:
+            print(f"\n{ns}")
+    except Exception:
+        pass
 
 
 def _cmd_intent(args):

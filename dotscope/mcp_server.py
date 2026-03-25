@@ -46,6 +46,7 @@ def main():
     # Session-level tracker (lives across tool calls in a single MCP session)
     from .visibility import SessionTracker
     tracker = SessionTracker()
+    _root = None  # Will be set below
 
     # Load cached data from .dotscope/ for attribution hints + session stats
     _repo_tokens = 0
@@ -63,6 +64,7 @@ def main():
                 _repo_tokens = _idx.total_repo_tokens
             _cached_history = load_cached_history(_root)
             _cached_graph_hubs = load_cached_graph_hubs(_root)
+            tracker.set_repo_root(_root)
     except Exception:
         pass
 
@@ -159,6 +161,10 @@ def main():
             task_str = f"resolve {scope}" + (f" (budget={budget})" if budget else "")
             session_id = mgr.create_session(scope, task_str, resolved.files, resolved.context)
             resolved.context = f"# dotscope-session: {session_id}\n{resolved.context}"
+            # Onboarding
+            from .onboarding import mark_milestone, increment_counter
+            mark_milestone(root, "first_session")
+            increment_counter(root, "sessions_completed")
         except Exception:
             pass  # Session tracking failures never block resolution
 

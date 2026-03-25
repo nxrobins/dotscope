@@ -33,6 +33,7 @@ class SessionStats:
     attribution_hints_served: int = 0
     health_warnings_surfaced: int = 0
     unique_scopes: Set[str] = field(default_factory=set)
+    constraints_served: List[dict] = field(default_factory=list)
     started_at: Optional[str] = None
     last_activity: Optional[str] = None
 
@@ -67,6 +68,13 @@ class SessionTracker:
         warnings = response.get("health_warnings", [])
         self._stats.health_warnings_surfaced += len(warnings)
 
+        constraints = response.get("constraints", [])
+        self._stats.constraints_served.extend(constraints)
+
+    def set_repo_root(self, root: str) -> None:
+        """Set repo root for counterfactual computation."""
+        self._repo_root = root
+
     def summary(self) -> dict:
         """Return session summary as dict for MCP response."""
         s = self._stats
@@ -75,7 +83,7 @@ class SessionTracker:
             reduction_pct = round(
                 (1 - s.tokens_served / s.tokens_available) * 100, 1
             )
-        return {
+        result = {
             "scopes_resolved": s.scopes_resolved,
             "unique_scopes": len(s.unique_scopes),
             "tokens_served": s.tokens_served,
@@ -86,6 +94,21 @@ class SessionTracker:
             "started_at": s.started_at,
             "last_activity": s.last_activity,
         }
+
+        # Counterfactuals (gated by onboarding stage)
+        cfs = self._compute_counterfactuals()
+        if cfs:
+            result["counterfactuals"] = [
+                {
+                    "type": cf.type,
+                    "description": cf.description,
+                    "source": cf.source,
+                    "severity": cf.severity,
+                }
+                for cf in cfs
+            ]
+
+        return result
 
     def format_terminal(self) -> str:
         """Format summary for stderr output."""
@@ -106,20 +129,104 @@ class SessionTracker:
             f" . {s.tokens_served:,} tokens served"
             f" ({reduction_pct}% reduction)",
         ]
+
+        # Counterfactuals (the magic section)
+        cfs = self._compute_counterfactuals()
+        if cfs:
+            from .counterfactual import format_counterfactuals_terminal
+            cf_text = format_counterfactuals_terminal(cfs)
+            if cf_text:
+                lines.append(cf_text)
+
+        # Knowledge provided
+        provided = []
         if s.attribution_hints_served:
-            hint_word = "hint" if s.attribution_hints_served == 1 else "hints"
-            lines.append(
-                f"  {s.attribution_hints_served} attribution {hint_word} served"
-            )
+            provided.append(f"{s.attribution_hints_served} attribution hints served")
         if s.health_warnings_surfaced:
-            lines.append(
-                f"  {s.health_warnings_surfaced} health warnings surfaced"
-            )
-        lines.append(
-            "  Session tracked -> run `dotscope sessions` to review"
-        )
+            provided.append(f"{s.health_warnings_surfaced} health warnings surfaced")
+        if s.constraints_served:
+            provided.append(f"{len(s.constraints_served)} constraints applied")
+        if provided:
+            lines.append("")
+            lines.append("  What dotscope provided:")
+            for p in provided:
+                lines.append(f"    {p}")
+
+        # Milestone message
+        try:
+            root = getattr(self, "_repo_root", None)
+            if root:
+                from .onboarding import load_onboarding, milestone_message, next_step
+                state = load_onboarding(root)
+                msg = milestone_message(state)
+                if msg:
+                    lines.append(f"\n  {msg}")
+                ns = next_step(state)
+                if ns:
+                    lines.append(f"\n  {ns}")
+        except Exception:
+            pass
+
         lines.append("-" * 55)
         return "\n".join(lines)
+
+    def _compute_counterfactuals(self) -> list:
+        """Compute counterfactuals from session data. Best-effort."""
+        try:
+            root = getattr(self, "_repo_root", None)
+            if not root:
+                return []
+
+            from .onboarding import load_onboarding, should_show_counterfactuals
+            state = load_onboarding(root)
+            if not should_show_counterfactuals(state):
+                return []
+
+            from .counterfactual import compute_counterfactuals
+            from .near_miss import load_recent_near_misses
+            import json
+
+            # Gather data
+            near_misses = []
+            for scope in self._stats.unique_scopes:
+                nms = load_recent_near_misses(root, scope)
+                near_misses.extend(nms)
+
+            invariants = {}
+            inv_path = os.path.join(root, ".dotscope", "invariants.json")
+            if os.path.exists(inv_path):
+                with open(inv_path, "r", encoding="utf-8") as f:
+                    invariants = json.load(f)
+
+            intents = []
+            try:
+                from .intent import load_intents
+                intents = load_intents(root)
+            except Exception:
+                pass
+
+            # Modified files from recent observations
+            modified = set()
+            diff_text = ""
+            try:
+                from .sessions import SessionManager
+                mgr = SessionManager(root)
+                recent_obs = mgr.get_observations(limit=5)
+                for obs in recent_obs:
+                    modified.update(obs.actual_files_modified)
+            except Exception:
+                pass
+
+            return compute_counterfactuals(
+                constraints_served=self._stats.constraints_served,
+                modified_files=modified,
+                diff_text=diff_text,
+                near_misses=near_misses,
+                invariants=invariants,
+                intents=intents,
+            )
+        except Exception:
+            return []
 
     def reset(self) -> None:
         """Clear all session stats."""

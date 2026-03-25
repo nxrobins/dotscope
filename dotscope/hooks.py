@@ -81,6 +81,13 @@ def install_hook(repo_root: str) -> str:
     except OSError:
         pass  # Windows may not support chmod
 
+    # Onboarding: mark hook installed
+    try:
+        from .onboarding import mark_milestone
+        mark_milestone(repo_root, "hook_installed")
+    except Exception:
+        pass
+
     return str(hook_path)
 
 
