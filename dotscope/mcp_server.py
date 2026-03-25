@@ -129,15 +129,12 @@ def main():
             try:
                 data = json.loads(output)
 
-                # Feature 2: Attribution hints + source signals
+                # Feature 2: Attribution hints (with provenance)
                 from .visibility import (
-                    extract_attribution_hints, compute_source_signals,
-                    build_recent_learning, check_health_nudges,
+                    extract_attribution_hints, build_accuracy,
+                    check_health_nudges,
                 )
                 data["attribution_hints"] = extract_attribution_hints(
-                    resolved.context
-                )
-                data["source_signals"] = compute_source_signals(
                     resolved.context
                 )
 
@@ -146,7 +143,7 @@ def main():
                 has_contracts = "implicit contract" in resolved.context.lower()
                 tracker.record_resolve(token_count, 0, has_contracts)
 
-                # Features 2-5 require observation data
+                # Features requiring observation data
                 if dot_dir and dot_dir.exists():
                     from .sessions import SessionManager
                     mgr = SessionManager(root)
@@ -160,28 +157,10 @@ def main():
                         if o.session_id in scope_session_ids
                     ]
 
-                    # Wire 2: scope_accuracy
-                    if observations:
-                        recalls = [o.recall for o in observations]
-                        precisions = [o.precision for o in observations]
-                        recent_r = recalls[-5:] if len(recalls) >= 5 else recalls
-                        older_r = recalls[:-5] if len(recalls) > 5 else []
-                        trend = (
-                            "improving"
-                            if older_r and sum(recent_r) / len(recent_r) > sum(older_r) / len(older_r)
-                            else "stable"
-                        )
-                        data["scope_accuracy"] = {
-                            "observations": len(observations),
-                            "avg_recall": round(sum(recalls) / len(recalls), 3),
-                            "avg_precision": round(sum(precisions) / len(precisions), 3),
-                            "trend": trend,
-                        }
-
-                    # Feature 3: Recent learning
-                    learning = build_recent_learning(observations, scope)
-                    if learning:
-                        data["recent_learning"] = learning
+                    # Unified accuracy (merges scope_accuracy + recent_learning)
+                    accuracy = build_accuracy(observations, scope)
+                    if accuracy:
+                        data["accuracy"] = accuracy
 
                     # Feature 4: Health nudges
                     nudges = check_health_nudges(observations, scope)

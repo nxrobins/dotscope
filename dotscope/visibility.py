@@ -91,58 +91,53 @@ _HINT_KEYWORDS = re.compile(
 )
 
 
-def extract_attribution_hints(context: str, max_hints: int = 3) -> List[str]:
-    """Extract the highest-value context fragments as standalone statements."""
+def extract_attribution_hints(
+    context: str, max_hints: int = 3,
+) -> List[Dict[str, str]]:
+    """Extract the highest-value context fragments with provenance.
+
+    Returns: [{"hint": "...", "source": "hand_authored|git_history|..."}]
+    """
     if not context:
         return []
 
-    hints = []
+    hints: List[Dict[str, str]] = []
+    seen: set = set()
+
     for line in context.split("\n"):
         line = line.strip()
         if not line or line.startswith("#") or line.startswith("dotscope-session"):
             continue
-        if _HINT_KEYWORDS.search(line):
-            # Clean up markdown list markers
-            clean = re.sub(r"^[-*]\s+", "", line)
-            if len(clean) > 15:  # Skip trivially short matches
-                hints.append(clean)
 
-    # Also include any implicit contract lines
-    for line in context.split("\n"):
-        line = line.strip()
-        if "co-change" in line.lower() or "implicit contract" in line.lower():
-            clean = re.sub(r"^[-*]\s+", "", line)
-            if clean not in hints and len(clean) > 15:
-                hints.append(clean)
+        clean = re.sub(r"^[-*]\s+", "", line)
+        if len(clean) <= 15:
+            continue
+
+        source = _classify_source(line)
+
+        if _HINT_KEYWORDS.search(line) and clean not in seen:
+            hints.append({"hint": clean, "source": source})
+            seen.add(clean)
+
+        elif ("co-change" in line.lower() or "implicit contract" in line.lower()) and clean not in seen:
+            hints.append({"hint": clean, "source": source})
+            seen.add(clean)
 
     return hints[:max_hints]
 
 
-def compute_source_signals(context: str) -> Dict[str, int]:
-    """Count provenance signals in scope context."""
-    signals = {
-        "from_git_history": 0,
-        "from_docstrings": 0,
-        "from_signal_comments": 0,
-        "from_implicit_contracts": 0,
-        "hand_authored": 0,
-    }
-
-    for line in context.split("\n"):
-        lower = line.lower().strip()
-        if "from git history" in lower or "co-change" in lower or "commits" in lower:
-            signals["from_git_history"] += 1
-        elif "implicit contract" in lower:
-            signals["from_implicit_contracts"] += 1
-        elif "docstring" in lower or "api:" in lower:
-            signals["from_docstrings"] += 1
-        elif any(kw in lower for kw in ("invariant:", "hack:", "warning:", "note:")):
-            signals["from_signal_comments"] += 1
-        elif line.strip() and not line.strip().startswith("#"):
-            signals["hand_authored"] += 1
-
-    # Don't return all zeros — filter to non-zero
-    return {k: v for k, v in signals.items() if v > 0} or {"hand_authored": 1}
+def _classify_source(line: str) -> str:
+    """Classify a context line's provenance."""
+    lower = line.lower()
+    if "co-change" in lower or "from git history" in lower or "commits" in lower:
+        return "git_history"
+    if "implicit contract" in lower:
+        return "implicit_contract"
+    if "docstring" in lower or "api:" in lower:
+        return "docstring"
+    if any(kw in lower for kw in ("invariant:", "hack:", "warning:", "note:")):
+        return "signal_comment"
+    return "hand_authored"
 
 
 # ---------------------------------------------------------------------------
@@ -185,43 +180,50 @@ def format_observation_delta(
     return "\n".join(lines)
 
 
-def build_recent_learning(
+def build_accuracy(
     observations: List[ObservationLog],
     scope: str,
 ) -> Optional[dict]:
-    """Build recent_learning metadata from observations within 24h."""
-    now = time.time()
-    day_ago = now - 86400
+    """Build unified accuracy metadata from all observations.
 
-    recent = [o for o in observations if o.timestamp > day_ago]
-    if not recent:
+    Merges what was previously scope_accuracy + recent_learning into one field.
+    Returns None if no observations exist.
+    """
+    if not observations:
         return None
 
-    latest = recent[-1]
-    recalls = [o.recall for o in recent]
-    avg = sum(recalls) / len(recalls) if recalls else 0
+    now = time.time()
+    recalls = [o.recall for o in observations]
+    precisions = [o.precision for o in observations]
+    avg_recall = sum(recalls) / len(recalls)
+    avg_precision = sum(precisions) / len(precisions)
 
-    # Trend: compare last 3 to previous
-    if len(recalls) >= 4:
-        recent_avg = sum(recalls[-3:]) / 3
-        older_avg = sum(recalls[:-3]) / len(recalls[:-3])
-        trend = "improving" if recent_avg > older_avg + 0.05 else "stable"
-    else:
-        trend = "stable"
+    # Trend: compare recent vs older
+    recent_r = recalls[-5:] if len(recalls) >= 5 else recalls
+    older_r = recalls[:-5] if len(recalls) > 5 else []
+    trend = (
+        "improving"
+        if older_r and sum(recent_r) / len(recent_r) > sum(older_r) / len(older_r)
+        else "stable"
+    )
 
-    hours_ago = max(1, int((now - latest.timestamp) / 3600))
-    result = {
-        "last_observation": f"{hours_ago}h ago",
-        "accuracy_trend": trend,
-        "recent_accuracy": round(avg, 2),
+    result: dict = {
+        "observations": len(observations),
+        "avg_recall": round(avg_recall, 3),
+        "avg_precision": round(avg_precision, 3),
+        "trend": trend,
     }
 
-    # Note about what was learned
-    if latest.touched_not_predicted:
-        result["note"] = (
-            f"Added {', '.join(latest.touched_not_predicted[:3])} "
-            f"after missed prediction in last commit"
-        )
+    # Add recency info from most recent observation
+    latest = observations[-1]
+    if latest.timestamp > 0:
+        hours_ago = max(1, int((now - latest.timestamp) / 3600))
+        result["last_observation"] = f"{hours_ago}h ago"
+
+    # Count lessons applied (observations where something was learned)
+    lessons = sum(1 for o in observations if o.touched_not_predicted)
+    if lessons:
+        result["lessons_applied"] = lessons
 
     return result
 

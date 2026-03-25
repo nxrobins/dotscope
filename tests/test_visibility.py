@@ -4,9 +4,8 @@ import time
 from dotscope.visibility import (
     SessionTracker,
     extract_attribution_hints,
-    compute_source_signals,
     format_observation_delta,
-    build_recent_learning,
+    build_accuracy,
     check_health_nudges,
     detect_near_misses,
 )
@@ -42,7 +41,7 @@ class TestSessionTracker:
 
 
 class TestAttributionHints:
-    def test_extracts_warning_keywords(self):
+    def test_extracts_warning_keywords_with_provenance(self):
         context = (
             "## Gotchas\n"
             "- Never call .delete() on User, use .deactivate() instead\n"
@@ -51,29 +50,27 @@ class TestAttributionHints:
         )
         hints = extract_attribution_hints(context)
         assert len(hints) >= 2
-        assert any("delete" in h.lower() for h in hints)
-        assert any("validate" in h.lower() or "always" in h.lower() for h in hints)
+        # Hints are now dicts with hint + source
+        assert all("hint" in h and "source" in h for h in hints)
+        assert any("delete" in h["hint"].lower() for h in hints)
+        assert any(h["source"] == "hand_authored" for h in hints)
 
     def test_empty_context(self):
         assert extract_attribution_hints("") == []
         assert extract_attribution_hints("# just a heading") == []
 
-    def test_includes_co_change(self):
+    def test_includes_co_change_with_git_history_source(self):
         context = "billing.py and webhook_handler.py have 73% co-change rate"
         hints = extract_attribution_hints(context)
         assert len(hints) == 1
-        assert "co-change" in hints[0]
+        assert "co-change" in hints[0]["hint"]
+        assert hints[0]["source"] == "git_history"
 
-
-class TestSourceSignals:
-    def test_detects_git_history(self):
-        context = "## Implicit Contracts (from git history)\n- billing changes"
-        signals = compute_source_signals(context)
-        assert signals.get("from_git_history", 0) > 0
-
-    def test_empty_context(self):
-        signals = compute_source_signals("")
-        assert "hand_authored" in signals
+    def test_signal_comment_source(self):
+        context = "WARNING: this module is fragile after migration"
+        hints = extract_attribution_hints(context)
+        assert len(hints) == 1
+        assert hints[0]["source"] == "signal_comment"
 
 
 class TestObservationDelta:
@@ -108,11 +105,11 @@ class TestObservationDelta:
         assert "Missing:" in delta
 
 
-class TestRecentLearning:
+class TestAccuracy:
     def test_no_observations(self):
-        assert build_recent_learning([], "auth") is None
+        assert build_accuracy([], "auth") is None
 
-    def test_recent_observation(self):
+    def test_single_observation(self):
         obs = ObservationLog(
             commit_hash="abc",
             session_id="s1",
@@ -120,23 +117,41 @@ class TestRecentLearning:
             touched_not_predicted=["b.py"],
             recall=0.5,
             precision=1.0,
-            timestamp=time.time() - 3600,  # 1 hour ago
+            timestamp=time.time() - 3600,
         )
-        result = build_recent_learning([obs], "auth")
+        result = build_accuracy([obs], "auth")
         assert result is not None
-        assert "1h ago" in result["last_observation"]
-        assert result["recent_accuracy"] == 0.5
-        assert "note" in result  # Should note the missed file
+        assert result["observations"] == 1
+        assert result["avg_recall"] == 0.5
+        assert result["avg_precision"] == 1.0
+        assert result["trend"] == "stable"
+        assert "last_observation" in result
+        assert result["lessons_applied"] == 1  # One missed file = one lesson
 
-    def test_old_observation_ignored(self):
+    def test_improving_trend(self):
+        obs = [
+            ObservationLog(commit_hash=f"c{i}", session_id=f"s{i}",
+                          recall=0.6, precision=0.8, timestamp=float(i))
+            for i in range(5)
+        ] + [
+            ObservationLog(commit_hash=f"d{i}", session_id=f"s{i+5}",
+                          recall=0.95, precision=0.95, timestamp=float(i + 5))
+            for i in range(5)
+        ]
+        result = build_accuracy(obs, "auth")
+        assert result["trend"] == "improving"
+
+    def test_no_lessons_when_perfect(self):
         obs = ObservationLog(
             commit_hash="abc",
             session_id="s1",
-            recall=0.9,
-            precision=0.9,
-            timestamp=time.time() - 100000,  # >24h ago
+            touched_not_predicted=[],  # Perfect prediction
+            recall=1.0,
+            precision=1.0,
+            timestamp=time.time(),
         )
-        assert build_recent_learning([obs], "auth") is None
+        result = build_accuracy([obs], "auth")
+        assert "lessons_applied" not in result  # No lessons needed
 
 
 class TestHealthNudges:
