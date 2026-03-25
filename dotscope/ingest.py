@@ -165,6 +165,9 @@ def ingest(
     # Step 6: Write to disk
     if not dry_run:
         _write_scopes(plan)
+        # Cache structured data for MCP server
+        from .cache import cache_ingest_data
+        cache_ingest_data(root, history=plan.history, graph=plan.graph)
 
     return plan
 

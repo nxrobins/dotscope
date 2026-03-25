@@ -124,6 +124,64 @@ class TestAttributionHints:
         assert len(hints) == 1
         assert hints[0]["source"] == "signal_comment"
 
+    def test_implicit_contracts_from_history(self):
+        """Hints extracted directly from cached history objects."""
+        from dotscope.history import ImplicitContract
+        contracts = [
+            ImplicitContract(
+                trigger_file="auth/handler.py",
+                coupled_file="cache/sessions.py",
+                confidence=0.68,
+                occurrences=12,
+                description="When auth/handler.py changes, cache/sessions.py changes 68% of the time",
+            ),
+        ]
+        hints = extract_attribution_hints(
+            "", implicit_contracts=contracts, scope_directory="auth",
+        )
+        assert len(hints) == 1
+        assert hints[0]["source"] == "git_history"
+        assert "68%" in hints[0]["hint"]
+
+    def test_graph_hub_hints(self):
+        """Hints from cached graph hubs."""
+        hubs = {
+            "auth/handler.py": {
+                "imported_by_count": 8,
+                "imported_by_dirs": ["api", "admin", "tests"],
+            },
+        }
+        hints = extract_attribution_hints(
+            "", graph_hubs=hubs, scope_directory="auth",
+        )
+        assert len(hints) == 1
+        assert hints[0]["source"] == "graph"
+        assert "8 files" in hints[0]["hint"]
+
+    def test_priority_ordering(self):
+        """git_history hints come before hand_authored."""
+        from dotscope.history import ImplicitContract
+        contracts = [
+            ImplicitContract("auth/a.py", "auth/b.py", 0.7, 10,
+                           "a.py and b.py change together"),
+        ]
+        context = "## Gotchas\n- Never call .delete() on User"
+        hints = extract_attribution_hints(
+            context, implicit_contracts=contracts, scope_directory="auth",
+        )
+        assert len(hints) >= 2
+        assert hints[0]["source"] == "git_history"
+
+    def test_section_header_provenance(self):
+        """Lines under ## Implicit Contracts should be classified as git_history."""
+        context = (
+            "## Implicit Contracts (from git history)\n"
+            "- Always update webhooks.py when changing billing.py\n"
+        )
+        hints = extract_attribution_hints(context)
+        assert len(hints) == 1
+        assert hints[0]["source"] == "git_history"
+
 
 class TestObservationDelta:
     def test_formats_good_prediction(self):

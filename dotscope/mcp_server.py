@@ -47,17 +47,22 @@ def main():
     from .visibility import SessionTracker
     tracker = SessionTracker()
 
-    # Read total_repo_tokens from index for session reduction stats
+    # Load cached data from .dotscope/ for attribution hints + session stats
     _repo_tokens = 0
+    _cached_history = None
+    _cached_graph_hubs = {}
     try:
         from .discovery import find_repo_root
         from .parser import parse_scopes_index
+        from .cache import load_cached_history, load_cached_graph_hubs
         _root = find_repo_root()
         if _root:
             _idx_path = os.path.join(_root, ".scopes")
             if os.path.exists(_idx_path):
                 _idx = parse_scopes_index(_idx_path)
                 _repo_tokens = _idx.total_repo_tokens
+            _cached_history = load_cached_history(_root)
+            _cached_graph_hubs = load_cached_graph_hubs(_root)
     except Exception:
         pass
 
@@ -158,13 +163,20 @@ def main():
                     extract_attribution_hints, build_accuracy,
                     check_health_nudges,
                 )
+                module = scope.split("+")[0].split("-")[0].split("&")[0].split("@")[0]
+                contracts = (
+                    _cached_history.implicit_contracts
+                    if _cached_history else None
+                )
                 data["attribution_hints"] = extract_attribution_hints(
-                    resolved.context
+                    resolved.context,
+                    implicit_contracts=contracts,
+                    graph_hubs=_cached_graph_hubs,
+                    scope_directory=module,
                 )
 
                 # Track for session summary (inject _repo_tokens, then strip)
                 data["_repo_tokens"] = _repo_tokens
-                module = scope.split("+")[0].split("-")[0].split("&")[0].split("@")[0]
                 tracker.record_resolve(module, data)
                 data.pop("_repo_tokens", None)
 

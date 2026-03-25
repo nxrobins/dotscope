@@ -137,49 +137,120 @@ _HINT_KEYWORDS = re.compile(
 
 
 def extract_attribution_hints(
-    context: str, max_hints: int = 3,
+    context: str,
+    max_hints: int = 3,
+    implicit_contracts: Optional[List] = None,
+    graph_hubs: Optional[Dict] = None,
+    scope_directory: str = "",
 ) -> List[Dict[str, str]]:
-    """Extract the highest-value context fragments with provenance.
+    """Extract highest-value context fragments with provenance.
 
-    Returns: [{"hint": "...", "source": "hand_authored|git_history|..."}]
+    Sources (in priority order):
+    1. Implicit contracts from cached history → source: git_history
+    2. Warning-keyword lines from context → source inferred from section headers
+    3. Graph hub info → source: graph
+
+    Returns: [{"hint": "...", "source": "git_history|hand_authored|..."}]
     """
-    if not context:
-        return []
-
     hints: List[Dict[str, str]] = []
     seen: set = set()
 
-    for line in context.split("\n"):
-        line = line.strip()
-        if not line or line.startswith("#") or line.startswith("dotscope-session"):
-            continue
+    # 1. Implicit contracts (highest priority — things nobody documented)
+    if implicit_contracts:
+        for ic in implicit_contracts:
+            desc = getattr(ic, "description", "") or str(ic.get("description", "")) if isinstance(ic, dict) else ic.description
+            trigger = getattr(ic, "trigger_file", "") if not isinstance(ic, dict) else ic.get("trigger_file", "")
+            coupled = getattr(ic, "coupled_file", "") if not isinstance(ic, dict) else ic.get("coupled_file", "")
 
-        clean = re.sub(r"^[-*]\s+", "", line)
-        if len(clean) <= 15:
-            continue
+            if scope_directory and not (
+                trigger.startswith(scope_directory + "/")
+                or coupled.startswith(scope_directory + "/")
+            ):
+                continue
 
-        source = _classify_source(line)
+            if desc and desc not in seen and len(desc) > 15:
+                hints.append({"hint": desc, "source": "git_history"})
+                seen.add(desc)
 
-        if _HINT_KEYWORDS.search(line) and clean not in seen:
-            hints.append({"hint": clean, "source": source})
-            seen.add(clean)
+    # 2. Warning-keyword lines from context
+    if context:
+        for line in context.split("\n"):
+            line = line.strip()
+            if not line or line.startswith("#") or line.startswith("dotscope-session"):
+                continue
 
-        elif ("co-change" in line.lower() or "implicit contract" in line.lower()) and clean not in seen:
-            hints.append({"hint": clean, "source": source})
-            seen.add(clean)
+            clean = re.sub(r"^[-*]\s+", "", line)
+            if len(clean) <= 15 or clean in seen:
+                continue
+
+            if _HINT_KEYWORDS.search(line):
+                source = _infer_source(line, context)
+                hints.append({"hint": clean, "source": source})
+                seen.add(clean)
+            elif "co-change" in line.lower():
+                hints.append({"hint": clean, "source": "git_history"})
+                seen.add(clean)
+
+    # 3. Graph hubs (wide blast radius warnings)
+    if graph_hubs and scope_directory:
+        for path, hub_info in graph_hubs.items():
+            if not path.startswith(scope_directory + "/"):
+                continue
+            count = hub_info.get("imported_by_count", 0)
+            if count >= 5:
+                hint = f"{path} is imported by {count} files — changes here have wide blast radius"
+                if hint not in seen:
+                    hints.append({"hint": hint, "source": "graph"})
+                    seen.add(hint)
+
+    # Priority sort: git_history > signal_comment > hand_authored > docstring > graph
+    _PRIORITY = {
+        "git_history": 0, "implicit_contract": 0,
+        "signal_comment": 1, "hand_authored": 2,
+        "docstring": 3, "graph": 4,
+    }
+    hints.sort(key=lambda h: _PRIORITY.get(h["source"], 5))
 
     return hints[:max_hints]
 
 
-def _classify_source(line: str) -> str:
-    """Classify a context line's provenance."""
+def _infer_source(line: str, full_context: str) -> str:
+    """Infer provenance by walking backward to the nearest ## section header."""
+    lines = full_context.splitlines()
+    target_idx = None
+    for i, l in enumerate(lines):
+        if l.strip() == line.strip():
+            target_idx = i
+            break
+
+    if target_idx is None:
+        return _classify_line(line)
+
+    for i in range(target_idx, -1, -1):
+        header = lines[i].strip().lower()
+        if not header.startswith("##"):
+            continue
+        if "implicit contract" in header or "git history" in header:
+            return "git_history"
+        if "stability" in header:
+            return "git_history"
+        if "docstring" in header or "readme" in header:
+            return "docstring"
+        if "signal" in header or "comment" in header:
+            return "signal_comment"
+        # Any other ## header — treat content as hand_authored
+        return "hand_authored"
+
+    return _classify_line(line)
+
+
+def _classify_line(line: str) -> str:
+    """Fallback: classify a line's provenance from its own content."""
     lower = line.lower()
     if "co-change" in lower or "from git history" in lower or "commits" in lower:
         return "git_history"
     if "implicit contract" in lower:
-        return "implicit_contract"
-    if "docstring" in lower or "api:" in lower:
-        return "docstring"
+        return "git_history"
     if any(kw in lower for kw in ("invariant:", "hack:", "warning:", "note:")):
         return "signal_comment"
     return "hand_authored"
