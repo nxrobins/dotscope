@@ -152,7 +152,7 @@ dotscope/
 └── mcp_server.py        # Agent interface
 ```
 
-The Nouns live in `models/`. The Verbs live in `passes/`. The Memory lives in `storage/`. The Interfaces are at the root. A contributor opening the repo sees architecture, not a script.
+The Nouns live in `models/`. The Verbs live in `passes/`. The Memory lives in `storage/`. The Interfaces are at the root.
 
 ## Details
 
