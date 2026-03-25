@@ -60,7 +60,9 @@ def main():
 
         If budget is set, returns the most relevant files fitting within
         that token count. Context is always included first, then files are
-        ranked by relevance and loaded until the budget is exhausted.
+        ranked by historical utility and loaded until the budget is exhausted.
+
+        Response includes scope_accuracy when observation data exists.
 
         Args:
             scope: Scope name, path, or composition expression
@@ -68,16 +70,40 @@ def main():
             follow_related: Whether to follow related scope references
             format: Output format — "json", "plain", or "cursor"
         """
+        from pathlib import Path
         from .composer import compose
         from .budget import apply_budget
         from .discovery import find_repo_root
         from .formatter import format_resolved
 
         root = find_repo_root()
+        dot_dir = Path(root) / ".dotscope" if root else None
         resolved = compose(scope, root=root, follow_related=follow_related)
 
+        # Wire 1: inject lessons and invariants into context
+        if dot_dir and dot_dir.exists():
+            try:
+                from .lessons import load_lessons, load_invariants, format_lessons_for_context
+                module = scope.split("+")[0].split("-")[0].split("&")[0].split("@")[0]
+                lessons = load_lessons(dot_dir, module)
+                invariants = load_invariants(dot_dir, module)
+                enrichment = format_lessons_for_context(lessons, invariants)
+                if enrichment:
+                    resolved.context = resolved.context + "\n\n" + enrichment
+            except Exception:
+                pass  # Enrichment failures never block resolution
+
+        # Wire 3: load utility scores for budget ranking
+        utility_scores = None
+        if dot_dir and dot_dir.exists():
+            try:
+                from .utility import load_utility_scores
+                utility_scores = load_utility_scores(dot_dir)
+            except Exception:
+                pass
+
         if budget is not None:
-            resolved = apply_budget(resolved, budget)
+            resolved = apply_budget(resolved, budget, utility_scores=utility_scores)
 
         # Track session (MCP calls only — compose stays pure)
         session_id = None
@@ -91,7 +117,43 @@ def main():
         except Exception:
             pass  # Session tracking failures never block resolution
 
-        return format_resolved(resolved, fmt=format, root=root)
+        output = format_resolved(resolved, fmt=format, root=root)
+
+        # Wire 2: inject scope_accuracy metadata into JSON responses
+        if format == "json" and dot_dir and dot_dir.exists():
+            try:
+                from .sessions import SessionManager
+                mgr = SessionManager(root)
+                sessions = mgr.get_sessions(limit=200)
+                scope_session_ids = {
+                    s.session_id for s in sessions if scope in s.scope_expr
+                }
+                observations = [
+                    o for o in mgr.get_observations(limit=200)
+                    if o.session_id in scope_session_ids
+                ]
+                if observations:
+                    recalls = [o.recall for o in observations]
+                    precisions = [o.precision for o in observations]
+                    recent = recalls[-5:] if len(recalls) >= 5 else recalls
+                    older = recalls[:-5] if len(recalls) > 5 else []
+                    trend = (
+                        "improving"
+                        if older and sum(recent) / len(recent) > sum(older) / len(older)
+                        else "stable"
+                    )
+                    data = json.loads(output)
+                    data["scope_accuracy"] = {
+                        "observations": len(observations),
+                        "avg_recall": round(sum(recalls) / len(recalls), 3),
+                        "avg_precision": round(sum(precisions) / len(precisions), 3),
+                        "trend": trend,
+                    }
+                    output = json.dumps(data, indent=2)
+            except Exception:
+                pass  # Accuracy metadata is best-effort
+
+        return output
 
     @mcp.tool()
     def match_scope(task: str) -> str:

@@ -15,12 +15,13 @@ def apply_budget(
     resolved: ResolvedScope,
     max_tokens: int,
     task: Optional[str] = None,
+    utility_scores: Optional[dict] = None,
 ) -> ResolvedScope:
     """Apply a token budget to a resolved scope.
 
     Algorithm:
     1. Reserve tokens for context (always included)
-    2. Rank files by relevance tier and size
+    2. Rank files by relevance tier and size, weighted by utility
     3. Fill files until budget is exhausted
     4. Set truncated=True if files were dropped
 
@@ -28,6 +29,7 @@ def apply_budget(
         resolved: The fully resolved scope
         max_tokens: Maximum total tokens (context + files)
         task: Optional task description for relevance ranking
+        utility_scores: Historical file utility data from observations
     """
     if max_tokens <= 0:
         return ResolvedScope(
@@ -52,8 +54,8 @@ def apply_budget(
             truncated=True,
         )
 
-    # Rank and score files
-    scored_files = _rank_files(resolved.files, task)
+    # Rank and score files (utility data flows through when available)
+    scored_files = _rank_files(resolved.files, task, utility_scores)
 
     # Fill within budget
     selected_files: List[str] = []
