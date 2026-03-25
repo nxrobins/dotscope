@@ -168,6 +168,8 @@ def ingest(
         # Cache structured data for MCP server
         from .cache import cache_ingest_data
         cache_ingest_data(root, history=plan.history, graph=plan.graph)
+        # Cache invariants for enforcement
+        _cache_invariants(root, plan.history)
 
     return plan
 
@@ -755,3 +757,39 @@ def _extract_validation(plan: IngestPlan, g: Optional[dict] = None) -> List[str]
         )
 
     return lines
+
+
+def _cache_invariants(root: str, history: Optional[HistoryAnalysis]) -> None:
+    """Cache invariants.json with contracts, function_co_changes, and file_stabilities."""
+    if not history:
+        return
+
+    dot_dir = os.path.join(root, ".dotscope")
+    os.makedirs(dot_dir, exist_ok=True)
+
+    contracts = []
+    for ic in history.implicit_contracts:
+        contracts.append({
+            "trigger_file": ic.trigger_file,
+            "coupled_file": ic.coupled_file,
+            "confidence": ic.confidence,
+            "description": ic.description,
+        })
+
+    stabilities = {}
+    for path, fh in history.file_histories.items():
+        stabilities[path] = {
+            "classification": fh.stability,
+            "commit_count": fh.commit_count,
+        }
+
+    invariants = {
+        "contracts": contracts,
+        "function_co_changes": {},  # Populated when function-level data available
+        "file_stabilities": stabilities,
+    }
+
+    import json
+    path = os.path.join(dot_dir, "invariants.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(invariants, f, indent=2)

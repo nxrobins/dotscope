@@ -69,18 +69,22 @@ Every `resolve_scope` response includes visibility metadata the agent naturally 
     "last_observation": "2h ago", "lessons_applied": 3
   },
 
+  "constraints": [
+    { "category": "contract", "message": "If you modify auth/tokens.py, review api/auth_routes.py", "confidence": 0.82 },
+    { "category": "anti_pattern", "message": "Use .deactivate() instead of .delete() on User", "confidence": 1.0 },
+    { "category": "intent", "message": "decouple auth/, payments/: Auth should not depend on payment internals", "confidence": 1.0 }
+  ],
+
   "health_warnings": [],
   "near_misses": []
 }
 ```
 
-**Attribution hints** tell the agent *what matters most* and *where the knowledge came from* — git history analysis vs hand-authored warnings vs graph structure. Different credibility registers for different knowledge types.
+**Constraints** are the rules the agent should follow — implicit contracts from git history, anti-patterns from scope context, dependency boundaries from the import graph, and architectural intents declared by the developer. Prevention, not correction.
 
-**Accuracy** tracks how well this scope predicts what agents actually need. Trend tells you if it's getting better or worse.
+**Attribution hints** tell the agent *where the knowledge came from* — git history vs hand-authored vs graph structure.
 
-**Health warnings** fire when a scope degrades: accuracy dropped >15%, scope file >30 days stale, or uncovered files appeared.
-
-**Near-misses** surface after a commit where the agent avoided an anti-pattern that the scope warned against. The disaster that didn't happen.
+**Accuracy** tracks prediction quality. Trend tells you if it's getting better or worse.
 
 ## The feedback loop
 
@@ -93,6 +97,26 @@ Agent resolves a scope (prediction)
 ```
 
 Install with `dotscope hook install`. Scopes that start as documentation become intelligence.
+
+## Enforcement
+
+dotscope knows the rules of your codebase. It can enforce them.
+
+```bash
+dotscope check                             # Validate staged changes
+dotscope check --backtest --commits 10     # What would checks have caught?
+dotscope intent add decouple auth/ payments/ --reason "Separate concerns"
+dotscope intent add freeze core/           # No changes without acknowledgment
+dotscope intent list
+```
+
+Three severity levels: **HOLD** (must address or acknowledge), **NOTE** (informational), **CLEAR** (implicit, never shown).
+
+Six check categories: boundary violations, implicit contracts, anti-patterns, dependency direction, stability concerns, architectural intent.
+
+The agent calls `dotscope_check` before committing. Holds come with fix proposals — predicted sections that need changes, or exact diffs for anti-pattern replacements.
+
+Acknowledged holds decay in confidence over time. Rules that are consistently wrong get demoted from HOLD to NOTE. The enforcement system self-corrects just like the resolution system.
 
 ## The .scope file
 
@@ -135,7 +159,7 @@ dotscope-mcp
 }
 ```
 
-Key tools: `resolve_scope`, `match_scope`, `get_context`, `impact_analysis`, `session_summary`, `suggest_scope_changes`.
+Key tools: `resolve_scope`, `match_scope`, `get_context`, `impact_analysis`, `dotscope_check`, `dotscope_acknowledge`, `session_summary`, `suggest_scope_changes`.
 
 ## CLI
 
@@ -146,6 +170,9 @@ dotscope resolve auth --budget 4000        # Best 4K tokens
 dotscope resolve auth+payments             # Union
 dotscope resolve auth@context              # Knowledge only, no files
 dotscope impact auth/tokens.py             # Blast radius
+dotscope check                             # Validate staged diff against rules
+dotscope check --backtest                  # Replay commits against checks
+dotscope intent add freeze core/           # Declare architectural direction
 dotscope health                            # Staleness, drift, coverage gaps
 dotscope backtest --commits 500            # Validate against history
 dotscope hook install                      # Start the feedback loop

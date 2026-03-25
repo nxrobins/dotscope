@@ -92,6 +92,7 @@ def main():
         budget: Optional[int] = None,
         follow_related: bool = True,
         format: str = "json",
+        task: Optional[str] = None,
     ) -> str:
         """Resolve a scope expression to a file list with architectural context.
 
@@ -184,6 +185,36 @@ def main():
                     graph_hubs=_cached_graph_hubs,
                     scope_directory=module,
                 )
+
+                # Constraints (prophylactic enforcement)
+                try:
+                    from .check.constraints import build_constraints
+                    from .intent import load_intents
+                    invariants = {}
+                    inv_path = os.path.join(root, ".dotscope", "invariants.json")
+                    if os.path.exists(inv_path):
+                        with open(inv_path, "r", encoding="utf-8") as _f:
+                            invariants = json.loads(_f.read())
+                    scopes_data = {}
+                    from .check.checker import _load_scopes_with_antipatterns
+                    scopes_data = _load_scopes_with_antipatterns(root)
+                    intents = load_intents(root)
+                    constraints = build_constraints(
+                        module, root, invariants, scopes_data, intents,
+                        graph_hubs=_cached_graph_hubs, task=task,
+                    )
+                    if constraints:
+                        data["constraints"] = [
+                            {
+                                "category": c.category,
+                                "message": c.message,
+                                "file": c.file,
+                                "confidence": c.confidence,
+                            }
+                            for c in constraints
+                        ]
+                except Exception:
+                    pass
 
                 # Track for session summary (inject _repo_tokens, then strip)
                 data["_repo_tokens"] = _repo_tokens
@@ -736,6 +767,96 @@ def main():
         if terminal:
             print(terminal, file=sys.stderr)
         return json.dumps(summary, indent=2)
+
+    @mcp.tool()
+    def dotscope_check(
+        diff: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> str:
+        """Check proposed changes against codebase rules and architectural intent.
+
+        Call before committing. Returns holds (must address), notes (informational),
+        and proposed fixes for each hold.
+
+        If no diff provided, checks current git staged changes.
+        If session_id provided, uses that session for boundary checking.
+        """
+        from .check.checker import check_diff, check_staged
+        from .discovery import find_repo_root
+
+        root = find_repo_root()
+        if root is None:
+            return json.dumps({"error": "Could not find repository root"})
+
+        if diff:
+            report = check_diff(diff, root, session_id=session_id)
+        else:
+            report = check_staged(root, session_id=session_id)
+
+        return json.dumps({
+            "passed": report.passed,
+            "holds": [
+                {
+                    "category": r.category.value,
+                    "severity": r.severity.value,
+                    "message": r.message,
+                    "file": r.file,
+                    "suggestion": r.suggestion,
+                    "acknowledge_id": r.acknowledge_id,
+                    "proposed_fix": {
+                        "file": r.proposed_fix.file,
+                        "reason": r.proposed_fix.reason,
+                        "predicted_sections": r.proposed_fix.predicted_sections,
+                        "proposed_diff": r.proposed_fix.proposed_diff,
+                        "confidence": r.proposed_fix.confidence,
+                    } if r.proposed_fix else None,
+                }
+                for r in report.holds
+            ],
+            "notes": [
+                {
+                    "category": r.category.value,
+                    "severity": r.severity.value,
+                    "message": r.message,
+                    "file": r.file,
+                }
+                for r in report.notes
+            ],
+            "files_checked": report.files_checked,
+        }, indent=2)
+
+    @mcp.tool()
+    def dotscope_acknowledge(
+        ids: str,
+        reason: str,
+    ) -> str:
+        """Acknowledge a hold and proceed.
+
+        Records the acknowledgment. Repeated acknowledgments of the same
+        constraint cause its confidence to decay over time.
+
+        Args:
+            ids: Comma-separated acknowledge IDs from dotscope_check holds
+            reason: Why this acknowledgment is correct
+        """
+        from .check.acknowledge import record_acknowledgment
+        from .discovery import find_repo_root
+
+        root = find_repo_root()
+        if root is None:
+            return json.dumps({"error": "Could not find repository root"})
+
+        ack_ids = [i.strip() for i in ids.split(",") if i.strip()]
+        recorded = []
+        for ack_id in ack_ids:
+            entry = record_acknowledgment(root, ack_id, reason)
+            recorded.append(entry)
+
+        return json.dumps({
+            "acknowledged": len(recorded),
+            "ids": ack_ids,
+            "reason": reason,
+        }, indent=2)
 
     mcp.run(transport="stdio")
 

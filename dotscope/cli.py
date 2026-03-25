@@ -96,6 +96,28 @@ def main(argv=None):
     # --- rebuild ---
     sub.add_parser("rebuild", help="Rebuild derived state from event logs")
 
+    # --- check ---
+    p_check = sub.add_parser("check", help="Validate a diff against codebase rules")
+    p_check.add_argument("--diff", default=None, help="Path to diff file (default: staged changes)")
+    p_check.add_argument("--session", default=None, help="Session ID for boundary checking")
+    p_check.add_argument("--acknowledge", action="append", default=[], help="Acknowledge a hold by ID")
+    p_check.add_argument("--backtest", action="store_true", help="Replay recent commits against checks")
+    p_check.add_argument("--commits", type=int, default=10, help="Commits to replay in backtest mode")
+    p_check.add_argument("--json", dest="json_output", action="store_true", help="Output as JSON")
+
+    # --- intent ---
+    p_intent = sub.add_parser("intent", help="Manage architectural intents")
+    intent_sub = p_intent.add_subparsers(dest="intent_action")
+    p_intent_add = intent_sub.add_parser("add", help="Add an architectural intent")
+    p_intent_add.add_argument("directive", choices=["decouple", "deprecate", "freeze", "consolidate"])
+    p_intent_add.add_argument("targets", nargs="+", help="Modules or files")
+    p_intent_add.add_argument("--reason", default="", help="Why this intent exists")
+    p_intent_add.add_argument("--replacement", default=None, help="Replacement (for deprecate)")
+    p_intent_add.add_argument("--target", default=None, help="Consolidation target")
+    p_intent_list = intent_sub.add_parser("list", help="List all intents")
+    p_intent_rm = intent_sub.add_parser("remove", help="Remove an intent by ID")
+    p_intent_rm.add_argument("id", help="Intent ID to remove")
+
     args = parser.parse_args(argv)
 
     if args.command is None:
@@ -122,6 +144,8 @@ def main(argv=None):
             "lessons": _cmd_lessons,
             "invariants": _cmd_invariants,
             "rebuild": _cmd_rebuild,
+            "check": _cmd_check,
+            "intent": _cmd_intent,
         }[args.command]
         handler(args)
     except (ValueError, FileNotFoundError) as e:
@@ -752,6 +776,180 @@ def _cmd_rebuild(args):
             print(f"  {mod}: {len(invariants)} invariant(s)")
 
     print("Done.")
+
+
+def _cmd_check(args):
+    import json as json_mod
+    from .discovery import find_repo_root
+    from .check.checker import check_diff, check_staged, format_terminal
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    if args.backtest:
+        _cmd_check_backtest(root, args.commits, args.json_output)
+        return
+
+    if args.diff:
+        with open(args.diff, "r", encoding="utf-8") as f:
+            diff_text = f.read()
+        report = check_diff(
+            diff_text, root,
+            session_id=args.session,
+            acknowledge_ids=args.acknowledge,
+        )
+    else:
+        report = check_staged(root, session_id=args.session)
+
+    if args.json_output:
+        data = {
+            "passed": report.passed,
+            "holds": [
+                {
+                    "category": r.category.value,
+                    "severity": r.severity.value,
+                    "message": r.message,
+                    "file": r.file,
+                    "suggestion": r.suggestion,
+                    "acknowledge_id": r.acknowledge_id,
+                    "proposed_fix": {
+                        "file": r.proposed_fix.file,
+                        "reason": r.proposed_fix.reason,
+                        "predicted_sections": r.proposed_fix.predicted_sections,
+                        "confidence": r.proposed_fix.confidence,
+                    } if r.proposed_fix else None,
+                }
+                for r in report.holds
+            ],
+            "notes": [
+                {
+                    "category": r.category.value,
+                    "severity": r.severity.value,
+                    "message": r.message,
+                    "file": r.file,
+                }
+                for r in report.notes
+            ],
+            "files_checked": report.files_checked,
+        }
+        print(json_mod.dumps(data, indent=2))
+    else:
+        output = format_terminal(report)
+        try:
+            print(output)
+        except UnicodeEncodeError:
+            print(output.encode("ascii", errors="replace").decode("ascii"))
+
+    if not report.passed:
+        sys.exit(1)
+
+
+def _cmd_check_backtest(root, n_commits, json_output):
+    """Replay recent commits against checks to validate enforcement."""
+    import json as json_mod
+    import subprocess
+    from .check.checker import check_diff
+
+    try:
+        result = subprocess.run(
+            ["git", "log", f"--max-count={n_commits}", "--pretty=format:%H|%s"],
+            cwd=root, capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode != 0:
+            print("Could not read git log", file=sys.stderr)
+            return
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        print("git not available", file=sys.stderr)
+        return
+
+    commits = []
+    for line in result.stdout.strip().splitlines():
+        if "|" in line:
+            h, msg = line.split("|", 1)
+            commits.append((h.strip(), msg.strip()))
+
+    if not commits:
+        print("No commits found")
+        return
+
+    print(f"dotscope: replaying last {len(commits)} commits\n")
+
+    clean = 0
+    total_holds = 0
+    total_notes = 0
+
+    for commit_hash, message in commits:
+        try:
+            diff_result = subprocess.run(
+                ["git", "diff", commit_hash + "~1", commit_hash],
+                cwd=root, capture_output=True, text=True, timeout=10,
+            )
+            if diff_result.returncode != 0 or not diff_result.stdout:
+                continue
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            continue
+
+        report = check_diff(diff_result.stdout, root)
+
+        if report.passed and not report.notes:
+            clean += 1
+            continue
+
+        print(f"  commit {commit_hash[:7]}  \"{message}\"")
+        for r in report.holds:
+            print(f"  HOLD  {r.category.value}")
+            print(f"    {r.message}")
+            total_holds += 1
+        for r in report.notes:
+            print(f"  NOTE  {r.category.value}")
+            print(f"    {r.message}")
+            total_notes += 1
+        print()
+
+    print(f"  {clean} commits clean, {total_holds} hold(s), {total_notes} note(s)")
+    if total_holds:
+        print(f"  dotscope would have caught {total_holds} issue(s) before they shipped")
+
+
+def _cmd_intent(args):
+    from .discovery import find_repo_root
+    from .intent import load_intents, add_intent, remove_intent
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    if args.intent_action == "add":
+        intent = add_intent(
+            root,
+            directive=args.directive,
+            targets=args.targets,
+            reason=args.reason,
+            replacement=args.replacement,
+            target=args.target,
+        )
+        print(f"Added intent: {intent.directive} (id: {intent.id})")
+
+    elif args.intent_action == "list":
+        intents = load_intents(root)
+        if not intents:
+            print("No intents defined. Use 'dotscope intent add' to declare architectural direction.")
+            return
+        for intent in intents:
+            targets = ", ".join(intent.modules + intent.files)
+            print(f"  [{intent.id}] {intent.directive} {targets}")
+            if intent.reason:
+                print(f"         {intent.reason}")
+            print(f"         set by {intent.set_by} on {intent.set_at}")
+            print()
+
+    elif args.intent_action == "remove":
+        removed = remove_intent(root, args.id)
+        print("Removed." if removed else f"Intent not found: {args.id}")
+
+    else:
+        print("Usage: dotscope intent {add|list|remove}")
 
 
 def _version():
