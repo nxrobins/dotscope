@@ -311,12 +311,12 @@ def _cmd_init(args):
 
     # 2. Install hooks
     try:
-        from .storage.git_hooks import install_hooks
-        install_hooks(root)
+        from .storage.git_hooks import install_hook
+        install_hook(root)
         if not quiet:
             print("dotscope: hooks installed", file=sys.stderr)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"dotscope: hook install failed: {e}", file=sys.stderr)
 
     # 3. Auto-configure MCP for detected IDEs
     try:
@@ -324,8 +324,8 @@ def _cmd_init(args):
         configured = configure_mcp(root)
         if configured and not quiet:
             print(f"dotscope: MCP configured for {', '.join(configured)}", file=sys.stderr)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"dotscope: MCP config failed: {e}", file=sys.stderr)
 
     # 4. Backtest as counterfactual demo
     if not quiet:
@@ -337,7 +337,20 @@ def _cmd_init(args):
                 for scope_result in report["results"]:
                     total_violations += scope_result.get("missed_files", 0)
 
-                _print_counterfactual(result, report, total_violations)
+                # Extract stats from IngestPlan object
+                stats = {
+                    "scopes_written": len(result.scopes) if hasattr(result, "scopes") else 0,
+                    "contracts_found": (
+                        len(result.history.implicit_contracts)
+                        if hasattr(result, "history") and result.history else 0
+                    ),
+                    "conventions_found": (
+                        len(result.discovered_conventions) if hasattr(result, "discovered_conventions") else 0
+                    ),
+                }
+                _print_counterfactual(stats, report, total_violations)
+            else:
+                _print_summary(result)
         except Exception:
             # Backtest may fail on repos with few commits
             _print_summary(result)
