@@ -6,8 +6,14 @@ from typing import Dict, List, Optional
 
 
 class Severity(Enum):
-    HOLD = "hold"
-    NOTE = "note"
+    GUARD = "guard"  # Blocks commit. Protective wall.
+    NUDGE = "nudge"  # Prints warning. Does not block. Course correction.
+    NOTE = "note"    # Informational.
+    HOLD = "hold"    # Backwards compat — treated same as GUARD
+
+    @property
+    def blocks_commit(self) -> bool:
+        return self.value in ("guard", "hold")
 
 
 class CheckCategory(Enum):
@@ -79,12 +85,21 @@ class CheckReport:
     checks_run: int = 0
 
     @property
-    def holds(self) -> List[CheckResult]:
-        return [r for r in self.results if not r.passed and r.severity == Severity.HOLD]
+    def guards(self) -> List[CheckResult]:
+        return [r for r in self.results if not r.passed and r.severity.blocks_commit]
+
+    @property
+    def nudges(self) -> List[CheckResult]:
+        return [r for r in self.results if not r.passed and r.severity == Severity.NUDGE]
 
     @property
     def notes(self) -> List[CheckResult]:
         return [r for r in self.results if not r.passed and r.severity == Severity.NOTE]
+
+    @property
+    def holds(self) -> List[CheckResult]:
+        """Backwards compat alias for guards."""
+        return self.guards
 
 
 # ---------------------------------------------------------------------------

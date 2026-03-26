@@ -123,6 +123,11 @@ Ask your agent: "What scopes are available?" It should call `list_scopes` and sh
     "last_observation": "2h ago", "lessons_applied": 3
   },
 
+  "routing": [
+    { "category": "routing", "message": "Files here follow the 'Repository' convention. Implement: get, save. Do not import: flask.", "confidence": 0.85 },
+    { "category": "routing", "message": "Code style: Type hints on most functions (62% adoption). Google style docstrings.", "confidence": 0.9 }
+  ],
+
   "voice": {
     "mode": "adaptive",
     "global": "Type hints on most functions (62% adoption). Follow existing patterns..."
@@ -133,9 +138,11 @@ Ask your agent: "What scopes are available?" It should call `list_scopes` and sh
 }
 ```
 
-**`constraints`** — Rules the agent should follow. Implicit contracts, anti-patterns, dependency boundaries, stability warnings, architectural intents, and convention blueprints. Filtered to the resolved scope, capped at 5 per category. Prevention, not correction.
+**`constraints`** — Warnings about what NOT to do. Implicit contracts, anti-patterns, boundaries, intents. Capped at 5 per category.
 
-**`voice`** — How the codebase writes code. Global style rules (~150-200 tokens, always included) plus convention-specific voice with canonical snippet when relevant.
+**`routing`** — Guidance about what TO do. Convention blueprints, voice rules, structural patterns. The bowling bumpers. The agent reads this and writes code that already follows the rules.
+
+**`voice`** — How the codebase writes code. Global style rules plus convention-specific voice with canonical snippet when relevant.
 
 **`attribution_hints`** — Where the knowledge came from. `git_history`, `hand_authored`, `signal_comment`, or `graph`. Different credibility registers for different knowledge types.
 
@@ -145,15 +152,15 @@ Ask your agent: "What scopes are available?" It should call `list_scopes` and sh
 
 ```json
 {
-  "passed": false,
-  "holds": [
+  "passed": true,
+  "guards": [],
+  "nudges": [
     {
       "category": "implicit_contract",
-      "severity": "hold",
+      "severity": "nudge",
       "message": "auth/tokens.py modified without api/auth_routes.py (82% co-change)",
       "file": "auth/tokens.py",
       "suggestion": "Review api/auth_routes.py for necessary changes",
-      "acknowledge_id": "contract_auth_tokens_api_a1b2c3",
       "proposed_fix": {
         "file": "api/auth_routes.py",
         "reason": "When auth/tokens.py changes, these sections typically need updates",
@@ -167,7 +174,7 @@ Ask your agent: "What scopes are available?" It should call `list_scopes` and sh
 }
 ```
 
-Holds come with fix proposals. The agent can apply them or acknowledge and proceed.
+Only GUARDs (frozen modules, deprecated imports) make `passed: false`. NUDGEs are course corrections — the agent sees them and self-corrects. The commit is not blocked.
 
 ## Assertion Errors
 
@@ -222,10 +229,10 @@ Installs two git hooks:
 
 | Hook | When | What | Blocks? |
 |------|------|------|---------|
-| pre-commit | Before every commit | `dotscope check` on staged changes | Yes (HOLDs) |
+| pre-commit | Before every commit | `dotscope check` on staged changes | GUARDs only |
 | post-commit | After every commit | `dotscope observe` + `dotscope incremental` | Never |
 
-The pre-commit hook is the enforcement guarantee. It works everywhere git runs: Claude Desktop, Claude Code, VS Code, terminal. An agent (or human) cannot commit code that violates architectural rules, conventions, or voice config. HOLDs block the commit. NOTEs print to stderr and pass through.
+The pre-commit hook only blocks on GUARDs (frozen modules, deprecated imports). NUDGEs (contracts, conventions, anti-patterns) print guidance but pass through. The agent sees the nudge, self-corrects on the next iteration. The rules make the agent faster, not slower.
 
 The post-commit hook records what changed and compares it to what was predicted. Utility scores update automatically. This is the feedback loop that makes dotscope smarter over time.
 

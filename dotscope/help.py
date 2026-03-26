@@ -7,18 +7,20 @@ this module handles display.
 HELP_ROOT = """\
 Usage: dotscope <command>
 
-  ingest .                  Learn a codebase
+  init                      One command: ingest, hooks, MCP config
   resolve <scope>           Serve context to an agent
-  check                     Validate staged changes
-  intent                    Declare architectural direction
+  check                     Verify routing (guards block, nudges guide)
   conventions               View and manage conventions
   voice                     View and manage code style
+  health                    Scope staleness and drift
+
+  ingest .                  Re-ingest (full scan)
+  intent                    Declare architectural direction
   diff --staged             Semantic diff
+  hook install              Re-install hooks
   bench                     Performance metrics
   test-compiler             Regression suite
   debug --last              Diagnose a bad session
-  health                    Scope staleness and drift
-  hook install              Post-commit feedback loop
 
 Run dotscope <command> --help for details."""
 
@@ -57,14 +59,19 @@ Usage: dotscope check [options]
   dotscope check                          Validate staged changes
   dotscope check --diff changes.patch     Check arbitrary diff
   dotscope check --backtest --commits 10  Replay history
-  dotscope check --acknowledge <id>       Acknowledge a hold
+  dotscope check --acknowledge <id>       Acknowledge a guard
+
+Three severities:
+  GUARD    Blocks commit. Frozen modules, deprecated imports.
+  NUDGE    Prints guidance. Contracts, conventions, anti-patterns.
+  NOTE     Informational. Direction reversals, stability.
 
 Options:
   --staged             Check staged changes (default)
   --diff <file>        Check arbitrary diff file
   --backtest           Replay commits instead of checking staged
   --commits <n>        Commits to replay (with --backtest)
-  --acknowledge <id>   Acknowledge a hold and proceed
+  --acknowledge <id>   Acknowledge a guard and proceed
   --json               Machine-readable output"""
 
 HELP_INTENT = """\
@@ -165,8 +172,8 @@ Usage: dotscope hook <action>
   dotscope hook uninstall              Remove all dotscope hooks
   dotscope hook status                 Check what's installed
 
-Pre-commit blocks commits with HOLDs. Post-commit records observations.
-Claude Code hook is defense-in-depth for Claude Code users."""
+Pre-commit blocks on GUARDs only. NUDGEs and NOTEs pass through.
+Post-commit records observations for the feedback loop."""
 
 HELP_COMMANDS = {
     "ingest": HELP_INGEST,

@@ -25,16 +25,16 @@ else
     OUTPUT=$(python3 -m dotscope.cli check 2>&1) || true
 fi
 
-# Parse result: if "hold" appears, block the commit
-if echo "$OUTPUT" | grep -q "HOLD"; then
+# Only GUARDs block. NUDGEs and NOTEs pass through.
+if echo "$OUTPUT" | grep -qE "GUARD|HOLD"; then
     echo "$OUTPUT" >&2
     echo "" >&2
-    echo "dotscope: commit blocked -- address holds before committing" >&2
+    echo "dotscope: commit blocked -- address guards before committing" >&2
     exit 2
 fi
 
-# Notes are informational, don't block
-if echo "$OUTPUT" | grep -q "NOTE"; then
+# NUDGEs and NOTEs are guidance, not gates
+if echo "$OUTPUT" | grep -qE "NUDGE|NOTE"; then
     echo "$OUTPUT" >&2
 fi
 

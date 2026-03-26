@@ -70,7 +70,7 @@ def check_antipatterns(
                         results.append(CheckResult(
                             passed=False,
                             category=CheckCategory.ANTIPATTERN,
-                            severity=Severity.HOLD,
+                            severity=Severity.NUDGE,
                             message=message,
                             detail=f"Pattern: {pattern_str} in {filepath}",
                             file=filepath,

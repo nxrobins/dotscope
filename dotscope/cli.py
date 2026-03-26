@@ -59,9 +59,9 @@ def main(argv=None):
     p_match.add_argument("task", help="Task description string")
 
     # --- init ---
-    p_init = sub.add_parser("init", help="Create a .scope file")
-    p_init.add_argument("--scan", action="store_true", help="Auto-generate from directory analysis")
-    p_init.add_argument("--dir", default=".", help="Directory to create .scope in")
+    p_init = sub.add_parser("init", help="One command: ingest, install hooks, configure agents")
+    p_init.add_argument("path", nargs="?", default=".", help="Repository root")
+    p_init.add_argument("--quiet", action="store_true", help="Suppress progress (for CI)")
 
     # --- validate ---
     sub.add_parser("validate", help="Check all .scope files for broken paths")
@@ -301,41 +301,75 @@ def _cmd_match(args):
 
 
 def _cmd_init(args):
-    from .scanner import scan_directory
-    from .parser import serialize_scope
+    """One command: ingest, hooks, MCP config, counterfactual demo."""
+    root = os.path.abspath(getattr(args, "path", None) or ".")
+    quiet = getattr(args, "quiet", False)
 
-    target_dir = os.path.abspath(args.dir)
-    scope_path = os.path.join(target_dir, ".scope")
+    # 1. Ingest
+    from .ingest import ingest
+    result = ingest(root, quiet=quiet)
 
-    if os.path.exists(scope_path):
-        print(f".scope already exists at {scope_path}", file=sys.stderr)
-        sys.exit(1)
+    # 2. Install hooks
+    try:
+        from .storage.git_hooks import install_hooks
+        install_hooks(root)
+        if not quiet:
+            print("dotscope: hooks installed", file=sys.stderr)
+    except Exception:
+        pass
 
-    if args.scan:
-        config = scan_directory(target_dir)
-        content = serialize_scope(config)
-    else:
-        # Interactive: create a minimal template
-        name = os.path.basename(target_dir)
-        content = f"""description: {name}
-includes:
-  - {name}/
-excludes:
-  - {name}/tests/fixtures/
-  - {name}/__pycache__/
-context: |
-  # TODO: Add architectural context here.
-  # What invariants does this module maintain?
-  # What gotchas should an agent know about?
-  # What conventions does it follow?
-"""
+    # 3. Auto-configure MCP for detected IDEs
+    try:
+        from .storage.mcp_config import configure_mcp
+        configured = configure_mcp(root)
+        if configured and not quiet:
+            print(f"dotscope: MCP configured for {', '.join(configured)}", file=sys.stderr)
+    except Exception:
+        pass
 
-    with open(scope_path, "w", encoding="utf-8") as f:
-        f.write(content)
+    # 4. Backtest as counterfactual demo
+    if not quiet:
+        try:
+            from .passes.backtest import backtest_scopes
+            report = backtest_scopes(root, commits=50)
+            if report and report.get("results"):
+                total_violations = 0
+                for scope_result in report["results"]:
+                    total_violations += scope_result.get("missed_files", 0)
 
-    print(f"Created {scope_path}")
-    if not args.scan:
-        print("Edit the context field. That's the part that can't be automated.")
+                _print_counterfactual(result, report, total_violations)
+        except Exception:
+            # Backtest may fail on repos with few commits
+            _print_summary(result)
+
+
+def _print_counterfactual(ingest_result, backtest, violations):
+    """Format init output as a counterfactual story."""
+    scopes = ingest_result.get("scopes_written", 0) if isinstance(ingest_result, dict) else 0
+    contracts = ingest_result.get("contracts_found", 0) if isinstance(ingest_result, dict) else 0
+    conventions = ingest_result.get("conventions_found", 0) if isinstance(ingest_result, dict) else 0
+
+    recall = backtest.get("overall_recall", 0)
+
+    lines = [""]
+    lines.append(f"  {scopes} scopes, {contracts} contracts, {conventions} conventions, {recall:.0%} recall")
+    lines.append("")
+
+    if violations > 0:
+        lines.append(f"  What dotscope would have caught in your last 50 commits:")
+        lines.append(f"    {violations} files that agents would have missed")
+    lines.append("")
+    lines.append("  Your agents are ready.")
+    lines.append("")
+
+    print("\n".join(lines), file=sys.stderr)
+
+
+def _print_summary(ingest_result):
+    """Fallback when backtest isn't available."""
+    print("", file=sys.stderr)
+    print("  Your agents are ready.", file=sys.stderr)
+    print("", file=sys.stderr)
 
 
 def _cmd_validate(args):

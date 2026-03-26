@@ -28,22 +28,39 @@ from dotscope.check.checker import check_diff, format_terminal, _parse_diff
 # ---------------------------------------------------------------------------
 
 class TestModels:
-    def test_check_report_holds(self):
+    def test_check_report_three_tiers(self):
         r = CheckReport(
             passed=False,
             results=[
+                CheckResult(passed=False, category=CheckCategory.INTENT,
+                            severity=Severity.GUARD, message="frozen"),
                 CheckResult(passed=False, category=CheckCategory.CONTRACT,
-                            severity=Severity.HOLD, message="x"),
+                            severity=Severity.NUDGE, message="coupled"),
                 CheckResult(passed=False, category=CheckCategory.STABILITY,
-                            severity=Severity.NOTE, message="y"),
+                            severity=Severity.NOTE, message="stable"),
             ],
         )
-        assert len(r.holds) == 1
+        assert len(r.guards) == 1
+        assert len(r.nudges) == 1
         assert len(r.notes) == 1
+        assert len(r.holds) == 1  # backwards compat alias for guards
+
+    def test_nudges_do_not_block(self):
+        r = CheckReport(
+            passed=True,
+            results=[
+                CheckResult(passed=False, category=CheckCategory.CONTRACT,
+                            severity=Severity.NUDGE, message="x"),
+            ],
+        )
+        # NUDGE does not make passed=False (only GUARD does)
+        assert r.guards == []
+        assert len(r.nudges) == 1
 
     def test_check_report_empty(self):
         r = CheckReport(passed=True)
-        assert r.holds == []
+        assert r.guards == []
+        assert r.nudges == []
         assert r.notes == []
 
 
@@ -61,7 +78,7 @@ class TestBoundaryCheck:
         session = {"predicted_files": ["auth/handler.py"]}
         results = check_boundaries(["payments/billing.py"], session, {"auth": {}})
         assert len(results) == 1
-        assert results[0].severity == Severity.HOLD
+        assert results[0].severity == Severity.NUDGE
         assert "payments/billing.py" in results[0].message
 
     def test_no_session_skips(self):
@@ -99,7 +116,7 @@ class TestContractCheck:
         }
         results = check_contracts(["billing.py"], invariants, "")
         assert len(results) == 1
-        assert results[0].severity == Severity.HOLD
+        assert results[0].severity == Severity.NUDGE
         assert "webhook.py" in results[0].message
 
     def test_low_confidence_skipped(self):
@@ -146,7 +163,7 @@ class TestAntiPatternCheck:
         added = {"auth/handler.py": ["user.delete()"]}
         results = check_antipatterns(added, scopes, "/tmp")
         assert len(results) == 1
-        assert results[0].severity == Severity.HOLD
+        assert results[0].severity == Severity.NUDGE
         assert results[0].proposed_fix is not None
 
     def test_no_match(self):
@@ -230,7 +247,7 @@ class TestIntentChecks:
         )]
         results = check_intent_holds(["core/engine.py"], {}, intents)
         assert len(results) == 1
-        assert results[0].severity == Severity.HOLD
+        assert results[0].severity == Severity.GUARD
 
     def test_deprecate_new_usage_hold(self):
         intents = [IntentDirective(
@@ -352,22 +369,39 @@ class TestPipeline:
         output = format_terminal(report)
         assert "clear" in output
 
-    def test_format_terminal_holds(self):
+    def test_format_terminal_nudge(self):
         report = CheckReport(
-            passed=False,
+            passed=True,
             files_checked=2,
             checks_run=7,
             results=[
                 CheckResult(
                     passed=False, category=CheckCategory.CONTRACT,
-                    severity=Severity.HOLD, message="billing.py without webhook.py",
+                    severity=Severity.NUDGE, message="billing.py without webhook.py",
+                ),
+            ],
+        )
+        output = format_terminal(report)
+        assert "NUDGE" in output
+        assert "billing.py" in output
+        assert "guidance, not gates" in output
+
+    def test_format_terminal_guard(self):
+        report = CheckReport(
+            passed=False,
+            files_checked=1,
+            checks_run=7,
+            results=[
+                CheckResult(
+                    passed=False, category=CheckCategory.INTENT,
+                    severity=Severity.GUARD, message="core/ is frozen",
                     can_acknowledge=True, acknowledge_id="ack_1",
                 ),
             ],
         )
         output = format_terminal(report)
-        assert "HOLD" in output
-        assert "billing.py" in output
+        assert "GUARD" in output
+        assert "address guards" in output
 
 
 # ---------------------------------------------------------------------------

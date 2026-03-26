@@ -38,7 +38,7 @@ def check_contracts(
             results.append(CheckResult(
                 passed=False,
                 category=CheckCategory.CONTRACT,
-                severity=Severity.HOLD,
+                severity=Severity.NUDGE,
                 message=(
                     f"{trigger} modified without {coupled} "
                     f"({confidence:.0%} co-change rate)"
@@ -57,7 +57,7 @@ def check_contracts(
             results.append(CheckResult(
                 passed=False,
                 category=CheckCategory.CONTRACT,
-                severity=Severity.HOLD,
+                severity=Severity.NUDGE,
                 message=(
                     f"{coupled} modified without {trigger} "
                     f"({confidence:.0%} co-change rate)"

@@ -38,7 +38,7 @@ def check_conventions(
                         passed=False,
                         category=CheckCategory.CONVENTION,
                         severity=(
-                            Severity.HOLD if severity == "hold"
+                            Severity.NUDGE if severity in ("hold", "nudge")
                             else Severity.NOTE
                         ),
                         message=f"Convention drift: {rule.name}",

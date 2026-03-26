@@ -81,7 +81,7 @@ def _check_deprecate(
                     results.append(CheckResult(
                         passed=False,
                         category=CheckCategory.INTENT,
-                        severity=Severity.HOLD,
+                        severity=Severity.GUARD,
                         message=f"{dep_file} is deprecated: {intent.reason}",
                         detail=f"New import in {filepath}",
                         file=filepath,
@@ -99,7 +99,7 @@ def _check_freeze(
     modified_files: List[str],
     intent: IntentDirective,
 ) -> List[CheckResult]:
-    """Any change to frozen modules is a HOLD."""
+    """Any change to frozen modules is a GUARD."""
     results = []
     frozen = set(intent.modules)
 
@@ -109,7 +109,7 @@ def _check_freeze(
                 results.append(CheckResult(
                     passed=False,
                     category=CheckCategory.INTENT,
-                    severity=Severity.HOLD,
+                    severity=Severity.GUARD,
                     message=f"{module} is frozen: {intent.reason}",
                     detail=f"Modified {filepath}",
                     file=filepath,

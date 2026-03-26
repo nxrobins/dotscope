@@ -29,12 +29,12 @@ def compute_compliance(
 def convention_severity(compliance: float) -> str:
     """Map compliance ratio to enforcement severity.
 
-    100-80%: hold (enforced)
-    79-50%:  note (warning)
+    100-80%: nudge (course correction)
+    79-50%:  note (informational)
     <50%:    retired (not enforced)
     """
     if compliance >= 0.80:
-        return "hold"
+        return "nudge"
     if compliance >= 0.50:
         return "note"
     return "retired"

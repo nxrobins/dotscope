@@ -151,6 +151,287 @@ def build_constraints(
     return _cap_per_category(constraints, max_per=5)
 
 
+def build_routing_guidance(
+    scope_dir: str,
+    conventions: Optional[List[ConventionRule]] = None,
+    voice_config: Optional[dict] = None,
+    repo_root: Optional[str] = None,
+) -> List[Constraint]:
+    """Build positive-frame routing guidance: what patterns apply here.
+
+    Constraints tell agents what NOT to do. Routing tells agents what TO do.
+    This is the bowling bumper: the agent reads it and writes code that
+    already follows the rules.
+    """
+    guidance: List[Constraint] = []
+
+    for conv in (conventions or []):
+        if conv.compliance < 0.50:
+            continue
+
+        rules = conv.rules or {}
+        rules_summary = _convention_rules_summary(rules)
+
+        # Existing-file routing: what convention files in this scope follow
+        parts = [f"Files here follow the '{conv.name}' convention"]
+        if conv.description:
+            parts.append(conv.description)
+        if rules_summary:
+            parts.extend(rules_summary)
+        guidance.append(Constraint(
+            category="routing",
+            message=". ".join(parts),
+            confidence=conv.compliance,
+            metadata={"convention": conv.name, "type": "convention_blueprint"},
+        ))
+
+        # Gap 1: Path-first routing for new files
+        # If convention has file_path match criteria, inject guidance for
+        # files that don't exist yet
+        for criteria_list in (
+            conv.match_criteria.get("any_of", []),
+            conv.match_criteria.get("all_of", []),
+        ):
+            for criterion in criteria_list:
+                if isinstance(criterion, dict) and "file_path" in criterion:
+                    pattern = criterion["file_path"]
+                    parts_new = [
+                        f"New files matching pattern {pattern} "
+                        f"should follow '{conv.name}' convention"
+                    ]
+                    if rules_summary:
+                        parts_new.extend(rules_summary)
+                    guidance.append(Constraint(
+                        category="routing",
+                        message=". ".join(parts_new),
+                        confidence=conv.compliance,
+                        metadata={
+                            "convention": conv.name,
+                            "type": "path_pattern",
+                            "pattern": pattern,
+                        },
+                    ))
+
+    # Voice guidance
+    if voice_config and voice_config.get("mode"):
+        voice_parts = []
+        for key in ("typing", "docstrings", "error_handling", "structure", "density"):
+            val = voice_config.get(key)
+            if val and isinstance(val, str):
+                voice_parts.append(val.strip().split("\n")[0])
+        if voice_parts:
+            guidance.append(Constraint(
+                category="routing",
+                message="Code style: " + ". ".join(voice_parts),
+                confidence=0.9,
+                metadata={"type": "voice"},
+            ))
+
+    # Gap 6: Learned routing from observations
+    if repo_root:
+        learned = _learned_routing(scope_dir, repo_root)
+        guidance.extend(learned)
+
+    # Deduplicate: if two conventions match the same path pattern,
+    # keep the one with higher compliance
+    return _deduplicate_routing(guidance)
+
+
+def build_adjacent_routing(
+    scope_dir: str,
+    graph_hubs: Optional[Dict[str, object]] = None,
+    all_scopes: Optional[Dict[str, dict]] = None,
+    conventions: Optional[List[ConventionRule]] = None,
+) -> List[Constraint]:
+    """Gap 2: Routing for scopes the agent is likely to touch next.
+
+    When resolving scope X, check which other scopes X's files import from.
+    Include a compact routing summary for those adjacent scopes.
+    """
+    if not graph_hubs or not all_scopes:
+        return []
+
+    adjacent_modules: set = set()
+    scope_mod = scope_dir.rstrip("/")
+
+    for hub_file, hub_data in graph_hubs.items():
+        if not isinstance(hub_data, dict):
+            continue
+        if not _in_scope(hub_file, scope_dir):
+            continue
+        for imp in hub_data.get("imported_by", []):
+            mod = imp.split("/")[0] if "/" in imp else ""
+            if mod and mod != scope_mod:
+                adjacent_modules.add(mod)
+        for dep in hub_data.get("imports", []):
+            mod = dep.split("/")[0] if "/" in dep else ""
+            if mod and mod != scope_mod:
+                adjacent_modules.add(mod)
+
+    guidance: List[Constraint] = []
+    for mod in sorted(adjacent_modules):
+        scope_data = all_scopes.get(mod, {})
+        desc = scope_data.get("description", "")
+        parts = [f"Adjacent scope: {mod}/"]
+        if desc:
+            parts.append(desc)
+
+        # Find conventions that apply to this adjacent scope
+        for conv in (conventions or []):
+            if conv.compliance < 0.50:
+                continue
+            for criteria_list in (
+                conv.match_criteria.get("any_of", []),
+                conv.match_criteria.get("all_of", []),
+            ):
+                for criterion in criteria_list:
+                    if isinstance(criterion, dict):
+                        fp = criterion.get("file_path", "")
+                        if fp and mod in fp:
+                            rules_summary = _convention_rules_summary(conv.rules or {})
+                            parts.append(f"Convention '{conv.name}'")
+                            parts.extend(rules_summary)
+                            break
+
+        if len(parts) > 1:  # Only include if we have something beyond the name
+            guidance.append(Constraint(
+                category="routing_adjacent",
+                message=". ".join(parts),
+                confidence=0.7,
+                metadata={"adjacent_scope": mod, "type": "adjacent"},
+            ))
+
+    return guidance[:5]  # Cap at 5 adjacent scopes
+
+
+def match_conventions_by_path(
+    filepath: str,
+    conventions: List[ConventionRule],
+) -> List[dict]:
+    """Gap 5: File creation advisor. Match conventions by path only (no AST needed).
+
+    Returns matching conventions with their rules for a file that may not exist yet.
+    """
+    import re
+    matches = []
+    for conv in conventions:
+        if conv.compliance < 0.50:
+            continue
+        for criteria_list in (
+            conv.match_criteria.get("any_of", []),
+            conv.match_criteria.get("all_of", []),
+        ):
+            for criterion in criteria_list:
+                if not isinstance(criterion, dict):
+                    continue
+                fp = criterion.get("file_path", "")
+                if fp:
+                    try:
+                        if re.search(fp, filepath):
+                            matches.append({
+                                "convention": conv.name,
+                                "description": conv.description,
+                                "rules": conv.rules,
+                                "compliance": conv.compliance,
+                                "matched_by": f"file_path: {fp}",
+                            })
+                    except re.error:
+                        pass
+                # Also match class_ends_with against filename
+                suffix = criterion.get("class_ends_with", "")
+                if suffix and suffix.lower() in filepath.lower():
+                    matches.append({
+                        "convention": conv.name,
+                        "description": conv.description,
+                        "rules": conv.rules,
+                        "compliance": conv.compliance,
+                        "matched_by": f"class_ends_with: {suffix} (from filename)",
+                    })
+    # Deduplicate by convention name
+    seen = set()
+    result = []
+    for m in matches:
+        if m["convention"] not in seen:
+            seen.add(m["convention"])
+            result.append(m)
+    return result
+
+
+def _deduplicate_routing(guidance: List[Constraint]) -> List[Constraint]:
+    """Deduplicate routing by (convention, type), keeping highest compliance.
+
+    If two conventions with the same name AND same type produce guidance,
+    keep the one with higher compliance. Different types (blueprint vs
+    path_pattern) for the same convention are both kept.
+    """
+    best: Dict[tuple, Constraint] = {}
+    non_convention: List[Constraint] = []
+
+    for g in guidance:
+        conv_name = g.metadata.get("convention")
+        if not conv_name:
+            non_convention.append(g)
+            continue
+        gtype = g.metadata.get("type", "")
+        key = (conv_name, gtype)
+        existing = best.get(key)
+        if existing is None or g.confidence > existing.confidence:
+            best[key] = g
+
+    return list(best.values()) + non_convention
+
+
+def _convention_rules_summary(rules: dict) -> List[str]:
+    """Build a compact rules summary list for a convention."""
+    parts = []
+    if rules.get("required_methods"):
+        parts.append(f"Implement: {', '.join(rules['required_methods'])}")
+    if rules.get("prohibited_imports"):
+        parts.append(f"Do not import: {', '.join(rules['prohibited_imports'])}")
+    return parts
+
+
+def _learned_routing(scope_dir: str, repo_root: str) -> List[Constraint]:
+    """Gap 6: Inject routing from observation data.
+
+    If agents repeatedly needed file X when resolving scope Y but X isn't
+    in Y's includes, mention it as routing guidance.
+    """
+    import json
+    scores_path = os.path.join(repo_root, ".dotscope", "utility_scores.json")
+    if not os.path.exists(scores_path):
+        return []
+
+    try:
+        with open(scores_path, "r", encoding="utf-8") as f:
+            scores = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return []
+
+    guidance = []
+    scope_scores = scores.get(scope_dir, scores.get(scope_dir.rstrip("/"), {}))
+    if not isinstance(scope_scores, dict):
+        return []
+
+    # Files with high utility that aren't in this scope
+    for filepath, score in sorted(scope_scores.items(), key=lambda x: x[1], reverse=True):
+        if isinstance(score, (int, float)) and score >= 3.0:
+            if not _in_scope(filepath, scope_dir):
+                guidance.append(Constraint(
+                    category="routing",
+                    message=(
+                        f"Agents frequently need {filepath} when working in {scope_dir} "
+                        f"(utility score: {score:.1f})"
+                    ),
+                    confidence=min(score / 5.0, 0.95),
+                    metadata={"type": "learned", "file": filepath, "score": score},
+                ))
+        if len(guidance) >= 3:
+            break
+
+    return guidance
+
+
 def _in_scope(filepath: str, scope_dir: str) -> bool:
     """Check if a file falls within a scope directory."""
     return filepath.startswith(scope_dir) or filepath.startswith(scope_dir + "/")

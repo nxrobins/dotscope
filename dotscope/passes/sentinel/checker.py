@@ -80,6 +80,41 @@ def check_diff(
             file=None,
         ))
 
+    # Gap 3: NUDGE escalation — repeated nudges become guards
+    from .acknowledge import (
+        record_nudge_occurrence, record_nudge_resolution, is_escalated,
+    )
+    # Track which nudge IDs fired this run
+    fired_nudge_ids = set()
+    for r in results:
+        if r.severity == Severity.NUDGE and not r.passed and r.acknowledge_id:
+            fired_nudge_ids.add(r.acknowledge_id)
+            record_nudge_occurrence(repo_root, r.acknowledge_id)
+            if is_escalated(repo_root, r.acknowledge_id):
+                r.severity = Severity.GUARD
+
+    # Record resolutions: nudges that were previously tracked but didn't fire
+    # this run have been fixed — reset their escalation counter
+    try:
+        nudge_path = os.path.join(repo_root, ".dotscope", "nudge_occurrences.jsonl")
+        if os.path.exists(nudge_path):
+            known_ids: set = set()
+            with open(nudge_path, "r", encoding="utf-8") as _f:
+                for _line in _f:
+                    _line = _line.strip()
+                    if _line:
+                        try:
+                            _entry = json.loads(_line)
+                            if not _entry.get("resolved"):
+                                known_ids.add(_entry.get("id", ""))
+                        except json.JSONDecodeError:
+                            pass
+            for kid in known_ids:
+                if kid and kid not in fired_nudge_ids:
+                    record_nudge_resolution(repo_root, kid)
+    except Exception:
+        pass
+
     # Filter acknowledged
     ack_set = set(acknowledge_ids or [])
     for r in results:
@@ -89,9 +124,9 @@ def check_diff(
         ):
             r.passed = True
 
-    # Determine overall pass/fail (only unacknowledged HOLDs fail)
+    # Only GUARDs block commits. NUDGEs and NOTEs pass through.
     passed = not any(
-        r.severity == Severity.HOLD and not r.passed
+        r.severity.blocks_commit and not r.passed
         for r in results
     )
 
@@ -113,22 +148,29 @@ def check_staged(repo_root: str, session_id: Optional[str] = None) -> CheckRepor
 
 def format_terminal(report: CheckReport) -> str:
     """Format a check report for terminal output."""
-    if report.passed and not report.notes:
+    if report.passed and not report.nudges and not report.notes:
         return f"dotscope: {report.files_checked} files, {report.checks_run} checks -- clear"
 
     lines = [f"dotscope: checking {report.files_checked} files"]
     lines.append("")
 
-    for r in report.holds:
-        lines.append(f"  HOLD  {r.category.value}")
+    for r in report.guards:
+        lines.append(f"  GUARD  {r.category.value}")
+        lines.append(f"    {r.message}")
+        if r.suggestion:
+            lines.append(f"    -> {r.suggestion}")
+        if r.can_acknowledge and r.acknowledge_id:
+            lines.append(f"    -> Acknowledge: dotscope check --acknowledge {r.acknowledge_id}")
+        lines.append("")
+
+    for r in report.nudges:
+        lines.append(f"  NUDGE  {r.category.value}")
         lines.append(f"    {r.message}")
         if r.suggestion:
             lines.append(f"    -> {r.suggestion}")
         if r.proposed_fix and r.proposed_fix.predicted_sections:
             sections = ", ".join(r.proposed_fix.predicted_sections)
             lines.append(f"    Likely needs changes: {sections}")
-        if r.can_acknowledge and r.acknowledge_id:
-            lines.append(f"    -> Acknowledge: dotscope check --acknowledge {r.acknowledge_id}")
         lines.append("")
 
     for r in report.notes:
@@ -136,12 +178,15 @@ def format_terminal(report: CheckReport) -> str:
         lines.append(f"    {r.message}")
         lines.append("")
 
-    hold_count = len(report.holds)
+    guard_count = len(report.guards)
+    nudge_count = len(report.nudges)
     note_count = len(report.notes)
-    if hold_count:
-        lines.append(f"dotscope: {hold_count} hold(s), {note_count} note(s) -- address holds to proceed")
+    if guard_count:
+        lines.append(f"dotscope: {guard_count} guard(s), {nudge_count} nudge(s), {note_count} note(s) -- address guards to proceed")
+    elif nudge_count:
+        lines.append(f"dotscope: {nudge_count} nudge(s), {note_count} note(s) -- clear (nudges are guidance, not gates)")
     else:
-        lines.append(f"dotscope: {note_count} note(s) -- clear (notes are informational)")
+        lines.append(f"dotscope: {note_count} note(s) -- clear")
 
     return "\n".join(lines)
 

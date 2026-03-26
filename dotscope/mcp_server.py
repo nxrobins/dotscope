@@ -250,6 +250,61 @@ def main():
                             }
                             for c in constraints
                         ]
+
+                    # Routing guidance: positive-frame "what to do"
+                    from .passes.sentinel.constraints import build_routing_guidance
+                    vc = None
+                    try:
+                        from .intent import load_voice_config
+                        vc = load_voice_config(root)
+                    except Exception:
+                        pass
+                    routing = build_routing_guidance(
+                        module, conventions=conventions, voice_config=vc,
+                        repo_root=root,
+                    )
+                    if routing:
+                        data["routing"] = [
+                            {
+                                "category": r.category,
+                                "message": r.message,
+                                "confidence": r.confidence,
+                            }
+                            for r in routing
+                        ]
+
+                    # Gap 2: Adjacent scope routing
+                    from .passes.sentinel.constraints import build_adjacent_routing
+                    scopes_index = {}
+                    try:
+                        from .scanner import load_scopes_index
+                        scopes_index = load_scopes_index(root)
+                    except Exception:
+                        pass
+                    adjacent = build_adjacent_routing(
+                        module, graph_hubs=_cached_graph_hubs,
+                        all_scopes=scopes_index, conventions=conventions,
+                    )
+                    if adjacent:
+                        data["routing_adjacent"] = [
+                            {
+                                "scope": r.metadata.get("adjacent_scope", ""),
+                                "message": r.message,
+                            }
+                            for r in adjacent
+                        ]
+
+                except Exception:
+                    pass
+
+                # Gap 4: Last observation feedback
+                try:
+                    obs_path = os.path.join(root, ".dotscope", "last_observation.json")
+                    if os.path.exists(obs_path):
+                        with open(obs_path, "r", encoding="utf-8") as _f:
+                            last_obs = json.loads(_f.read())
+                        if last_obs.get("scope") == module or not last_obs.get("scope"):
+                            data["last_observation"] = last_obs
                 except Exception:
                     pass
 
@@ -874,26 +929,31 @@ def main():
         else:
             report = check_staged(root, session_id=session_id)
 
+        def _fmt_result(r):
+            d = {
+                "category": r.category.value,
+                "severity": r.severity.value,
+                "message": r.message,
+                "file": r.file,
+            }
+            if r.suggestion:
+                d["suggestion"] = r.suggestion
+            if r.acknowledge_id:
+                d["acknowledge_id"] = r.acknowledge_id
+            if r.proposed_fix:
+                d["proposed_fix"] = {
+                    "file": r.proposed_fix.file,
+                    "reason": r.proposed_fix.reason,
+                    "predicted_sections": r.proposed_fix.predicted_sections,
+                    "proposed_diff": r.proposed_fix.proposed_diff,
+                    "confidence": r.proposed_fix.confidence,
+                }
+            return d
+
         return json.dumps({
             "passed": report.passed,
-            "holds": [
-                {
-                    "category": r.category.value,
-                    "severity": r.severity.value,
-                    "message": r.message,
-                    "file": r.file,
-                    "suggestion": r.suggestion,
-                    "acknowledge_id": r.acknowledge_id,
-                    "proposed_fix": {
-                        "file": r.proposed_fix.file,
-                        "reason": r.proposed_fix.reason,
-                        "predicted_sections": r.proposed_fix.predicted_sections,
-                        "proposed_diff": r.proposed_fix.proposed_diff,
-                        "confidence": r.proposed_fix.confidence,
-                    } if r.proposed_fix else None,
-                }
-                for r in report.holds
-            ],
+            "guards": [_fmt_result(r) for r in report.guards],
+            "nudges": [_fmt_result(r) for r in report.nudges],
             "notes": [
                 {
                     "category": r.category.value,
@@ -903,6 +963,7 @@ def main():
                 }
                 for r in report.notes
             ],
+            "holds": [_fmt_result(r) for r in report.guards],  # backwards compat
             "files_checked": report.files_checked,
         }, indent=2)
 
@@ -977,6 +1038,41 @@ def main():
             "ids": ack_ids,
             "reason": reason,
         }, indent=2)
+
+    @mcp.tool()
+    def match_conventions_by_path(
+        filepath: str,
+    ) -> str:
+        """What conventions apply to a file path?
+
+        Takes a file path (can be a file that doesn't exist yet) and returns
+        matching conventions with their rules. Use this before creating a new
+        file to understand what patterns it should follow.
+
+        Args:
+            filepath: Path to check (relative to repo root)
+        """
+        from .discovery import find_repo_root
+        from .intent import load_conventions
+
+        root = find_repo_root()
+        if root is None:
+            return json.dumps({"error": "Could not find repository root"})
+
+        conventions = load_conventions(root)
+        if not conventions:
+            return json.dumps({"matches": [], "message": "No conventions defined"})
+
+        from .passes.sentinel.constraints import match_conventions_by_path as _match
+        matches = _match(filepath, conventions)
+
+        if not matches:
+            return json.dumps({
+                "matches": [],
+                "message": f"No conventions match {filepath}",
+            })
+
+        return json.dumps({"matches": matches}, indent=2)
 
     mcp.run(transport="stdio")
 

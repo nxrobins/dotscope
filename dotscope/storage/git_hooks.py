@@ -1,7 +1,7 @@
 """Git hook management for dotscope.
 
 Two hooks:
-  pre-commit  — enforcement. Runs dotscope check, blocks on HOLDs.
+  pre-commit  — routing verification. Runs dotscope check, blocks on GUARDs only.
   post-commit — feedback loop. Runs observe + incremental, never blocks.
 
 Both are deliberately minimal. All logic lives in Python.
@@ -21,13 +21,14 @@ _INCREMENTAL_MARKER = "# dotscope incremental"
 _PRE_MARKER = "# dotscope pre-commit"
 
 # ---------------------------------------------------------------------------
-# Pre-commit hook: enforcement (blocks on HOLDs)
+# Pre-commit hook: routing verification (blocks on GUARDs only)
 # ---------------------------------------------------------------------------
 
 _PRE_COMMIT_SH = """\
 #!/bin/sh
 # dotscope pre-commit
-# Runs dotscope check on staged changes. HOLDs block the commit.
+# Runs dotscope check on staged changes. Only GUARDs block the commit.
+# NUDGEs and NOTEs print but pass through.
 # Timeout after 30 seconds — fail open if dotscope hangs.
 if command -v timeout >/dev/null 2>&1; then
     OUTPUT=$(timeout 30 python -m dotscope.cli check 2>&1) || true
@@ -36,13 +37,13 @@ elif command -v gtimeout >/dev/null 2>&1; then
 else
     OUTPUT=$(python -m dotscope.cli check 2>&1) || true
 fi
-if echo "$OUTPUT" | grep -q "HOLD"; then
+if echo "$OUTPUT" | grep -qE "GUARD|HOLD"; then
     echo "$OUTPUT" >&2
     echo "" >&2
-    echo "dotscope: commit blocked -- address holds before committing" >&2
+    echo "dotscope: commit blocked -- address guards before committing" >&2
     exit 1
 fi
-if echo "$OUTPUT" | grep -q "NOTE"; then
+if echo "$OUTPUT" | grep -qE "NUDGE|NOTE"; then
     echo "$OUTPUT" >&2
 fi
 """
@@ -57,12 +58,12 @@ try:
         capture_output=True, text=True, timeout=30,
     )
     output = result.stdout + result.stderr
-    if "HOLD" in output:
+    if "GUARD" in output or "HOLD" in output:
         print(output, file=sys.stderr)
         print("", file=sys.stderr)
-        print("dotscope: commit blocked -- address holds before committing", file=sys.stderr)
+        print("dotscope: commit blocked -- address guards before committing", file=sys.stderr)
         sys.exit(1)
-    if "NOTE" in output:
+    if "NUDGE" in output or "NOTE" in output:
         print(output, file=sys.stderr)
 except Exception:
     pass  # If dotscope fails, don't block
@@ -76,7 +77,11 @@ _POST_COMMIT_SH = """\
 #!/bin/sh
 # dotscope auto-observer
 COMMIT_HASH=$(git rev-parse HEAD)
-python -m dotscope.cli observe "$COMMIT_HASH" 2>/dev/null || true
+# Capture observation output for agent feedback (Gap 4)
+OUTPUT=$(python -m dotscope.cli observe "$COMMIT_HASH" 2>&1) || true
+if [ -n "$OUTPUT" ]; then
+    echo "$OUTPUT" >&2
+fi
 # dotscope incremental
 python -m dotscope.cli incremental "$COMMIT_HASH" 2>/dev/null || true
 """

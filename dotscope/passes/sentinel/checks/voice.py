@@ -41,7 +41,7 @@ def check_voice(
         # Bare excepts
         bare_level = enforce.get("bare_excepts")
         if bare_level and bare_level is not False:
-            severity = Severity.HOLD if bare_level == "hold" else Severity.NOTE
+            severity = Severity.NUDGE if bare_level == "hold" else Severity.NOTE
             for node in ast.walk(tree):
                 if isinstance(node, ast.ExceptHandler) and node.type is None:
                     results.append(CheckResult(
@@ -57,7 +57,7 @@ def check_voice(
         # Missing type hints (only on new/modified functions)
         hint_level = enforce.get("missing_type_hints")
         if hint_level and hint_level is not False:
-            severity = Severity.HOLD if hint_level == "hold" else Severity.NOTE
+            severity = Severity.NUDGE if hint_level == "hold" else Severity.NOTE
 
             # Filter to code-only lines (exclude comments and strings)
             from ..line_filter import strip_comments_and_strings

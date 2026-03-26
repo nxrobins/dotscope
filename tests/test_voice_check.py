@@ -19,7 +19,7 @@ class TestBareExcepts:
                 {"enforce": {"bare_excepts": "hold"}}, d,
             )
             assert len(results) == 1
-            assert results[0].severity == Severity.HOLD
+            assert results[0].severity == Severity.NUDGE
             assert results[0].category == CheckCategory.VOICE
 
     def test_note_on_bare_except(self):

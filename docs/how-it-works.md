@@ -65,28 +65,39 @@ When an agent calls `resolve_scope`:
 5. Build filtered constraints (contracts, anti-patterns, boundaries, intents, convention blueprints — relevant to this scope)
 6. Return files, context, constraints, attribution hints, accuracy, health warnings, near-misses
 
-## Enforcement
+## Routing, Not Enforcement
 
-dotscope knows your codebase's rules. It surfaces them at three points:
+dotscope's architecture is a bowling alley with the bumpers up, not a maze of laser tripwires. The agent codes as fast and creatively as it wants. dotscope nudges files into the correct semantic buckets. Rules exist to make the agent faster, not slower.
 
-**Prophylactic (at resolve time).** Every `resolve_scope` response includes a `constraints` field: implicit contracts, anti-patterns, dependency boundaries, stability warnings, architectural intents, and convention blueprints. The agent knows the rules before writing code. Filtered to the resolved scope and capped at 5 per category to stay under 400 tokens.
+Three points of contact:
 
-**Diagnostic (before commit).** The agent calls `dotscope_check` with its diff. Returns structured holds (must address) and notes (informational), with fix proposals: predicted functions that need changes, or exact replacement diffs for anti-pattern violations.
+**Routing (at resolve time).** Every `resolve_scope` response includes `constraints` (what not to do) and `routing` (what to do). Convention blueprints, voice rules, implicit contracts — the agent knows the patterns before writing code. This is the primary mechanism. If the routing is good, the checks almost never fire.
 
-**Gate (at commit time).** The pre-commit git hook runs `dotscope check` on staged changes. HOLDs block the commit. NOTEs print to stderr and pass through. This works everywhere git runs: Claude Desktop, Claude Code, VS Code, terminal. The agent cannot bypass it.
+**Verification (before commit).** `dotscope_check` returns GUARDs (must address), NUDGEs (course corrections), and NOTEs (informational). Only GUARDs block. NUDGEs are guidance the agent sees and self-corrects on.
+
+**Gate (at commit time).** The pre-commit hook runs `dotscope check`. Only GUARDs block the commit. NUDGEs and NOTEs print to stderr and pass through.
+
+Three severity levels:
+
+| Severity | Commits | Purpose |
+|----------|---------|---------|
+| **GUARD** | Blocks | Protective wall. Frozen modules, deprecated imports. |
+| **NUDGE** | Passes | Course correction. Contracts, conventions, anti-patterns. |
+| **NOTE** | Passes | Informational. Direction reversals, stability. |
 
 Eight check categories:
 
 | Category | Severity | What it catches |
 |----------|----------|-----------------|
-| Boundary violation | HOLD | Agent modified files outside its resolved scope |
-| Implicit contract | HOLD | Coupled file modified without its pair |
-| Anti-pattern | HOLD | Prohibited pattern in added lines |
-| Convention violation | HOLD or NOTE | File drifting from its convention's rules |
-| Voice violation | HOLD or NOTE | Bare except or missing type hint on new function |
+| Intent: freeze | GUARD | Change to a frozen module |
+| Intent: deprecate | GUARD | New usage of deprecated code |
+| Boundary violation | NUDGE | Agent modified files outside its resolved scope |
+| Implicit contract | NUDGE | Coupled file modified without its pair |
+| Anti-pattern | NUDGE | Prohibited pattern in added lines |
+| Convention violation | NUDGE or NOTE | File drifting from its convention's rules |
+| Voice violation | NUDGE or NOTE | Bare except or missing type hint |
 | Dependency direction | NOTE | New import reversing established flow |
 | Stability concern | NOTE | Large change to a stable file |
-| Architectural intent | HOLD or NOTE | Change violating declared direction |
 
 ## Architectural Intent
 

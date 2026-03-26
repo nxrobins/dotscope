@@ -34,7 +34,7 @@ def check_boundaries(
             results.append(CheckResult(
                 passed=False,
                 category=CheckCategory.BOUNDARY,
-                severity=Severity.HOLD,
+                severity=Severity.NUDGE,
                 message=f"Modified {f} outside resolved scope",
                 detail=f"Session resolved: {len(resolved_files)} files, this file was not included",
                 file=f,
