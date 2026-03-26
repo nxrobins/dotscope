@@ -3,8 +3,9 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from .core import DependencyGraph, ScopeConfig, ScopesIndex, ScopeEntry
+from .core import ConventionNode, DependencyGraph, ScopeConfig, ScopesIndex, ScopeEntry
 from .history import HistoryAnalysis
+from .intent import ConventionRule
 from .state import BacktestReport
 
 
@@ -22,6 +23,7 @@ class IngestPlan:
     history: Optional[HistoryAnalysis] = None
     backtest_report: Optional[BacktestReport] = None
     virtual_scopes: List[ScopeConfig] = field(default_factory=list)
+    discovered_conventions: List[ConventionRule] = field(default_factory=list)
     total_repo_files: int = 0
     total_repo_tokens: int = 0
 
@@ -43,3 +45,14 @@ class VirtualScope:
     files: List[str]
     cohesion: float
     directories_spanned: int
+
+
+@dataclass
+class SemanticDiffReport:
+    """Structural diff translated to convention-level changes."""
+    added: List[ConventionNode] = field(default_factory=list)
+    removed: List[ConventionNode] = field(default_factory=list)
+    modified: List[tuple] = field(default_factory=list)  # (before, after) pairs
+    dependency_changes: List[str] = field(default_factory=list)
+    all_conventions_upheld: bool = True
+    counterfactual: Optional[str] = None

@@ -275,3 +275,13 @@ class DependencyGraph:
     edges: List[tuple] = field(default_factory=list)
     modules: List[ModuleBoundary] = field(default_factory=list)
     apis: Dict[str, ModuleAPI] = field(default_factory=dict)
+
+
+@dataclass
+class ConventionNode:
+    """A file's membership in a convention, with any rule violations."""
+    name: str          # Convention name, e.g. "REST Controller"
+    file_path: str
+    target_name: str   # Class or function name
+    violations: List[str] = field(default_factory=list)
+    matched_by: List[str] = field(default_factory=list)  # Which criteria matched

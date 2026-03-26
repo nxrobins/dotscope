@@ -182,6 +182,73 @@ intents:
 
 See [How It Works](how-it-works.md) for details on intent directives.
 
+### Conventions
+
+Conventions are also stored in `intent.yaml`. They describe structural patterns across files:
+
+```yaml
+conventions:
+  - name: "Repository"
+    source: discovered
+    match:
+      any_of:
+        - class_ends_with: "Repository"
+      all_of:
+        - imports: [sqlalchemy]
+    rules:
+      required_methods: [get, save]
+      prohibited_imports: []
+    description: "The only layer allowed to execute direct database queries."
+    compliance: 0.85
+```
+
+**Match criteria** determine which files belong to a convention:
+
+- `has_decorator` — regex matched against file decorators (e.g., `"app\\.route|router"`)
+- `file_path` — regex matched against the file path
+- `class_ends_with` — class name suffix match
+- `imports` — all listed modules must be imported
+- `not_imports` — none of the listed modules may be imported
+- `base_class` — class must extend the named base
+
+`any_of` criteria are OR'd (at least one must match). `all_of` criteria are AND'd (all must match).
+
+**Rules** define what matching files must or must not do:
+
+- `prohibited_imports` — imports that violate the convention
+- `required_methods` — methods all matching classes must implement
+- `must_have_matching` — pattern for a companion file (e.g., a test file)
+
+**Compliance** tracks what percentage of matching files follow the rules. Conventions with >=80% compliance are enforced as HOLDs, 50-79% as NOTEs, and below 50% are retired.
+
+Conventions are primarily discovered by `dotscope ingest` or `dotscope conventions --discover`. You can also author them by hand with `source: hand_authored`.
+
+### Voice
+
+The `voice:` block in `intent.yaml` describes how the codebase writes code:
+
+```yaml
+voice:
+  mode: "adaptive"
+  typing: |
+    Type hints used on most functions (62% adoption).
+    Follow existing patterns.
+  docstrings: |
+    Google style. Match existing docstrings.
+  enforce:
+    bare_excepts: "note"
+    missing_type_hints: false
+  stats:
+    type_hint_rate: 0.62
+    bare_except_rate: 0.04
+```
+
+**`mode`**: `"prescriptive"` (new codebases) or `"adaptive"` (existing codebases).
+
+**`enforce`**: `"hold"` blocks commits, `"note"` informs, `false` means prophylactic only. Levels derived from codebase state.
+
+See [How It Works](how-it-works.md) for voice discovery and enforcement.
+
 ## What to Commit
 
 - **`.scope` files** — commit them. They're institutional memory.

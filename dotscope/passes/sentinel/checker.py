@@ -13,7 +13,9 @@ from .checks.contracts import check_contracts
 from .checks.antipattern import check_antipatterns
 from .checks.direction import check_dependency_direction
 from .checks.stability import check_stability
+from .checks.convention import check_conventions
 from .checks.intent import check_intent_holds, check_intent_notes
+from .checks.voice import check_voice
 from .acknowledge import is_acknowledged
 
 
@@ -36,9 +38,12 @@ def check_diff(
     if not modified_files:
         return CheckReport(passed=True, files_checked=0, checks_run=0)
 
-    # Cap enormous diffs
-    if len(modified_files) > 100:
+    # Cap enormous diffs (with warning)
+    capped = False
+    total_files = len(modified_files)
+    if total_files > 100:
         modified_files = modified_files[:100]
+        capped = True
 
     # Load all data
     invariants = _load_invariants(repo_root)
@@ -46,6 +51,8 @@ def check_diff(
     graph_hubs = _load_graph_hubs(repo_root)
     session = _resolve_session(repo_root, session_id)
     intents = _load_intents(repo_root)
+    conventions, convention_ast = _load_conventions_and_ast(repo_root, modified_files)
+    voice_config = _load_voice_config(repo_root)
 
     results: List[CheckResult] = []
 
@@ -54,11 +61,24 @@ def check_diff(
     results.extend(check_contracts(modified_files, invariants, diff_text))
     results.extend(check_antipatterns(added_lines, scopes, repo_root))
     results.extend(check_intent_holds(modified_files, added_lines, intents))
+    results.extend(check_conventions(modified_files, added_lines, conventions, convention_ast))
+    results.extend(check_voice(modified_files, added_lines, voice_config, repo_root))
 
     # NOTEs
     results.extend(check_dependency_direction(added_lines, graph_hubs, scopes))
     results.extend(check_stability(modified_files, diff_text, invariants))
     results.extend(check_intent_notes(modified_files, added_lines, intents))
+
+    # Warn if files were capped
+    if capped:
+        results.append(CheckResult(
+            passed=False,
+            category=CheckCategory.STABILITY,
+            severity=Severity.NOTE,
+            message=f"Large diff: checked 100 of {total_files} files",
+            detail=f"Files beyond position 100 were not checked.",
+            file=None,
+        ))
 
     # Filter acknowledged
     ack_set = set(acknowledge_ids or [])
@@ -79,7 +99,7 @@ def check_diff(
         passed=passed,
         results=[r for r in results if not r.passed],
         files_checked=len(modified_files),
-        checks_run=7,
+        checks_run=9,
     )
 
 
@@ -163,15 +183,29 @@ def _get_staged_diff(repo_root: str) -> str:
 
 
 def _load_invariants(repo_root: str) -> dict:
-    """Load invariants.json from ..dotscope/."""
+    """Load invariants.json from .dotscope/, pruning stale references."""
     path = os.path.join(repo_root, ".dotscope", "invariants.json")
     if not os.path.exists(path):
         return {}
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
     except (json.JSONDecodeError, IOError):
         return {}
+
+    # Prune contracts referencing files that no longer exist
+    contracts = data.get("contracts", [])
+    if contracts:
+        valid = []
+        for c in contracts:
+            trigger = c.get("trigger_file", "")
+            coupled = c.get("coupled_file", "")
+            if (os.path.isfile(os.path.join(repo_root, trigger))
+                    and os.path.isfile(os.path.join(repo_root, coupled))):
+                valid.append(c)
+        data["contracts"] = valid
+
+    return data
 
 
 def _load_scopes_with_antipatterns(repo_root: str) -> Dict[str, dict]:
@@ -253,3 +287,52 @@ def _load_intents(repo_root: str) -> list:
         return load_intents(repo_root)
     except Exception:
         return []
+
+
+def _load_conventions_and_ast(
+    repo_root: str,
+    modified_files: List[str],
+) -> tuple:
+    """Load conventions and parse AST for modified files."""
+    try:
+        from ...intent import load_conventions
+        conventions = load_conventions(repo_root)
+    except Exception:
+        conventions = []
+
+    ast_data = {}
+    if conventions:
+        try:
+            from ..ast_analyzer import analyze_file
+            for filepath in modified_files:
+                full_path = os.path.join(repo_root, filepath)
+                if os.path.isfile(full_path):
+                    lang = _detect_language(filepath)
+                    if lang:
+                        analysis = analyze_file(full_path, lang)
+                        if analysis:
+                            ast_data[filepath] = analysis
+        except Exception:
+            pass
+
+    return conventions, ast_data
+
+
+def _detect_language(filepath: str) -> Optional[str]:
+    """Detect language from file extension."""
+    ext = os.path.splitext(filepath)[1].lower()
+    return {
+        ".py": "python",
+        ".js": "javascript",
+        ".ts": "typescript",
+        ".go": "go",
+    }.get(ext)
+
+
+def _load_voice_config(repo_root: str) -> Optional[dict]:
+    """Load voice config from intent.yaml."""
+    try:
+        from ...intent import load_voice_config
+        return load_voice_config(repo_root)
+    except Exception:
+        return None

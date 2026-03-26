@@ -94,8 +94,9 @@ class TestHooks:
     def test_install_hook(self, tmp_path):
         _git_init(tmp_path)
         from dotscope.hooks import install_hook, is_hook_installed
-        path = install_hook(str(tmp_path))
-        assert os.path.exists(path)
+        result = install_hook(str(tmp_path))
+        assert "pre-commit:" in result
+        assert "post-commit:" in result
         assert is_hook_installed(str(tmp_path))
 
     def test_uninstall_hook(self, tmp_path):

@@ -82,17 +82,27 @@ class TestNextStep:
         assert "backtest" in ns
 
     def test_after_backtest(self):
-        state = {"first_backtest": "2026-03-25", "first_session": None}
+        state = {"first_backtest": "2026-03-25", "conventions_reviewed": None, "first_session": None}
+        ns = next_step(state)
+        assert "conventions" in ns.lower()
+
+    def test_after_conventions(self):
+        state = {"first_backtest": "x", "conventions_reviewed": "x", "voice_reviewed": None, "first_session": None}
+        ns = next_step(state)
+        assert "voice" in ns.lower()
+
+    def test_after_voice(self):
+        state = {"first_backtest": "x", "conventions_reviewed": "x", "voice_reviewed": "x", "first_session": None}
         ns = next_step(state)
         assert "agent" in ns.lower() or "mcp" in ns.lower()
 
     def test_after_session(self):
-        state = {"first_backtest": "x", "first_session": "x", "hook_installed": None}
+        state = {"first_backtest": "x", "conventions_reviewed": "x", "voice_reviewed": "x", "first_session": "x", "hook_installed": None}
         ns = next_step(state)
         assert "hook" in ns
 
     def test_fully_onboarded(self):
-        state = {"first_backtest": "x", "first_session": "x", "hook_installed": "x"}
+        state = {"first_backtest": "x", "conventions_reviewed": "x", "voice_reviewed": "x", "first_session": "x", "hook_installed": "x"}
         assert next_step(state) is None
 
 

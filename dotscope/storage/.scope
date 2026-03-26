@@ -1,13 +1,15 @@
 description: Infrastructure — disk I/O, hooks, caching, state persistence
 includes:
-  - dotscope/storage/session_manager.py
-  - dotscope/storage/cache.py
-  - dotscope/storage/git_hooks.py
-  - dotscope/storage/onboarding.py
-  - dotscope/storage/timing.py
-  - dotscope/storage/near_miss.py
+  - session_manager.py
+  - cache.py
+  - git_hooks.py
+  - claude_hooks.py
+  - onboarding.py
+  - timing.py
+  - near_miss.py
+  - incremental_state.py
 excludes:
-  - dotscope/storage/__pycache__/
+  - __pycache__/
 context: |
   Storage reads and writes models.state to disk. Pure infrastructure.
 
@@ -21,14 +23,21 @@ context: |
   server can load them at startup without re-computing.
 
   ## git_hooks.py
-  Post-commit hook: calls `dotscope observe HEAD` after every commit.
+  Two git hooks installed by `dotscope hook install`:
+    pre-commit: runs `dotscope check`, blocks on HOLDs (enforcement)
+    post-commit: runs `dotscope observe` + `dotscope incremental` (feedback)
   Cross-platform: POSIX shell script or Python fallback for Windows.
   Marks hook_installed in onboarding state.
+
+  ## claude_hooks.py
+  Claude Code PreToolUse hook installed by `dotscope hook claude`.
+  Writes .claude/hooks/pre-commit-check.sh and wires it into
+  .claude/settings.json. Defense-in-depth layer for Claude Code.
 
   ## onboarding.py
   Milestone tracking in .dotscope/onboarding.json. Gating rules:
   counterfactuals after 3+ observations, health nudges after 7+ days.
-  Next-step prompts: ingest → backtest → MCP → hook → stop.
+  Next-step prompts: ingest -> backtest -> conventions -> voice -> MCP -> hook -> stop.
 
   ## timing.py
   Appends operation timing (resolve, check, ingest) to timings.jsonl.
@@ -36,6 +45,10 @@ context: |
 
   ## near_miss.py
   Persistent storage for near-miss detections and session scopes.
+
+  ## incremental_state.py
+  Tracks commits_since_last_full_ingest in .dotscope/incremental.json.
+  Reset after full ingest. Used to prompt for re-scan after 200 commits.
 
   ## Gotchas
   All file I/O uses encoding="utf-8" for Windows compatibility.

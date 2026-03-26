@@ -68,6 +68,76 @@ def build_graph(root: str) -> DependencyGraph:
     return graph
 
 
+def build_partial_graph(root: str, seed_files: List[str]) -> DependencyGraph:
+    """Build a graph containing only seed_files and their direct imports.
+
+    Used by lazy ingest to scope analysis to a single module.
+    Does NOT detect module boundaries (requires the full graph).
+
+    Args:
+        root: Repository root (absolute path)
+        seed_files: List of (relative_path, language) tuples
+    """
+    root = os.path.abspath(root)
+    graph = DependencyGraph(root=root)
+
+    # AST-analyze seed files
+    for rel_path, language in seed_files:
+        abs_path = os.path.join(root, rel_path)
+        api = analyze_file(abs_path, language)
+
+        resolved_imports = []
+        if api:
+            graph.apis[rel_path] = api
+            for imp in api.imports:
+                resolved = _resolve_import(imp, rel_path, root, language)
+                if resolved:
+                    resolved_imports.append(resolved)
+                    imp.resolved_path = resolved
+
+        node = FileNode(
+            path=rel_path,
+            language=language,
+            imports=resolved_imports,
+            api=api,
+        )
+        graph.files[rel_path] = node
+
+    # Follow direct imports one level deep
+    imports_to_add = []
+    for path, node in graph.files.items():
+        for imp in node.imports:
+            if imp not in graph.files:
+                imp_abs = os.path.join(root, imp)
+                if os.path.exists(imp_abs):
+                    ext = os.path.splitext(imp)[1]
+                    lang = LANG_MAP.get(ext)
+                    if lang:
+                        imports_to_add.append((imp, lang))
+
+    for rel_path, language in imports_to_add:
+        abs_path = os.path.join(root, rel_path)
+        api = analyze_file(abs_path, language)
+        if api:
+            graph.apis[rel_path] = api
+        node = FileNode(
+            path=rel_path,
+            language=language,
+            imports=[],
+            api=api,
+        )
+        graph.files[rel_path] = node
+
+    # Build edges
+    for path, node in graph.files.items():
+        for imp in node.imports:
+            graph.edges.append((path, imp))
+            if imp in graph.files:
+                graph.files[imp].imported_by.append(path)
+
+    return graph
+
+
 def transitive_deps(graph: DependencyGraph, file: str) -> Set[str]:
     """BFS for all transitive dependencies of a file (cycle-safe)."""
     visited = set()

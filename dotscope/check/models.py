@@ -8,6 +8,7 @@ from ..models.intent import (  # noqa: F401
     CheckCategory,
     IntentDirective,
     Constraint,
+    ConventionRule,
     ProposedFix,
     CheckResult,
     CheckReport,

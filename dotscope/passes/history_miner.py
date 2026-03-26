@@ -11,7 +11,7 @@ Reads git log to extract:
 import os
 import subprocess
 from collections import Counter, defaultdict
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from ..models.history import (
     FileChange,
@@ -27,6 +27,7 @@ def analyze_history(
     root: str,
     max_commits: int = 500,
     coupling_threshold: float = 0.5,
+    paths: Optional[List[str]] = None,
 ) -> HistoryAnalysis:
     """Mine git history for architectural signals.
 
@@ -34,11 +35,13 @@ def analyze_history(
         root: Repository root
         max_commits: Maximum commits to analyze (most recent)
         coupling_threshold: Minimum coupling strength to report
+        paths: If provided, only analyze commits touching these paths
+               (uses git log -- <paths> for server-side filtering)
     """
     if not os.path.isdir(os.path.join(root, ".git")):
         return HistoryAnalysis()
 
-    commits = _parse_git_log(root, max_commits)
+    commits = _parse_git_log(root, max_commits, paths=paths)
     if not commits:
         return HistoryAnalysis()
 
@@ -107,16 +110,22 @@ def analyze_history(
     return analysis
 
 
-def _parse_git_log(root: str, max_commits: int) -> List[CommitInfo]:
+def _parse_git_log(
+    root: str, max_commits: int, paths: Optional[List[str]] = None,
+) -> List[CommitInfo]:
     """Parse git log with --numstat for line-change data."""
     try:
+        cmd = [
+            "git", "log",
+            f"--max-count={max_commits}",
+            "--pretty=format:%H|%aI|%s",
+            "--numstat",
+        ]
+        if paths:
+            cmd.append("--")
+            cmd.extend(paths)
         result = subprocess.run(
-            [
-                "git", "log",
-                f"--max-count={max_commits}",
-                "--pretty=format:%H|%aI|%s",
-                "--numstat",
-            ],
+            cmd,
             cwd=root,
             capture_output=True,
             text=True,

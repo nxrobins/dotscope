@@ -69,7 +69,7 @@ def scan_directory(path: str) -> ScopeConfig:
 
     # Build description
     file_count = len(files)
-    description = f"{dir_name} — {primary_lang or 'mixed'} ({file_count} files)"
+    description = f"{dir_name} -- {primary_lang or 'mixed'} ({file_count} files)"
 
     # Build tags
     tags = _infer_tags(path, dir_name, files)

@@ -74,20 +74,15 @@ def should_show_health_nudges(state: dict) -> bool:
 def next_step(state: dict) -> Optional[str]:
     """Return the single next action the developer should take, or None."""
     if not state.get("first_backtest"):
-        return (
-            "Next: Run `dotscope check --backtest` to see what issues\n"
-            "      dotscope would have caught in your recent commits."
-        )
+        return "Next: `dotscope check --backtest`"
+    if not state.get("conventions_reviewed"):
+        return "Next: `dotscope conventions`"
+    if not state.get("voice_reviewed"):
+        return "Next: `dotscope voice`"
     if not state.get("first_session"):
-        return (
-            "Next: Add dotscope to your agent.\n"
-            "      See docs/mcp-setup.md"
-        )
+        return "Next: Add dotscope to your agent (docs/mcp-setup.md)"
     if not state.get("hook_installed"):
-        return (
-            "Next: Install the post-commit hook to start the feedback loop.\n"
-            "      Run `dotscope hook install`"
-        )
+        return "Next: `dotscope hook install`"
     return None  # Onboarded. Stop prompting.
 
 
@@ -110,9 +105,7 @@ def version_control_tip(state: dict) -> Optional[str]:
     if state.get("vc_tip_shown"):
         return None
     return (
-        "Tip: Commit your .scope files and intent.yaml to version control.\n"
-        "     They're your codebase's institutional memory.\n"
-        "     .dotscope/ is gitignored — it rebuilds automatically."
+        "Commit .scope files and intent.yaml. .dotscope/ is gitignored and rebuilds."
     )
 
 
@@ -139,6 +132,8 @@ def _default_state() -> dict:
         "hook_installed": None,
         "first_observation": None,
         "first_check_hold": None,
+        "conventions_reviewed": None,
+        "voice_reviewed": None,
         "sessions_completed": 0,
         "observations_recorded": 0,
         "vc_tip_shown": False,

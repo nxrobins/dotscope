@@ -30,7 +30,19 @@ Omit `--root` to use the current working directory. Restart Claude Desktop after
 
 ## Claude Code
 
-Same config file as Claude Desktop.
+Add to your project's `.claude/settings.json` or the global settings:
+
+```json
+{
+  "mcpServers": {
+    "dotscope": {
+      "command": "dotscope-mcp"
+    }
+  }
+}
+```
+
+No `--root` needed. Claude Code launches from the project directory.
 
 ## Cursor
 
@@ -97,7 +109,8 @@ Ask your agent: "What scopes are available?" It should call `list_scopes` and sh
   "constraints": [
     { "category": "contract", "message": "If you modify auth/tokens.py, review api/auth_routes.py", "confidence": 0.82 },
     { "category": "anti_pattern", "message": "Use .deactivate() instead of .delete() on User", "confidence": 1.0 },
-    { "category": "intent", "message": "decouple auth/, payments/: separate concerns", "confidence": 1.0 }
+    { "category": "intent", "message": "decouple auth/, payments/: separate concerns", "confidence": 1.0 },
+    { "category": "convention", "message": "Convention 'Repository': Must implement get, save; Do not import flask", "confidence": 0.85 }
   ],
 
   "attribution_hints": [
@@ -110,12 +123,19 @@ Ask your agent: "What scopes are available?" It should call `list_scopes` and sh
     "last_observation": "2h ago", "lessons_applied": 3
   },
 
+  "voice": {
+    "mode": "adaptive",
+    "global": "Type hints on most functions (62% adoption). Follow existing patterns..."
+  },
+
   "health_warnings": [],
   "near_misses": []
 }
 ```
 
-**`constraints`** — Rules the agent should follow. Implicit contracts, anti-patterns, dependency boundaries, stability warnings, and architectural intents. Filtered to the resolved scope, capped at 5 per category. Prevention, not correction.
+**`constraints`** — Rules the agent should follow. Implicit contracts, anti-patterns, dependency boundaries, stability warnings, architectural intents, and convention blueprints. Filtered to the resolved scope, capped at 5 per category. Prevention, not correction.
+
+**`voice`** — How the codebase writes code. Global style rules (~150-200 tokens, always included) plus convention-specific voice with canonical snippet when relevant.
 
 **`attribution_hints`** — Where the knowledge came from. `git_history`, `hand_authored`, `signal_comment`, or `graph`. Different credibility registers for different knowledge types.
 
@@ -192,22 +212,37 @@ On MCP server shutdown (or when the agent calls `session_summary`):
 
 Counterfactuals appear after 3+ observations (needs data to be meaningful).
 
-## Post-Commit Hook
-
-For the feedback loop:
+## Hooks
 
 ```bash
 dotscope hook install
 ```
 
-Adds a git post-commit hook that records what changed and compares it to what was predicted. Utility scores update automatically. Near-misses are detected. Works on macOS, Linux, and Windows.
+Installs two git hooks:
+
+| Hook | When | What | Blocks? |
+|------|------|------|---------|
+| pre-commit | Before every commit | `dotscope check` on staged changes | Yes (HOLDs) |
+| post-commit | After every commit | `dotscope observe` + `dotscope incremental` | Never |
+
+The pre-commit hook is the enforcement guarantee. It works everywhere git runs: Claude Desktop, Claude Code, VS Code, terminal. An agent (or human) cannot commit code that violates architectural rules, conventions, or voice config. HOLDs block the commit. NOTEs print to stderr and pass through.
+
+The post-commit hook records what changed and compares it to what was predicted. Utility scores update automatically. This is the feedback loop that makes dotscope smarter over time.
+
+For Claude Code, an additional hook intercepts commits at the tool level:
+
+```bash
+dotscope hook claude     # Claude Code PreToolUse hook (.claude/settings.json)
+```
+
+This is a defense-in-depth layer. The git pre-commit hook is sufficient for most setups.
 
 ## Troubleshooting
 
-**"No scopes found"** — Run `dotscope ingest .` first.
+**"No scopes found"** — Run `dotscope ingest .` first. If you resolve a specific module, dotscope will lazy-ingest it on demand (2-3 seconds).
 
 **Agent doesn't see tools** — Check that `dotscope-mcp` is on your PATH. Run it directly to check for import errors.
 
-**Stale data** — Re-run `dotscope ingest .` or let the feedback loop correct over time.
+**Stale data** — Scopes update incrementally on every commit via the post-commit hook. For full re-scan (transitive deps, convention discovery), run `dotscope ingest .`.
 
 **Windows encoding errors** — dotscope uses UTF-8 everywhere with ASCII fallbacks for cp1252 terminals.

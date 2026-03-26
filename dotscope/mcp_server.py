@@ -35,13 +35,14 @@ def main():
         )
         sys.exit(1)
 
-    mcp = FastMCP(
-        "dotscope",
-        description=(
-            "Directory-scoped context boundaries for AI coding agents. "
-            "Resolve .scope files to curated file lists with architectural context."
-        ),
-    )
+    # Parse --root argument if provided
+    import argparse
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--root", default=None, help="Repository root path")
+    known, _remaining = parser.parse_known_args()
+    _cli_root = known.root
+
+    mcp = FastMCP("dotscope")
 
     # Session-level tracker (lives across tool calls in a single MCP session)
     from .visibility import SessionTracker
@@ -56,7 +57,7 @@ def main():
         from .discovery import find_repo_root
         from .parser import parse_scopes_index
         from .storage.cache import load_cached_history, load_cached_graph_hubs
-        _root = find_repo_root()
+        _root = find_repo_root(_cli_root)
         if _root:
             _idx_path = os.path.join(_root, ".scopes")
             if os.path.exists(_idx_path):
@@ -223,7 +224,7 @@ def main():
                 # Constraints (prophylactic enforcement)
                 try:
                     from .passes.sentinel.constraints import build_constraints
-                    from .intent import load_intents
+                    from .intent import load_conventions, load_intents
                     invariants = {}
                     inv_path = os.path.join(root, ".dotscope", "invariants.json")
                     if os.path.exists(inv_path):
@@ -233,9 +234,11 @@ def main():
                     from .passes.sentinel.checker import _load_scopes_with_antipatterns
                     scopes_data = _load_scopes_with_antipatterns(root)
                     intents = load_intents(root)
+                    conventions = load_conventions(root)
                     constraints = build_constraints(
                         module, root, invariants, scopes_data, intents,
                         graph_hubs=_cached_graph_hubs, task=task,
+                        conventions=conventions,
                     )
                     if constraints:
                         data["constraints"] = [
@@ -247,6 +250,18 @@ def main():
                             }
                             for c in constraints
                         ]
+                except Exception:
+                    pass
+
+                # Voice injection
+                try:
+                    from .intent import load_voice_config
+                    vc = load_voice_config(root)
+                    if vc:
+                        from .passes.voice import build_voice_response
+                        data["voice"] = build_voice_response(
+                            vc, root, resolved.files, conventions,
+                        )
                 except Exception:
                     pass
 
@@ -278,6 +293,13 @@ def main():
                     nudges = check_health_nudges(
                         observations, scope, repo_root=root,
                     )
+                    # Check for needs_full_ingest marker
+                    _marker = os.path.join(root, ".dotscope", "needs_full_ingest")
+                    if os.path.exists(_marker):
+                        nudges = nudges or []
+                        nudges.append(
+                            "Full re-ingest recommended: run `dotscope ingest .`"
+                        )
                     if nudges:
                         data["health_warnings"] = nudges
 
@@ -535,6 +557,7 @@ def main():
             mine_history=mine_history,
             absorb=absorb_docs,
             dry_run=dry_run,
+            quiet=True,
         )
 
         # Discovery data for programmatic consumers

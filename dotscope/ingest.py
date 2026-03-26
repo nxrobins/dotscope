@@ -31,6 +31,8 @@ def ingest(
     synthesize: bool = True,
     max_commits: int = 500,
     dry_run: bool = False,
+    quiet: bool = False,
+    voice_override: Optional[str] = None,
 ) -> IngestPlan:
     """Ingest a codebase and produce .scope files.
 
@@ -52,8 +54,11 @@ def ingest(
     root = os.path.abspath(root)
     plan = IngestPlan(root=root)
 
+    from .progress import ProgressEmitter
+    progress = ProgressEmitter(quiet=quiet)
+
     # Step 1: Dependency graph
-    print("Analyzing dependency graph...", file=sys.stderr)
+    progress.start("building dependency graph")
     graph = build_graph(root)
     plan.graph = graph
     plan.total_repo_files = len(graph.files)
@@ -63,31 +68,74 @@ def ingest(
     )
     from .graph import format_graph_summary
     plan.graph_summary = format_graph_summary(graph)
+    edge_count = sum(len(n.imports) for n in graph.files.values())
+    progress.finish(f"{len(graph.files)} files, {edge_count} edges, {len(graph.modules)} modules")
 
     # Step 2: Git history
     history = HistoryAnalysis()
     if mine_history:
-        print("Mining git history...", file=sys.stderr)
+        progress.start(f"mining git history ({max_commits} commits)")
         history = analyze_history(root, max_commits=max_commits)
         from .history import format_history_summary
         plan.history_summary = format_history_summary(history)
+        contracts = len(history.implicit_contracts)
+        progress.finish(f"{history.commits_analyzed} commits, {contracts} contracts")
+    else:
+        progress.skip("mining git history", "disabled")
     plan.history = history
 
     # Step 3: Doc absorption (with AST data if available)
     docs = AbsorptionResult()
     if absorb:
-        print("Absorbing documentation...", file=sys.stderr)
+        progress.start("absorbing documentation")
         docs = absorb_docs(root, apis=graph.apis if graph.apis else None)
+        progress.finish(f"{len(docs.fragments)} fragments")
+    else:
+        progress.skip("absorbing documentation", "disabled")
+
+    # Step 3b: Discover conventions from structural patterns
+    if graph.apis:
+        progress.start("discovering conventions")
+        from .passes.convention_discovery import discover_conventions
+        from .passes.convention_parser import parse_conventions
+        from .passes.convention_compliance import compute_compliance
+        discovered = discover_conventions(graph.apis, graph, history)
+        if discovered:
+            nodes = parse_conventions(graph.apis, discovered)
+            for conv in discovered:
+                conv.compliance = compute_compliance(conv, nodes, graph.apis)
+            viable = [c for c in discovered if c.compliance >= 0.5]
+            plan.discovered_conventions = viable
+            if viable and not dry_run:
+                from .intent import save_conventions
+                save_conventions(root, viable)
+            progress.finish(f"{len(viable) if discovered else 0} patterns")
+        else:
+            progress.finish("0 patterns")
+
+    # Step 3c: Voice discovery
+    if graph.apis:
+        progress.start("discovering voice")
+        from .passes.voice_discovery import detect_codebase_maturity, discover_voice
+        from .passes.voice_defaults import prescriptive_defaults
+        maturity = detect_codebase_maturity(graph.apis, history, voice_override)
+        if maturity == "new":
+            discovered_voice = prescriptive_defaults()
+        else:
+            discovered_voice = discover_voice(graph.apis, root)
+        if not dry_run:
+            from .intent import save_voice_config
+            save_voice_config(root, discovered_voice)
+        progress.finish(f"{maturity} mode")
 
     # Step 4: Synthesize scope files
-    print("Synthesizing scope files...", file=sys.stderr)
+    progress.start("generating scopes")
     for module in graph.modules:
-        planned = _synthesize_scope(module, graph, history, docs, root, synthesize)
+        planned = synthesize_scope(module, graph, history, docs, root, synthesize)
         if planned:
             plan.scopes.append(planned)
 
     # Step 4b: Detect virtual (cross-cutting) scopes
-    print("Detecting virtual scopes...", file=sys.stderr)
     from .virtual import detect_virtual_scopes
     virtual_scopes = detect_virtual_scopes(graph)
     plan.virtual_scopes = virtual_scopes
@@ -98,10 +146,13 @@ def ingest(
             confidence=0.7,
             signals=["graph: cross-cutting hub detection"],
         ))
+    real_count = len([s for s in plan.scopes if not s.directory.startswith("virtual/")])
+    virtual_count = len(virtual_scopes)
+    progress.finish(f"{real_count} scopes, {virtual_count} virtual")
 
     # Step 5: Backtest against git history and auto-correct
     if mine_history and plan.scopes:
-        print("Backtesting scopes against git history...", file=sys.stderr)
+        progress.start(f"backtesting ({min(max_commits, 50)} commits)")
         from .backtest import backtest_scopes, auto_correct_scope, format_backtest_report
 
         configs = [ps.config for ps in plan.scopes]
@@ -131,6 +182,9 @@ def ingest(
 
         plan.backtest_summary = format_backtest_report(report)
         plan.backtest_report = report
+        progress.finish(f"{report.overall_recall:.0%} recall")
+    elif not mine_history:
+        progress.skip("backtesting", "no history")
 
     # Build .scopes index
     plan.index = _build_index(plan.scopes, plan.total_repo_tokens)
@@ -143,11 +197,20 @@ def ingest(
         cache_ingest_data(root, history=plan.history, graph=plan.graph)
         # Cache invariants for enforcement
         _cache_invariants(root, plan.history)
+        # Reset incremental state + remove needs_full_ingest marker
+        try:
+            from .storage.incremental_state import reset_incremental_state
+            reset_incremental_state(root)
+            marker = os.path.join(root, ".dotscope", "needs_full_ingest")
+            if os.path.exists(marker):
+                os.remove(marker)
+        except Exception:
+            pass
 
     return plan
 
 
-def _synthesize_scope(
+def synthesize_scope(
     module: ModuleBoundary,
     graph: DependencyGraph,
     history: HistoryAnalysis,
@@ -181,7 +244,7 @@ def _synthesize_scope(
 
     description = f"{directory} module"
     if lang:
-        description = f"{directory} — {lang} module ({file_count} files)"
+        description = f"{directory} -- {lang} module ({file_count} files)"
 
     signals.append(f"graph: {file_count} files, cohesion {module.cohesion:.0%}")
 
@@ -281,7 +344,7 @@ def _synthesize_scope(
     # 7. NEVER TODO. If empty, synthesize from graph structure.
     if not context_parts:
         context_parts.append(
-            f"{directory} module — {file_count} files, "
+            f"{directory} module -- {file_count} files, "
             f"cohesion {module.cohesion:.0%}, "
             f"{len(module.external_deps)} external dependencies."
         )
@@ -404,6 +467,33 @@ def _build_index(
     )
 
 
+def append_to_index(root: str, planned: PlannedScope) -> None:
+    """Append a single scope entry to the .scopes index on disk."""
+    from .discovery import load_index
+    index = load_index(root)
+    if index is None:
+        index = ScopesIndex(version=1, scopes={}, defaults={"max_tokens": 8000, "include_related": False})
+
+    name = planned.directory
+    keywords = list(planned.config.tags)
+    for word in planned.config.description.split():
+        word = word.lower().strip("—()-,.")
+        if len(word) > 2 and word not in keywords:
+            keywords.append(word)
+
+    index.scopes[name] = ScopeEntry(
+        name=name,
+        path=f"{planned.directory}/.scope",
+        keywords=keywords[:15],
+        description=planned.config.description,
+    )
+
+    index_path = os.path.join(root, ".scopes")
+    content = _serialize_index(index)
+    with open(index_path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+
 def _write_scopes(plan: IngestPlan) -> None:
     """Write all planned .scope files and the .scopes index to disk."""
     written = 0
@@ -428,7 +518,7 @@ def _write_scopes(plan: IngestPlan) -> None:
             f.write(content)
         written += 1
 
-    print(f"Wrote {written} file(s)", file=sys.stderr)
+    pass  # Progress is handled by the caller
 
 
 def _serialize_index(index: ScopesIndex) -> str:

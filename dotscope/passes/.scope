@@ -1,14 +1,23 @@
 description: Analysis engine — the active verbs of the compiler
 includes:
-  - dotscope/passes/ast_analyzer.py
-  - dotscope/passes/graph_builder.py
-  - dotscope/passes/history_miner.py
-  - dotscope/passes/budget_allocator.py
-  - dotscope/passes/backtest.py
-  - dotscope/passes/virtual.py
-  - dotscope/passes/sentinel/
+  - ast_analyzer.py
+  - graph_builder.py
+  - history_miner.py
+  - budget_allocator.py
+  - backtest.py
+  - virtual.py
+  - convention_discovery.py
+  - convention_parser.py
+  - convention_compliance.py
+  - semantic_diff.py
+  - voice_discovery.py
+  - voice_defaults.py
+  - voice.py
+  - lazy.py
+  - incremental.py
+  - sentinel/
 excludes:
-  - dotscope/passes/__pycache__/
+  - __pycache__/
 context: |
   Passes produce or consume models. They are the operations of the compiler.
 
@@ -32,8 +41,50 @@ context: |
   (from observations) × relevance × size. Asserted files get infinite
   utility — ContextExhaustionError if budget can't fit them.
 
+  ## convention_discovery.py
+  Multi-pass clustering: shared decorators, base classes, naming suffixes.
+  Groups of 3+ files produce ConventionRule with match criteria and rules.
+  Runs during ingest after graph build.
+
+  ## convention_parser.py
+  Matches files to conventions via any_of/all_of criteria.
+  Checks rules: prohibited_imports, required_methods, must_have_matching.
+  Produces ConventionNode per file-convention match.
+
+  ## convention_compliance.py
+  Computes compliance ratio per convention. Severity thresholds:
+  >=80% hold, 50-79% note, <50% retired.
+
+  ## semantic_diff.py
+  Translates git diff into convention-level structural changes.
+  Parses AST at HEAD and working directory, compares ConventionNode graphs.
+
+  ## voice_discovery.py
+  Scans every function, docstring, exception handler in the codebase.
+  Produces VoiceStats: type hint rate, docstring style, bare except rate,
+  early return rate, comprehension density. Synthesizes DiscoveredVoice.
+
+  ## voice_defaults.py
+  Prescriptive voice config for new codebases (<10 files or <20 commits).
+  Strict type hints, Google docstrings, no bare excepts, early returns.
+
+  ## voice.py
+  Injection logic. Attaches global voice and convention-specific voice
+  (with canonical snippet) to resolve responses. AST-based canonical
+  snippet extraction.
+
+  ## lazy.py
+  On-demand single-module ingest. Builds partial graph (one level of
+  imports), mines filtered history (50 commits), synthesizes one scope.
+  Called by composer.py when find_scope() returns None.
+
+  ## incremental.py
+  Post-commit scope evolution. Adds new files to scope includes,
+  removes deleted files, updates stabilities in invariants.json.
+  Called by CLI incremental subcommand from the post-commit hook.
+
   ## sentinel/ — Enforcement Engine
-  6 checks: boundary, contracts, antipattern, direction, stability, intent.
+  8 checks: boundary, contracts, antipattern, convention, voice, direction, stability, intent.
   constraints.py: prophylactic injection into resolve responses.
   acknowledge.py: confidence decay (min floor 0.3).
   Three modes: prophylactic (at resolve), diagnostic (dotscope_check),

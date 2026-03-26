@@ -4,7 +4,7 @@ dotscope builds `.scope` files by analyzing your dependency graph, git history, 
 
 ## The Ingest Pipeline
 
-`dotscope ingest .` runs five steps:
+`dotscope ingest .` runs seven steps:
 
 **1. Dependency graph.** Static analysis of imports across all files. Produces a directed graph: module boundaries, cross-cutting hubs (files imported by many modules), and transitive blast radius for any file. Python uses AST parsing; JS/TS/Go use enhanced regex.
 
@@ -14,9 +14,45 @@ dotscope builds `.scope` files by analyzing your dependency graph, git history, 
 
 **4. Scope generation.** For each module, synthesizes a `.scope` file. Includes come from the dependency graph. Context is assembled from implicit contracts, stability profiles, absorbed docs, dependency info, and recent changes — in that priority order.
 
-**5. Backtest validation.** Replays recent commits: would the scope have pointed the agent at the right files? Reports recall per scope and token reduction. Auto-corrects low-scoring scopes and reruns.
+**5. Convention discovery.** Analyzes structural patterns across files to find architectural conventions the team follows but never documented. Three clustering passes: shared decorators (strongest signal), shared base classes, shared naming suffixes. For each cluster, derives match criteria and rules (required methods, prohibited imports). Discovered conventions are written to `intent.yaml`.
 
-After ingest, structured data is cached in `.dotscope/` (history, graph hubs, invariants) so the MCP server can use it at runtime without re-computing.
+**6. Voice discovery.** Scans every file for coding style signals: type hint adoption rate, docstring style, error handling patterns, structural preferences (early returns vs nested), comprehension density. On new codebases (<10 files or <20 commits), writes prescriptive defaults. On existing codebases, codifies what's already there. Voice config is written to the `voice:` block in `intent.yaml`.
+
+**7. Backtest validation.** Replays recent commits: would the scope have pointed the agent at the right files? Reports recall per scope and token reduction. Auto-corrects low-scoring scopes and reruns.
+
+Each step prints a status line to stderr as it runs. `--quiet` suppresses progress for CI.
+
+After ingest, structured data is cached in `.dotscope/` (history, graph hubs, invariants) so the MCP server can use it at runtime without re-computing. Incremental state is reset so the post-commit hook can track drift from this baseline.
+
+### Lazy Resolve
+
+If an agent resolves a module that hasn't been ingested, dotscope ingests just that module on demand instead of returning an error.
+
+```
+Agent calls: resolve_scope("billing")
+
+dotscope: billing/ not yet scoped — generating on demand (1.8s)
+
+{ "scope": "billing/", "files": [...], ... }
+```
+
+Lazy ingest builds a partial graph (module files + one level of imports), mines 50 recent commits filtered to the module path, and synthesizes one scope. 2-3 seconds instead of 30. A `.dotscope/needs_full_ingest` marker is written so the next full ingest fills in transitive dependencies and cross-module contracts.
+
+### Continuous Ingest
+
+The post-commit hook incrementally updates scopes on every commit. The pre-commit hook enforces rules before every commit. No manual re-ingest needed for routine changes.
+
+What updates per commit:
+
+| Data | Method |
+|------|--------|
+| Scope includes | New file in module dir added, deleted file removed |
+| File stabilities | Commit count incremented, volatility reclassified |
+| Co-change matrix | Pairs in this commit tracked |
+
+What does NOT update per commit (requires full ingest): dependency graph, transitive dependencies, convention discovery.
+
+After 200 commits without a full re-ingest, dotscope surfaces a health warning.
 
 ## Scope Resolution
 
@@ -26,26 +62,28 @@ When an agent calls `resolve_scope`:
 2. Load the `.scope` file(s)
 3. Inject lessons and invariants from the observation store into context
 4. Apply token budget (files ranked by historical utility, then keyword relevance, then size)
-5. Build filtered constraints (contracts, anti-patterns, boundaries, intents — relevant to this scope)
+5. Build filtered constraints (contracts, anti-patterns, boundaries, intents, convention blueprints — relevant to this scope)
 6. Return files, context, constraints, attribution hints, accuracy, health warnings, near-misses
 
 ## Enforcement
 
 dotscope knows your codebase's rules. It surfaces them at three points:
 
-**Prophylactic (at resolve time).** Every `resolve_scope` response includes a `constraints` field: implicit contracts, anti-patterns, dependency boundaries, stability warnings, and architectural intents. The agent knows the rules before writing code. Filtered to the resolved scope and capped at 5 per category to stay under 400 tokens.
+**Prophylactic (at resolve time).** Every `resolve_scope` response includes a `constraints` field: implicit contracts, anti-patterns, dependency boundaries, stability warnings, architectural intents, and convention blueprints. The agent knows the rules before writing code. Filtered to the resolved scope and capped at 5 per category to stay under 400 tokens.
 
 **Diagnostic (before commit).** The agent calls `dotscope_check` with its diff. Returns structured holds (must address) and notes (informational), with fix proposals: predicted functions that need changes, or exact replacement diffs for anti-pattern violations.
 
-**Gate (at commit time).** The post-commit hook runs the same checks. Terminal output shows holds and notes. Holds block the commit; notes are informational.
+**Gate (at commit time).** The pre-commit git hook runs `dotscope check` on staged changes. HOLDs block the commit. NOTEs print to stderr and pass through. This works everywhere git runs: Claude Desktop, Claude Code, VS Code, terminal. The agent cannot bypass it.
 
-Six check categories:
+Eight check categories:
 
 | Category | Severity | What it catches |
 |----------|----------|-----------------|
 | Boundary violation | HOLD | Agent modified files outside its resolved scope |
 | Implicit contract | HOLD | Coupled file modified without its pair |
 | Anti-pattern | HOLD | Prohibited pattern in added lines |
+| Convention violation | HOLD or NOTE | File drifting from its convention's rules |
+| Voice violation | HOLD or NOTE | Bare except or missing type hint on new function |
 | Dependency direction | NOTE | New import reversing established flow |
 | Stability concern | NOTE | Large change to a stable file |
 | Architectural intent | HOLD or NOTE | Change violating declared direction |
@@ -71,6 +109,65 @@ Four directives: `decouple` (new coupling is NOTE), `deprecate` (new usage is HO
 
 Intents flow through constraints (at resolve), checks (before commit), and the session summary (counterfactuals when respected).
 
+## Conventions
+
+Conventions are structural patterns your team follows but never writes down. dotscope discovers them during ingest by clustering files that share decorators, base classes, or naming patterns.
+
+```
+dotscope conventions --discover
+
+⚡ Discovered conventions:
+
+  "Route Handler" — 8 files in api/routes/
+    All decorated with @router or @app.route
+    Prohibited imports: sqlalchemy, psycopg2
+    Compliance: 100%
+
+  "Repository" — 4 files ending in _repo.py
+    Required methods: get, save
+    Compliance: 85%
+```
+
+Discovered conventions are written to `intent.yaml` alongside intents:
+
+```yaml
+conventions:
+  - name: "Route Handler"
+    source: discovered
+    match:
+      any_of:
+        - has_decorator: "app\\.route|router"
+    rules:
+      prohibited_imports: [sqlalchemy, psycopg2]
+    description: "Handles HTTP requests and delegates to Services."
+    compliance: 1.0
+```
+
+### How they work
+
+**Discovery.** Three clustering passes during ingest: shared decorators (strongest signal — survives refactors), shared base classes, shared naming suffixes. For each cluster of 3+ files, dotscope derives match criteria (what makes a file belong) and rules (what it must/must not do).
+
+**Matching.** `any_of` / `all_of` logic. Structural signals (decorators, base classes, imports) take priority over path patterns. A file matching structural criteria but not path still matches. A file matching path but not structural criteria doesn't.
+
+**Enforcement.** Convention rules are checked by `dotscope check` like any other check. Severity scales with compliance: >=80% compliance = HOLD, 50-79% = NOTE, <50% = retired (no longer enforced).
+
+**Blueprint injection.** When an agent resolves a scope containing files that match a convention, the convention's rules are injected as constraints. The agent builds the class correctly on the first try.
+
+**Compliance tracking.** During ingest, dotscope computes what percentage of matching files follow each convention's rules. Declining compliance triggers a health warning.
+
+### Semantic diff
+
+`dotscope diff --staged` translates a git diff into convention-level structural changes:
+
+```
+Semantic Diff:
+  [ADDED]    Route Handler: api/routes/billing.py
+  [ADDED]    Repository: models/billing_repo.py
+  [MODIFIED] Dependency: 'Route Handler' now depends on 'Repository'
+
+  Conventions: All upheld
+```
+
 ## Acknowledge Flow
 
 Sometimes breaking a rule is correct:
@@ -80,6 +177,21 @@ dotscope check --acknowledge contract_auth_tokens_api_a1b2c3
 ```
 
 Acknowledgments are recorded. 3+ acknowledgments of the same constraint within 30 days decay its confidence by 0.1 per excess. Below 0.5, the constraint becomes a NOTE instead of HOLD. Floor at 0.3 — core rules survive.
+
+## Voice
+
+Voice is how the codebase writes code. Type hint density, docstring style, error handling patterns, structural preferences. dotscope discovers it during ingest and teaches agents to match it.
+
+Two modes: **prescriptive** (new codebases, <10 files or <20 commits) provides opinionated defaults. **Adaptive** (existing codebases) scans every function, docstring, and exception handler, then codifies what the codebase already does.
+
+Override with `dotscope ingest . --voice prescriptive` or `--voice adaptive`.
+
+Voice config is written to the `voice:` block in `intent.yaml`. Two rules get mechanical AST checking via `dotscope check`:
+
+- **Bare excepts**: severity derived from codebase rate. <10% bare = HOLD, 10-30% = NOTE, >30% = not enforced.
+- **Missing type hints**: only fires on new or modified functions. Existing untyped functions are grandfathered. >80% adoption = NOTE, otherwise not enforced.
+
+`dotscope voice --upgrade typing` tightens enforcement as the codebase improves.
 
 ## The Feedback Loop
 
@@ -126,9 +238,11 @@ dotscope tracks milestones in `.dotscope/onboarding.json` and prints one next st
 
 | After | Prompt |
 |-------|--------|
-| First ingest | `Run dotscope check --backtest` |
-| First backtest | `Add dotscope to your agent` |
-| First MCP session | `Install the post-commit hook` |
+| First ingest | `dotscope check --backtest` |
+| First backtest | `dotscope conventions` |
+| Conventions reviewed | `dotscope voice` |
+| Voice reviewed | Add dotscope to your agent |
+| First MCP session | `dotscope hook install` |
 | Hook installed | Stop prompting |
 
 Complexity is gated: counterfactuals appear after 3+ observations, health nudges after 7+ days. Each prompt appears once.
@@ -227,9 +341,9 @@ Five domain files, each owning a distinct category of data:
 
 - **core.py** — Static architecture: `ScopeConfig`, `FileAnalysis`, `DependencyGraph`, `FileNode`, `ResolvedImport`. What the codebase *is* right now.
 - **history.py** — Empirical behavior: `ImplicitContract`, `FileHistory`, `ChangeCoupling`, `HistoryAnalysis`. How the codebase behaves over time.
-- **intent.py** — Human rulebook: `IntentDirective`, `Assertion`, `CheckResult`, `ProposedFix`, `Severity`. How the codebase *must* be treated.
+- **intent.py** — Human rulebook: `IntentDirective`, `ConventionRule`, `DiscoveredVoice`, `Assertion`, `CheckResult`, `ProposedFix`, `Severity`. How the codebase *must* be treated.
 - **state.py** — Persistent memory: `SessionLog`, `ObservationLog`, `BenchReport`, `RegressionCase`, `BisectionResult`. The schemas for `.dotscope/` event logs.
-- **passes.py** — Transient outputs: `IngestPlan`, `PlannedScope`, `VirtualScope`. Data transfer objects that live only during a single operation.
+- **passes.py** — Transient outputs: `IngestPlan`, `PlannedScope`, `VirtualScope`, `SemanticDiffReport`. Data transfer objects that live only during a single operation.
 
 No model file imports from any functional module. Data definitions are the foundation everything else builds on.
 
@@ -243,7 +357,14 @@ Analysis and enforcement operations that produce or consume models:
 - **budget_allocator.py** — Applies token budgets with assertion enforcement
 - **backtest.py** — Replays commits against scopes to measure recall
 - **virtual.py** — Detects cross-cutting scopes from graph hub analysis
-- **sentinel/** — The enforcement engine. Runs 6 checks (boundary, contracts, anti-pattern, direction, stability, intent), builds constraints for prophylactic injection, manages acknowledgment decay.
+- **convention_discovery.py** — Multi-pass clustering to discover structural conventions
+- **convention_parser.py** — Matches files to conventions, checks rules
+- **convention_compliance.py** — Compliance tracking and severity thresholds
+- **semantic_diff.py** — Translates git diff into convention-level structural changes
+- **voice_discovery.py** — Scans every function, docstring, exception handler for coding style signals
+- **voice_defaults.py** — Prescriptive voice config for new codebases
+- **voice.py** — Voice injection into resolve responses, canonical snippet extraction
+- **sentinel/** — The enforcement engine. Runs 8 checks (boundary, contracts, anti-pattern, convention, voice, direction, stability, intent), builds constraints for prophylactic injection, manages acknowledgment decay.
 
 ### storage/ — How the compiler remembers
 
@@ -251,7 +372,8 @@ Infrastructure that reads and writes `models.state` to disk:
 
 - **session_manager.py** — Creates sessions, records observations, manages `.dotscope/sessions/` and `.dotscope/observations/`
 - **cache.py** — Caches analysis data (history, graph hubs) for MCP server startup
-- **git_hooks.py** — Post-commit hook installation and management
+- **git_hooks.py** — Pre-commit enforcement + post-commit feedback hooks
+- **claude_hooks.py** — Claude Code PreToolUse hook installation
 - **onboarding.py** — Stage-aware milestone tracking
 - **timing.py** — Operation instrumentation for benchmarking
 - **near_miss.py** — Near-miss detection persistence

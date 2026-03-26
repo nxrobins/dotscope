@@ -107,7 +107,11 @@ def compose(
         # Resolve the scope reference
         config = find_scope(op.ref.name, root)
         if config is None:
-            raise ValueError(f"Scope not found: {op.ref.name}")
+            # Lazy ingest: generate scope on demand
+            from .passes.lazy import lazy_ingest_module
+            config = lazy_ingest_module(root, op.ref.name)
+            if config is None:
+                raise ValueError(f"Scope not found: {op.ref.name}")
 
         resolved = resolve(config, follow_related=follow_related, root=root)
 

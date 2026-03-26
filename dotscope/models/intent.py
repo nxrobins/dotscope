@@ -17,6 +17,8 @@ class CheckCategory(Enum):
     DIRECTION = "dependency_direction"
     STABILITY = "stability_concern"
     INTENT = "architectural_intent"
+    CONVENTION = "convention_violation"
+    VOICE = "voice_violation"
 
 
 @dataclass
@@ -158,3 +160,39 @@ class NearMiss:
     event: str
     context_used: str
     potential_impact: str
+
+
+# ---------------------------------------------------------------------------
+# Convention dataclasses
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ConventionRule:
+    """A structural convention: discovered or hand-authored."""
+    name: str
+    source: str = "discovered"  # "discovered" | "hand_authored"
+    match_criteria: Dict[str, list] = field(default_factory=dict)  # {"any_of": [...], "all_of": [...]}
+    rules: Dict[str, object] = field(default_factory=dict)  # {"prohibited_imports": [...], ...}
+    description: str = ""
+    compliance: float = 1.0
+    last_checked: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Voice dataclasses
+# ---------------------------------------------------------------------------
+
+@dataclass
+class DiscoveredVoice:
+    """Coding style profile: discovered from codebase or prescriptive defaults."""
+    mode: str = "adaptive"  # "prescriptive" | "adaptive"
+    rules: Dict[str, str] = field(default_factory=dict)
+    stats: Dict[str, float] = field(default_factory=dict)
+    enforce: Dict[str, object] = field(default_factory=dict)
+
+
+@dataclass
+class CanonicalExample:
+    """A representative file for a convention's coding style."""
+    file_path: str = ""
+    snippet: Optional[str] = None

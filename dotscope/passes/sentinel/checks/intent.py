@@ -52,13 +52,18 @@ def _check_deprecate(
         r'(?:from\s+(\S+)\s+import|import\s+(\S+))'
     )
 
+    from ..line_filter import strip_comments_and_strings
+
     for filepath, lines in added_lines.items():
         # Don't flag the deprecated file itself
         if filepath in deprecated:
             continue
 
         for line_text in lines:
-            m = import_re.search(line_text)
+            code_only = strip_comments_and_strings(line_text)
+            if not code_only.strip():
+                continue
+            m = import_re.search(code_only)
             if not m:
                 continue
             imported = (m.group(1) or m.group(2) or "").replace(".", "/")
@@ -131,13 +136,18 @@ def _check_decouple(
         r'(?:from\s+(\S+)\s+import|import\s+(\S+))'
     )
 
+    from ..line_filter import strip_comments_and_strings
+
     for filepath, lines in added_lines.items():
         file_module = _file_to_module(filepath)
         if file_module not in modules:
             continue
 
         for line_text in lines:
-            m = import_re.search(line_text)
+            code_only = strip_comments_and_strings(line_text)
+            if not code_only.strip():
+                continue
+            m = import_re.search(code_only)
             if not m:
                 continue
             imported = (m.group(1) or m.group(2) or "").split(".")[0]
@@ -180,7 +190,7 @@ def _check_consolidate(
                     category=CheckCategory.INTENT,
                     severity=Severity.NOTE,
                     message=(
-                        f"Changes to {mod} — intent is to consolidate into {target} "
+                        f"Changes to {mod}, intent is to consolidate into {target} "
                         f"(set {intent.set_at})"
                     ),
                     detail=intent.reason,

@@ -285,7 +285,7 @@ def extract_attribution_hints(
                 continue
             count = hub_info.get("imported_by_count", 0)
             if count >= 5:
-                hint = f"{path} is imported by {count} files — changes here have wide blast radius"
+                hint = f"{path} is imported by {count} files, changes here have wide blast radius"
                 if hint not in seen:
                     hints.append({"hint": hint, "source": "graph"})
                     seen.add(hint)

@@ -50,8 +50,13 @@ def check_antipatterns(
                 if not scope_files and not filepath.startswith(scope_dir):
                     continue
 
+                from ..line_filter import strip_comments_and_strings
+
                 for line_text in lines:
-                    if regex.search(line_text):
+                    code_only = strip_comments_and_strings(line_text)
+                    if not code_only.strip():
+                        continue
+                    if regex.search(code_only):
                         fix = None
                         if replacement:
                             fixed = regex.sub(replacement, line_text)

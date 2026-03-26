@@ -6,12 +6,36 @@ import os
 import sys
 
 
+def _safe_print(text, **kwargs):
+    """Print with ASCII fallback for Windows cp1252 terminals."""
+    try:
+        print(text, **kwargs)
+    except UnicodeEncodeError:
+        print(text.encode("ascii", errors="replace").decode("ascii"), **kwargs)
+
+
 def main(argv=None):
+    # Intercept help before argparse touches it
+    args_list = argv if argv is not None else sys.argv[1:]
+    if not args_list or args_list == ["help"] or args_list == ["--help"] or args_list == ["-h"]:
+        from .help import print_help
+        print_help()
+        return
+    if len(args_list) >= 2 and args_list[1] in ("--help", "-h"):
+        from .help import print_help, HELP_COMMANDS
+        cmd = args_list[0]
+        if cmd in HELP_COMMANDS:
+            print_help(cmd)
+            return
+        # Fall through to argparse for unknown commands
+
     parser = argparse.ArgumentParser(
         prog="dotscope",
         description="Directory-scoped context boundaries for AI coding agents",
+        add_help=False,
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {_version()}")
+    parser.add_argument("-h", "--help", action="store_true", dest="show_help")
 
     sub = parser.add_subparsers(dest="command")
 
@@ -58,6 +82,15 @@ def main(argv=None):
     p_ingest.add_argument("--no-docs", action="store_true", help="Skip doc absorption")
     p_ingest.add_argument("--dry-run", action="store_true", help="Plan only, don't write files")
     p_ingest.add_argument("--max-commits", type=int, default=500, help="Max git commits to analyze")
+    p_ingest.add_argument("--quiet", action="store_true", help="Suppress progress output (for CI)")
+    p_ingest.add_argument("--voice", choices=["prescriptive", "adaptive"], default=None,
+                          help="Override voice mode (prescriptive for new, adaptive for existing)")
+
+    # --- voice ---
+    p_voice = sub.add_parser("voice", help="View and manage code voice")
+    p_voice.add_argument("--upgrade", metavar="RULE", help="Upgrade enforcement for a rule (typing, bare_excepts)")
+    p_voice.add_argument("--reset", action="store_true", help="Reset voice to defaults")
+    p_voice.add_argument("--json", action="store_true", help="Machine-readable output")
 
     # --- impact ---
     p_impact = sub.add_parser("impact", help="Predict blast radius of changes to a file")
@@ -71,12 +104,17 @@ def main(argv=None):
     p_observe = sub.add_parser("observe", help="Record observation for a commit (called by post-commit hook)")
     p_observe.add_argument("commit", help="Commit hash to observe")
 
+    # --- incremental ---
+    p_incremental = sub.add_parser("incremental", help="Incremental scope update (called by post-commit hook)")
+    p_incremental.add_argument("commit", help="Commit hash")
+
     # --- hook ---
-    p_hook = sub.add_parser("hook", help="Manage post-commit hook")
+    p_hook = sub.add_parser("hook", help="Manage git hooks")
     hook_sub = p_hook.add_subparsers(dest="hook_action")
     hook_sub.add_parser("install", help="Install post-commit observer hook")
     hook_sub.add_parser("uninstall", help="Remove post-commit observer hook")
     hook_sub.add_parser("status", help="Check if hook is installed")
+    hook_sub.add_parser("claude", help="Install Claude Code pre-commit enforcement")
 
     # --- utility ---
     p_utility = sub.add_parser("utility", help="Show utility scores for a scope")
@@ -118,6 +156,18 @@ def main(argv=None):
     p_intent_rm = intent_sub.add_parser("remove", help="Remove an intent by ID")
     p_intent_rm.add_argument("id", help="Intent ID to remove")
 
+    # --- conventions ---
+    p_conv = sub.add_parser("conventions", help="List or discover conventions")
+    p_conv.add_argument("--discover", action="store_true", help="Discover conventions from codebase")
+    p_conv.add_argument("--accept", action="store_true", help="Accept discovered conventions")
+    p_conv.add_argument("--json", dest="json_output", action="store_true", help="Output as JSON")
+
+    # --- diff ---
+    p_diff = sub.add_parser("diff", help="Semantic diff against conventions")
+    p_diff.add_argument("ref", nargs="?", default=None, help="Git ref to diff against")
+    p_diff.add_argument("--staged", action="store_true", help="Diff staged changes")
+    p_diff.add_argument("--json", dest="json_output", action="store_true", help="Output as JSON")
+
     # --- test-compiler ---
     p_tc = sub.add_parser("test-compiler", help="Replay frozen sessions as regression tests")
     p_tc.add_argument("--scope", default=None, help="Filter to a specific scope")
@@ -134,8 +184,9 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
 
-    if args.command is None:
-        parser.print_help()
+    if args.command is None or getattr(args, "show_help", False):
+        from .help import print_help
+        print_help()
         return
 
     try:
@@ -152,6 +203,7 @@ def main(argv=None):
             "impact": _cmd_impact,
             "backtest": _cmd_backtest,
             "observe": _cmd_observe,
+            "incremental": _cmd_incremental,
             "hook": _cmd_hook,
             "utility": _cmd_utility,
             "virtual": _cmd_virtual,
@@ -160,6 +212,9 @@ def main(argv=None):
             "rebuild": _cmd_rebuild,
             "check": _cmd_check,
             "intent": _cmd_intent,
+            "conventions": _cmd_conventions,
+            "diff": _cmd_diff,
+            "voice": _cmd_voice,
             "test-compiler": _cmd_test_compiler,
             "bench": _cmd_bench,
             "debug": _cmd_debug,
@@ -280,7 +335,7 @@ context: |
 
     print(f"Created {scope_path}")
     if not args.scan:
-        print("Edit the context field — that's the part that can't be automated.")
+        print("Edit the context field. That's the part that can't be automated.")
 
 
 def _cmd_validate(args):
@@ -429,6 +484,8 @@ def _cmd_ingest(args):
         absorb=not args.no_docs,
         max_commits=args.max_commits,
         dry_run=args.dry_run,
+        quiet=args.quiet,
+        voice_override=getattr(args, "voice", None),
     )
 
     report = format_ingest_report(plan)
@@ -439,7 +496,7 @@ def _cmd_ingest(args):
         print(report.encode("ascii", errors="replace").decode("ascii"))
 
     if args.dry_run:
-        print("Dry run — no files written. Remove --dry-run to write scope files.")
+        print("Dry run: no files written. Remove --dry-run to write scope files.")
     else:
         # Onboarding: mark milestone + show next step + vc tip
         try:
@@ -476,12 +533,12 @@ def _cmd_impact(args):
     if node and node.imports:
         print(f"Direct imports ({len(node.imports)}):")
         for imp in node.imports:
-            print(f"  → {imp}")
+            _safe_print(f"  -> {imp}")
 
     if node and node.imported_by:
         print(f"\nDirect dependents ({len(node.imported_by)}):")
         for imp_by in node.imported_by:
-            print(f"  ← {imp_by}")
+            _safe_print(f"  <- {imp_by}")
 
     all_dependents = transitive_dependents(graph, target)
     transitive_only = all_dependents - set(node.imported_by if node else [])
@@ -489,7 +546,7 @@ def _cmd_impact(args):
     if transitive_only:
         print(f"\nTransitive dependents ({len(transitive_only)}):")
         for t in sorted(transitive_only):
-            print(f"  ← ← {t}")
+            _safe_print(f"  <- <- {t}")
 
     affected_modules = set()
     for f in all_dependents:
@@ -617,8 +674,50 @@ def _cmd_observe(args):
                   file=sys.stderr)
 
 
+def _cmd_incremental(args):
+    """Incremental scope update from a single commit."""
+    import subprocess
+    from .discovery import find_repo_root
+    from .passes.incremental import incremental_update
+
+    root = find_repo_root()
+    if root is None:
+        return
+
+    # Get changed files from the commit
+    try:
+        result = subprocess.run(
+            ["git", "diff-tree", "--no-commit-id", "--name-status", "-r", args.commit],
+            cwd=root, capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return
+    except Exception:
+        return
+
+    changed = []
+    added = []
+    deleted = []
+    for line in result.stdout.strip().splitlines():
+        parts = line.split("\t", 1)
+        if len(parts) != 2:
+            continue
+        status, filepath = parts[0].strip(), parts[1].strip()
+        changed.append(filepath)
+        if status == "A":
+            added.append(filepath)
+        elif status == "D":
+            deleted.append(filepath)
+
+    if changed:
+        try:
+            incremental_update(root, changed, added, deleted, args.commit)
+        except Exception:
+            pass  # Incremental update is best-effort
+
+
 def _cmd_hook(args):
-    from .storage.git_hooks import install_hook, uninstall_hook, is_hook_installed
+    from .storage.git_hooks import install_hook, uninstall_hook, hook_status
     from .discovery import find_repo_root
 
     root = find_repo_root()
@@ -626,16 +725,19 @@ def _cmd_hook(args):
         raise ValueError("Could not find repository root")
 
     if args.hook_action == "install":
-        path = install_hook(root)
-        print(f"Hook installed: {path}")
+        result = install_hook(root)
+        print(result)
     elif args.hook_action == "uninstall":
         removed = uninstall_hook(root)
-        print("Hook removed." if removed else "No hook found.")
+        print("Hooks removed." if removed else "No hooks found.")
     elif args.hook_action == "status":
-        installed = is_hook_installed(root)
-        print(f"Hook: {'installed' if installed else 'not installed'}")
+        print(hook_status(root))
+    elif args.hook_action == "claude":
+        from .storage.claude_hooks import install_claude_hook
+        result = install_claude_hook(root)
+        print(result)
     else:
-        print("Usage: dotscope hook {install|uninstall|status}")
+        print("Usage: dotscope hook {install|uninstall|status|claude}")
 
 
 def _cmd_backtest(args):
@@ -692,9 +794,10 @@ def _cmd_utility(args):
 
     print(f"Utility scores for {args.scope} ({len(relevant)} files):\n")
     for path, score in sorted(relevant.items(), key=lambda x: -x[1].utility_ratio):
-        bar = "█" * int(score.utility_ratio * 10) + "░" * (10 - int(score.utility_ratio * 10))
-        print(f"  {os.path.basename(path)}: {bar} {score.utility_ratio:.0%} "
-              f"({score.touch_count}/{score.resolve_count})")
+        filled = int(score.utility_ratio * 10)
+        bar = "#" * filled + "." * (10 - filled)
+        _safe_print(f"  {os.path.basename(path)}: {bar} {score.utility_ratio:.0%} "
+                    f"({score.touch_count}/{score.resolve_count})")
 
 
 def _cmd_virtual(args):
@@ -735,9 +838,10 @@ def _cmd_lessons(args):
 
     print(f"Lessons for {args.scope}:\n")
     for lesson in lessons:
-        conf = "█" * int(lesson.confidence * 5) + "░" * (5 - int(lesson.confidence * 5))
-        print(f"  [{conf}] {lesson.lesson_text}")
-        print(f"         {lesson.observation}")
+        filled = int(lesson.confidence * 5)
+        conf = "#" * filled + "." * (5 - filled)
+        _safe_print(f"  [{conf}] {lesson.lesson_text}")
+        _safe_print(f"         {lesson.observation}")
         print()
 
 
@@ -986,7 +1090,7 @@ def _cmd_test_compiler(args):
             result = replay_regression(case, root)
             results.append(result)
         except Exception as e:
-            print(f"  {case.id}: error — {e}", file=sys.stderr)
+            print(f"  {case.id}: error: {e}", file=sys.stderr)
 
     print(format_replay_report(results))
     regressions = sum(1 for r in results if r.is_regression)
@@ -1089,6 +1193,202 @@ def _cmd_intent(args):
 
     else:
         print("Usage: dotscope intent {add|list|remove}")
+
+
+def _cmd_voice(args):
+    import json as json_mod
+    from .discovery import find_repo_root
+    from .intent import load_voice_config
+
+    root = find_repo_root(".")
+    voice = load_voice_config(root)
+
+    if voice is None:
+        print("No voice discovered. Run `dotscope ingest .` first.", file=sys.stderr)
+        return
+
+    if getattr(args, "json", False):
+        print(json_mod.dumps(voice, indent=2, default=str))
+        return
+
+    if getattr(args, "upgrade", None):
+        rule = args.upgrade
+        enforce = voice.get("enforce", {})
+        current = enforce.get(rule)
+        if current is False:
+            enforce[rule] = "note"
+        elif current == "note":
+            enforce[rule] = "hold"
+        else:
+            print(f"{rule}: already at highest enforcement level", file=sys.stderr)
+            return
+
+        # Save back
+        from .models.intent import DiscoveredVoice
+        dv = DiscoveredVoice(
+            mode=voice.get("mode", "adaptive"),
+            rules=voice.get("rules", {}),
+            stats=voice.get("stats", {}),
+            enforce=enforce,
+        )
+        from .intent import save_voice_config
+        save_voice_config(root, dv)
+        print(f"{rule}: upgraded to {enforce[rule]}")
+        return
+
+    # Default: show voice config
+    print(f"Mode: {voice.get('mode', 'adaptive')}")
+    print()
+    rules = voice.get("rules", {})
+    if rules:
+        for key, val in rules.items():
+            val_short = val.strip().splitlines()[0] if val else ""
+            print(f"  {key}: {val_short}")
+    print()
+    enforce = voice.get("enforce", {})
+    if enforce:
+        print("Enforcement:")
+        for key, val in enforce.items():
+            label = str(val) if val is not False else "off"
+            print(f"  {key}: {label}")
+    stats = voice.get("stats", {})
+    if stats:
+        print()
+        print("Stats:")
+        for key, val in stats.items():
+            if val is not None:
+                print(f"  {key}: {val}")
+
+
+def _cmd_conventions(args):
+    import json as json_mod
+    from .discovery import find_repo_root
+    root = find_repo_root(os.getcwd()) or os.getcwd()
+
+    if args.discover:
+        from .passes.graph_builder import build_graph
+        from .passes.convention_discovery import discover_conventions
+        from .passes.convention_parser import parse_conventions
+        from .passes.convention_compliance import compute_compliance
+
+        print("Analyzing codebase...", file=sys.stderr)
+        graph = build_graph(root)
+        if not graph.apis:
+            print("No source files found to analyze.", file=sys.stderr)
+            return
+
+        discovered = discover_conventions(graph.apis, graph)
+        if not discovered:
+            print("No conventions discovered.", file=sys.stderr)
+            return
+
+        nodes = parse_conventions(graph.apis, discovered)
+        for conv in discovered:
+            conv.compliance = compute_compliance(conv, nodes, graph.apis)
+
+        viable = [c for c in discovered if c.compliance >= 0.5]
+
+        print(f"\nDiscovered {len(viable)} conventions:\n")
+        for conv in viable:
+            print(f'  "{conv.name}" -- {conv.description}')
+            if conv.rules.get("required_methods"):
+                print(f"    Required methods: {', '.join(conv.rules['required_methods'])}")
+            if conv.rules.get("prohibited_imports"):
+                print(f"    Prohibited imports: {', '.join(conv.rules['prohibited_imports'])}")
+            print(f"    Compliance: {conv.compliance:.0%}")
+            print()
+
+        if args.accept:
+            from .intent import save_conventions
+            save_conventions(root, viable)
+            print(f"Accepted {len(viable)} conventions. Written to intent.yaml.")
+        else:
+            print("Run with --accept to persist, or edit manually in intent.yaml.")
+        return
+
+    # List existing conventions
+    from .intent import load_conventions
+    conventions = load_conventions(root)
+
+    if not conventions:
+        print("No conventions defined. Run 'dotscope conventions --discover' to find patterns.")
+        return
+
+    if getattr(args, "json_output", False):
+        data = [
+            {
+                "name": c.name,
+                "source": c.source,
+                "description": c.description,
+                "compliance": c.compliance,
+                "rules": c.rules,
+            }
+            for c in conventions
+        ]
+        print(json_mod.dumps(data, indent=2))
+    else:
+        print(f"{len(conventions)} conventions:\n")
+        for conv in conventions:
+            severity = "HOLD" if conv.compliance >= 0.80 else "NOTE" if conv.compliance >= 0.50 else "RETIRED"
+            print(f"  [{severity}] {conv.name} ({conv.compliance:.0%} compliance)")
+            if conv.description:
+                print(f"         {conv.description}")
+            print()
+
+
+def _cmd_diff(args):
+    import json as json_mod
+    import subprocess
+    from .discovery import find_repo_root
+    root = find_repo_root(os.getcwd()) or os.getcwd()
+
+    # Get diff text
+    if args.staged:
+        result = subprocess.run(
+            ["git", "diff", "--cached"], cwd=root,
+            capture_output=True, text=True, timeout=10,
+        )
+        diff_text = result.stdout
+    elif args.ref:
+        result = subprocess.run(
+            ["git", "diff", args.ref], cwd=root,
+            capture_output=True, text=True, timeout=10,
+        )
+        diff_text = result.stdout
+    else:
+        result = subprocess.run(
+            ["git", "diff"], cwd=root,
+            capture_output=True, text=True, timeout=10,
+        )
+        diff_text = result.stdout
+
+    if not diff_text:
+        print("No changes to diff.")
+        return
+
+    from .intent import load_conventions
+    from .passes.semantic_diff import semantic_diff, format_semantic_diff
+
+    conventions = load_conventions(root)
+    if not conventions:
+        print("No conventions defined. Run 'dotscope conventions --discover' first.")
+        return
+
+    report = semantic_diff(diff_text, root, conventions)
+
+    if getattr(args, "json_output", False):
+        data = {
+            "added": [{"name": n.name, "file": n.file_path} for n in report.added],
+            "removed": [{"name": n.name, "file": n.file_path} for n in report.removed],
+            "modified": [
+                {"name": a.name, "file": a.file_path, "violations": a.violations}
+                for _, a in report.modified
+            ],
+            "all_upheld": report.all_conventions_upheld,
+        }
+        print(json_mod.dumps(data, indent=2))
+    else:
+        print(format_semantic_diff(report))
 
 
 def _version():

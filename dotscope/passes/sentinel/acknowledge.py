@@ -55,9 +55,22 @@ def load_acknowledgments(repo_root: str) -> List[dict]:
 
 
 def is_acknowledged(repo_root: str, ack_id: str) -> bool:
-    """Check if a hold has been acknowledged (in this run context)."""
+    """Check if a hold has been acknowledged.
+
+    Returns True if previously acknowledged AND confidence has not
+    decayed below the HOLD threshold (0.5). Constraints acknowledged
+    3+ times within 30 days lose confidence — below 0.5 they become
+    NOTEs instead of HOLDs, so this returns False (not "acknowledged"
+    as a HOLD pass-through).
+    """
     acks = load_acknowledgments(repo_root)
-    return any(a["id"] == ack_id for a in acks)
+    if not any(a["id"] == ack_id for a in acks):
+        return False
+
+    # Apply decay: if confidence drops below 0.5, the constraint
+    # should remain active (as a NOTE), not be silently passed
+    confidence = compute_decayed_confidence(1.0, ack_id, acks)
+    return confidence >= 0.5
 
 
 def compute_decayed_confidence(

@@ -3,7 +3,7 @@
 import os
 from typing import Dict, List, Optional
 
-from .models import Constraint, IntentDirective
+from .models import Constraint, ConventionRule, IntentDirective
 
 
 def build_constraints(
@@ -14,6 +14,7 @@ def build_constraints(
     intents: List[IntentDirective],
     graph_hubs: Optional[Dict[str, object]] = None,
     task: Optional[str] = None,
+    conventions: Optional[List[ConventionRule]] = None,
 ) -> List[Constraint]:
     """Build filtered constraints relevant to a resolved scope.
 
@@ -112,6 +113,33 @@ def build_constraints(
                     "directive": intent.directive,
                     "set_by": intent.set_by,
                     "set_at": intent.set_at,
+                },
+            ))
+
+    # 6. Convention blueprints matching this scope
+    for conv in (conventions or []):
+        if conv.compliance < 0.50:
+            continue  # Skip retired conventions
+        rules_summary = []
+        if conv.rules.get("prohibited_imports"):
+            rules_summary.append(
+                f"Do not import: {', '.join(conv.rules['prohibited_imports'])}"
+            )
+        if conv.rules.get("required_methods"):
+            rules_summary.append(
+                f"Must implement: {', '.join(conv.rules['required_methods'])}"
+            )
+        if rules_summary:
+            constraints.append(Constraint(
+                category="convention",
+                message=(
+                    f"Convention '{conv.name}': {'; '.join(rules_summary)}"
+                ),
+                confidence=conv.compliance,
+                metadata={
+                    "convention": conv.name,
+                    "description": conv.description,
+                    "compliance": conv.compliance,
                 },
             ))
 
