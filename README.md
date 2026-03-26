@@ -35,4 +35,4 @@ What changed:
 
 ## Details
 
-Python 3.9+. Zero dependencies. Cross-platform. 328 tests. [MIT](LICENSE).
+Python 3.9+. One dependency ([tree-sitter](https://tree-sitter.github.io/)). Cross-platform. Python, JavaScript, TypeScript, Go. 348 tests. [MIT](LICENSE).

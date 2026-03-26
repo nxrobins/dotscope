@@ -44,10 +44,17 @@ def analyze_file(filepath: str, language: str) -> Optional[FileAnalysis]:
     result = None
     if language == "python":
         result = _analyze_python(filepath, source)
-    elif language in ("javascript", "typescript"):
-        result = _analyze_js(filepath, source)
-    elif language == "go":
-        result = _analyze_go(filepath, source)
+    else:
+        # tree-sitter for JS/TS/Go, regex fallback
+        from .lang import get_analyzer
+        ts_analyzer = get_analyzer(language)
+        if ts_analyzer:
+            result = ts_analyzer(filepath, source)
+        if result is None:
+            if language in ("javascript", "typescript"):
+                result = _analyze_js(filepath, source)
+            elif language == "go":
+                result = _analyze_go(filepath, source)
 
     if result:
         try:

@@ -6,7 +6,7 @@ dotscope builds `.scope` files by analyzing your dependency graph, git history, 
 
 `dotscope ingest .` runs seven steps:
 
-**1. Dependency graph.** Static analysis of imports across all files. Produces a directed graph: module boundaries, cross-cutting hubs (files imported by many modules), and transitive blast radius for any file. Python uses AST parsing; JS/TS/Go use enhanced regex.
+**1. Dependency graph.** Static analysis of imports across all files. Produces a directed graph: module boundaries, cross-cutting hubs (files imported by many modules), and transitive blast radius for any file. Python uses stdlib `ast`; JS/TS/Go use tree-sitter for full AST analysis (decorators, base classes, methods, type annotations).
 
 **2. History mining.** Analyzes your git log (up to 500 commits) for patterns invisible in the code: implicit contracts (files that always change together), stability profiles, churn hotspots, and function-level co-change data.
 
@@ -362,7 +362,8 @@ No model file imports from any functional module. Data definitions are the found
 
 Analysis and enforcement operations that produce or consume models:
 
-- **ast_analyzer.py** — Populates `models.core` with structural analysis from Python AST
+- **ast_analyzer.py** — Populates `models.core` with structural analysis (Python via stdlib `ast`)
+- **lang/** — Tree-sitter analyzers for JS/TS (`javascript.py`) and Go (`go.py`). Produce the same `FileAnalysis` shape. Go import resolution via `go.mod`.
 - **graph_builder.py** — Builds `DependencyGraph` from import analysis
 - **history_miner.py** — Mines git log to produce `HistoryAnalysis`
 - **budget_allocator.py** — Applies token budgets with assertion enforcement

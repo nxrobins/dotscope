@@ -216,6 +216,9 @@ def _resolve_import(imp, source_file: str, root: str, language: str):
         return resolve_python_import(imp, os.path.join(root, source_file), root)
     elif language in ("javascript", "typescript"):
         return resolve_js_import(imp, os.path.join(root, source_file), root)
+    elif language == "go":
+        from .lang.go import resolve_go_import
+        return resolve_go_import(imp, os.path.join(root, source_file), root)
     return None
 
 

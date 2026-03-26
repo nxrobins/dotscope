@@ -13,6 +13,7 @@ includes:
   - voice_discovery.py
   - voice_defaults.py
   - voice.py
+  - lang/
   - lazy.py
   - incremental.py
   - sentinel/
@@ -93,7 +94,7 @@ context: |
   ## Gotchas
   Sentinel checks import from models.intent, never from each other.
   Budget allocator raises ContextExhaustionError (not returns error).
-  AST analyzer is Python-only; JS/TS/Go use regex in graph_builder.
+  Python uses stdlib ast; JS/TS/Go use tree-sitter via lang/ package.
 related:
   - dotscope/models/.scope
 tags:
