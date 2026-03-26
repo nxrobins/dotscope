@@ -9,6 +9,8 @@ What breaks when you change something.
 dotscope remembers. It reads your codebase, learns the rules, and
 gives every agent the context it needs — before it writes a line.
 
+Works on existing codebases and new projects. Point it at anything.
+
 ```
 pip install dotscope && dotscope init
 ```
