@@ -53,13 +53,8 @@ def check_dependency_direction(
             if not imported_module or imported_module == file_module:
                 continue
 
-            # Check if this reverses an established direction
-            # file_module is importing imported_module, but is imported_module
-            # supposed to import file_module instead?
-            if imported_module in import_directions.get(imported_module, set()):
-                continue  # Not a reversal
-
             # Check: does imported_module normally import file_module?
+            # If so, this new import reverses the established direction.
             if file_module in import_directions.get(imported_module, set()):
                 results.append(CheckResult(
                     passed=False,

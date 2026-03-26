@@ -31,11 +31,11 @@ _PRE_COMMIT_SH = """\
 # NUDGEs and NOTEs print but pass through.
 # Timeout after 30 seconds — fail open if dotscope hangs.
 if command -v timeout >/dev/null 2>&1; then
-    OUTPUT=$(timeout 30 python -m dotscope.cli check 2>&1) || true
+    OUTPUT=$(timeout 30 python3 -m dotscope.cli check 2>&1) || true
 elif command -v gtimeout >/dev/null 2>&1; then
-    OUTPUT=$(gtimeout 30 python -m dotscope.cli check 2>&1) || true
+    OUTPUT=$(gtimeout 30 python3 -m dotscope.cli check 2>&1) || true
 else
-    OUTPUT=$(python -m dotscope.cli check 2>&1) || true
+    OUTPUT=$(python3 -m dotscope.cli check 2>&1) || true
 fi
 if echo "$OUTPUT" | grep -qE "GUARD|HOLD"; then
     echo "$OUTPUT" >&2
@@ -78,12 +78,12 @@ _POST_COMMIT_SH = """\
 # dotscope auto-observer
 COMMIT_HASH=$(git rev-parse HEAD)
 # Capture observation output for agent feedback (Gap 4)
-OUTPUT=$(python -m dotscope.cli observe "$COMMIT_HASH" 2>&1) || true
+OUTPUT=$(python3 -m dotscope.cli observe "$COMMIT_HASH" 2>&1) || true
 if [ -n "$OUTPUT" ]; then
     echo "$OUTPUT" >&2
 fi
 # dotscope incremental
-python -m dotscope.cli incremental "$COMMIT_HASH" 2>/dev/null || true
+python3 -m dotscope.cli incremental "$COMMIT_HASH" 2>/dev/null || true
 """
 
 _POST_COMMIT_PY = """\
@@ -205,7 +205,7 @@ def install_hook(repo_root: str) -> str:
             if _INCREMENTAL_MARKER not in existing:
                 incremental_line = (
                     '# dotscope incremental\n'
-                    'python -m dotscope.cli incremental "$COMMIT_HASH" 2>/dev/null || true\n'
+                    'python3 -m dotscope.cli incremental "$COMMIT_HASH" 2>/dev/null || true\n'
                 )
                 with open(post_path, "a", encoding="utf-8") as f:
                     f.write(f"\n{incremental_line}")

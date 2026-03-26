@@ -29,9 +29,16 @@ def load_intents(repo_root: str) -> List[IntentDirective]:
     raw_intents = _parse_intent_list(text)
     results = []
 
+    _valid_directives = ("decouple", "deprecate", "freeze", "consolidate")
     for item in raw_intents:
         directive = item.get("directive", "")
-        if directive not in ("decouple", "deprecate", "freeze", "consolidate"):
+        if directive not in _valid_directives:
+            if directive:
+                import sys
+                print(
+                    f"dotscope: unknown directive '{directive}' in intent.yaml, skipping",
+                    file=sys.stderr,
+                )
             continue
 
         modules = _to_list(item.get("modules", []))

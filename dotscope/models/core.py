@@ -123,9 +123,10 @@ class ResolvedScope:
     def intersect(self, other: "ResolvedScope") -> "ResolvedScope":
         """Keep only files present in both scopes."""
         other_set = set(other.files)
+        ctx_parts = [p for p in [self.context, other.context] if p]
         return ResolvedScope(
             files=[f for f in self.files if f in other_set],
-            context=self.context,
+            context="\n\n".join(ctx_parts),
             token_estimate=0,
             scope_chain=list(dict.fromkeys(self.scope_chain + other.scope_chain)),
             truncated=self.truncated or other.truncated,

@@ -14,8 +14,11 @@ class TimingEntry:
     timestamp: str
 
 
+_MAX_TIMING_LINES = 5000
+
+
 def record_timing(repo_root: str, operation: str, duration_ms: float) -> None:
-    """Append a timing entry to .dotscope/timings.jsonl."""
+    """Append a timing entry to .dotscope/timings.jsonl. Truncates at 5000 lines."""
     dot_dir = os.path.join(repo_root, ".dotscope")
     if not os.path.isdir(dot_dir):
         return  # No .dotscope dir — skip silently
@@ -28,6 +31,16 @@ def record_timing(repo_root: str, operation: str, duration_ms: float) -> None:
     }
     with open(path, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
+
+    # Truncate if too large (keep most recent half)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        if len(lines) > _MAX_TIMING_LINES:
+            with open(path, "w", encoding="utf-8") as f:
+                f.writelines(lines[len(lines) // 2:])
+    except (IOError, OSError):
+        pass
 
 
 def load_timings(repo_root: str) -> List[TimingEntry]:

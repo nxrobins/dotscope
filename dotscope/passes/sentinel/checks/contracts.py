@@ -93,7 +93,9 @@ def _build_fix_proposal(
         pairs = function_co.get(key, [])
         for pair in pairs:
             if pair.get("file") == coupled_file:
-                predicted_sections.append(pair["function"])
+                fn = pair.get("function")
+                if fn:
+                    predicted_sections.append(fn)
                 total_confidence += pair.get("confidence", 0.5)
 
     if predicted_sections:
