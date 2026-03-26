@@ -1,4 +1,6 @@
-# dotscope
+<p align="center">
+  <img src="logo.png" alt="dotscope" width="400">
+</p>
 
 Point it at any codebase. It reads your dependency graph, mines your git history, and tells you things about your own code you didn't know.
 
