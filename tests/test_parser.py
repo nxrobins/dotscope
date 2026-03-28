@@ -71,6 +71,24 @@ class TestParseScope:
         config = parse_scope_file(str(tmp_path / ".scope"))
         assert config.related == ["payments/.scope", "api/.scope"]
 
+    def test_normalizes_windows_path_fields(self, tmp_path):
+        (tmp_path / ".scope").write_text(
+            "description: Test\n"
+            "includes:\n"
+            "  - auth\\\n"
+            "  - models\\user.py\n"
+            "excludes:\n"
+            "  - auth\\tests\\fixtures\\\n"
+            "related:\n"
+            "  - payments\\.scope\n"
+        )
+
+        config = parse_scope_file(str(tmp_path / ".scope"))
+
+        assert config.includes == ["auth/", "models/user.py"]
+        assert config.excludes == ["auth/tests/fixtures/"]
+        assert config.related == ["payments/.scope"]
+
 
 class TestParseScopesIndex:
     def test_full_index(self, tmp_path):
@@ -99,6 +117,20 @@ class TestParseScopesIndex:
         assert "payments" in index.scopes
         assert index.max_tokens == 8000
         assert index.include_related is False
+
+    def test_normalizes_windows_index_paths(self, tmp_path):
+        (tmp_path / ".scopes").write_text(
+            "version: 1\n"
+            "\n"
+            "scopes:\n"
+            "  auth:\n"
+            "    path: auth\\.scope\n"
+            "    keywords: [authentication]\n"
+        )
+
+        index = parse_scopes_index(str(tmp_path / ".scopes"))
+
+        assert index.scopes["auth"].path == "auth/.scope"
 
 
 class TestSerialize:

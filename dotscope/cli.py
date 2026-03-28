@@ -116,6 +116,18 @@ def main(argv=None):
     hook_sub.add_parser("status", help="Check if hook is installed")
     hook_sub.add_parser("claude", help="Install Claude Code pre-commit enforcement")
 
+    # --- refresh ---
+    p_refresh = sub.add_parser("refresh", help="Manage runtime refresh queue and worker")
+    refresh_sub = p_refresh.add_subparsers(dest="refresh_action")
+    p_refresh_enqueue = refresh_sub.add_parser("enqueue", help="Queue runtime refresh work")
+    p_refresh_enqueue.add_argument("scopes", nargs="*", help="Scope names to refresh")
+    p_refresh_enqueue.add_argument("--commit", default=None, help="Classify a commit into refresh work")
+    p_refresh_enqueue.add_argument("--repo", action="store_true", help="Enqueue a full repo runtime refresh")
+    p_refresh_enqueue.add_argument("--reason", default="", help="Reason stored with the queued job")
+    p_refresh_run = refresh_sub.add_parser("run", help="Run queued refresh work")
+    p_refresh_run.add_argument("--drain", action="store_true", help="Drain the entire queue")
+    refresh_sub.add_parser("status", help="Show refresh worker and queue status")
+
     # --- utility ---
     p_utility = sub.add_parser("utility", help="Show utility scores for a scope")
     p_utility.add_argument("scope", help="Scope name")
@@ -205,6 +217,7 @@ def main(argv=None):
             "observe": _cmd_observe,
             "incremental": _cmd_incremental,
             "hook": _cmd_hook,
+            "refresh": _cmd_refresh,
             "utility": _cmd_utility,
             "virtual": _cmd_virtual,
             "lessons": _cmd_lessons,
@@ -234,9 +247,12 @@ def _cmd_resolve(args):
     from .passes.budget_allocator import apply_budget
     from .discovery import find_repo_root
     from .formatter import format_resolved
+    from .refresh import ensure_resolution_freshness
 
     root = find_repo_root()
     follow_related = not args.no_related
+    if root is not None:
+        ensure_resolution_freshness(root, args.scope)
 
     resolved = compose(args.scope, root=root, follow_related=follow_related)
 
@@ -248,11 +264,14 @@ def _cmd_resolve(args):
 
 
 def _cmd_context(args):
-    from .discovery import find_scope, find_repo_root
+    from .discovery import find_repo_root, find_resolution_scope
     from .context import query_context
+    from .refresh import ensure_resolution_freshness
 
     root = find_repo_root()
-    config = find_scope(args.scope, root)
+    if root is not None:
+        ensure_resolution_freshness(root, args.scope)
+    config = find_resolution_scope(args.scope, root)
     if config is None:
         raise ValueError(f"Scope not found: {args.scope}")
 
@@ -266,15 +285,13 @@ def _cmd_context(args):
 
 def _cmd_match(args):
     from .matcher import match_task
-    from .discovery import find_repo_root, load_index, find_all_scopes
-    from .parser import parse_scope_file
+    from .discovery import find_repo_root, load_resolution_index, load_resolution_scopes
 
     root = find_repo_root()
     if root is None:
         raise ValueError("Could not find repository root")
 
-    index = load_index(root)
-    scope_files = find_all_scopes(root)
+    index = load_resolution_index(root)
 
     # Build scope list for matching
     scopes = []
@@ -282,13 +299,9 @@ def _cmd_match(args):
         for name, entry in index.scopes.items():
             scopes.append((name, entry.keywords, entry.description or ""))
     else:
-        for sf in scope_files:
-            try:
-                config = parse_scope_file(sf)
-                name = os.path.relpath(os.path.dirname(sf), root)
-                scopes.append((name, config.tags, config.description))
-            except (ValueError, IOError):
-                continue
+        for logical_path, config, _source in load_resolution_scopes(root):
+            name = os.path.dirname(logical_path) or "."
+            scopes.append((name, config.tags, config.description))
 
     matches = match_task(args.task, scopes)
 
@@ -502,7 +515,7 @@ def _cmd_health(args):
     if root is None:
         raise ValueError("Could not find repository root")
 
-    report = full_health_report(root)
+    report = full_health_report(root, use_runtime=True)
 
     if not report.issues:
         print(f"All {report.scopes_checked} scope(s) healthy. "
@@ -785,6 +798,60 @@ def _cmd_hook(args):
         print(result)
     else:
         print("Usage: dotscope hook {install|uninstall|status|claude}")
+
+
+def _cmd_refresh(args):
+    from .discovery import find_repo_root
+    from .refresh import (
+        enqueue_commit_refresh,
+        enqueue_repo_refresh,
+        enqueue_scope_refresh,
+        kick_refresh_worker,
+        refresh_status_summary,
+        run_refresh_queue,
+    )
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    if args.refresh_action == "enqueue":
+        job = None
+        if args.commit:
+            job = enqueue_commit_refresh(root, args.commit)
+        elif args.repo:
+            job = enqueue_repo_refresh(root, reason=args.reason)
+        else:
+            job = enqueue_scope_refresh(root, args.scopes, reason=args.reason)
+
+        if job is None:
+            print("No refresh work queued.")
+            return
+
+        kick_refresh_worker(root)
+        targets = ", ".join(job.get("targets", [])) if job.get("targets") else "repo"
+        print(f"Queued {job.get('kind')} refresh for {targets}.")
+        return
+
+    if args.refresh_action == "run":
+        ran = run_refresh_queue(root, drain=args.drain)
+        print("Refresh worker ran." if ran else "No refresh work run.")
+        return
+
+    if args.refresh_action == "status":
+        status = refresh_status_summary(root)
+        current_targets = ", ".join(status.get("current_targets", [])) or "-"
+        print(f"running: {status.get('running')}")
+        print(f"current_job: {status.get('current_job') or '-'}")
+        print(f"current_targets: {current_targets}")
+        print(f"queued_job_count: {status.get('queued_job_count', 0)}")
+        if status.get("last_success_at"):
+            print(f"last_success_at: {status['last_success_at']}")
+        if status.get("last_error"):
+            print(f"last_error: {status['last_error']}")
+        return
+
+    print("Usage: dotscope refresh {enqueue|run|status}")
 
 
 def _cmd_backtest(args):

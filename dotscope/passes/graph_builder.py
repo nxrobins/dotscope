@@ -20,6 +20,7 @@ from ..models.core import (
     ModuleBoundary,
     ModuleAPI,
 )
+from ..paths import normalize_relative_path
 
 
 def build_graph(root: str) -> DependencyGraph:
@@ -204,7 +205,7 @@ def _collect_source_files(root: str) -> List[Tuple[str, str]]:
         for fn in filenames:
             ext = os.path.splitext(fn)[1].lower()
             if ext in lang_map:
-                rel = os.path.relpath(os.path.join(dirpath, fn), root)
+                rel = normalize_relative_path(os.path.relpath(os.path.join(dirpath, fn), root))
                 results.append((rel, lang_map[ext]))
 
     return sorted(results)

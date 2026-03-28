@@ -12,6 +12,12 @@ from dotscope.ingest import (
     _extract_discoveries,
     _extract_validation,
 )
+from dotscope.passes.incremental import incremental_update
+from dotscope.storage.incremental_state import (
+    get_scope_refresh_epoch,
+    load_incremental_state,
+    save_incremental_state,
+)
 
 
 def _git_init(path):
@@ -118,6 +124,88 @@ class TestIngest:
         plan = ingest(str(tmp_path), mine_history=False, dry_run=True)
         assert plan.index is not None
         assert len(plan.index.scopes) >= 3
+
+    def test_virtual_scope_bookkeeping_is_consistent(self, tmp_path):
+        _git_init(tmp_path)
+
+        models = tmp_path / "models"
+        models.mkdir()
+        (models / "__init__.py").write_text("")
+        (models / "user.py").write_text("class User: pass\n")
+
+        for name in ("auth", "api", "admin"):
+            d = tmp_path / name
+            d.mkdir()
+            (d / "__init__.py").write_text("")
+            (d / "handler.py").write_text("from models.user import User\n")
+
+        plan = ingest(str(tmp_path), mine_history=False, dry_run=True)
+
+        virtual_scope = next(
+            scope for scope in plan.scopes
+            if scope.directory == "virtual/user_lifecycle"
+        )
+        assert virtual_scope.config.path.endswith("virtual/user_lifecycle/.scope")
+        assert plan.index.scopes["virtual/user_lifecycle"].path == "virtual/user_lifecycle/.scope"
+
+    def test_full_ingest_marks_existing_scope_refreshed(self, tmp_path):
+        _git_init(tmp_path)
+
+        existing = tmp_path / "existing"
+        existing.mkdir()
+        (existing / "main.py").write_text("x = 1\n")
+        (existing / ".scope").write_text(
+            "description: Existing\n"
+            "includes:\n"
+            "  - existing/\n"
+        )
+
+        ingest(str(tmp_path), mine_history=False, dry_run=False)
+
+        state = load_incremental_state(str(tmp_path))
+        assert "existing/.scope" in state.scope_refresh_timestamps
+
+    def test_incremental_refreshes_directory_and_virtual_scope(self, tmp_path):
+        _git_init(tmp_path)
+
+        models = tmp_path / "models"
+        models.mkdir()
+        (models / "__init__.py").write_text("")
+        (models / "user.py").write_text("class User: pass\n")
+
+        for name in ("auth", "api", "admin"):
+            d = tmp_path / name
+            d.mkdir()
+            (d / "__init__.py").write_text("")
+            (d / "handler.py").write_text("from models.user import User\n")
+
+        ingest(str(tmp_path), mine_history=False, dry_run=False)
+
+        state = load_incremental_state(str(tmp_path))
+        old_refresh = "2000-01-01T00:00:00Z"
+        state.scope_refresh_timestamps["auth/.scope"] = old_refresh
+        state.scope_refresh_timestamps["virtual/user_lifecycle/.scope"] = old_refresh
+        save_incremental_state(str(tmp_path), state)
+
+        incremental_update(
+            str(tmp_path),
+            changed_files=["auth/handler.py"],
+            added_files=[],
+            deleted_files=[],
+            commit_hash="abc12345",
+        )
+
+        refreshed_state = load_incremental_state(str(tmp_path))
+        assert get_scope_refresh_epoch(str(tmp_path), "auth/.scope", refreshed_state) > 0
+        assert get_scope_refresh_epoch(
+            str(tmp_path),
+            "virtual/user_lifecycle/.scope",
+            refreshed_state,
+        ) > get_scope_refresh_epoch(
+            str(tmp_path),
+            "virtual/user_lifecycle/.scope",
+            state,
+        )
 
 
 class TestIngestPlanStructuredData:

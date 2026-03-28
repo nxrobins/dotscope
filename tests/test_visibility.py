@@ -1,5 +1,7 @@
 """Tests for the DX visibility features."""
 
+import os
+import subprocess
 import time
 from dotscope.visibility import (
     SessionTracker,
@@ -10,6 +12,10 @@ from dotscope.visibility import (
     detect_near_misses,
 )
 from dotscope.models import ObservationLog
+from dotscope.storage.incremental_state import (
+    IncrementalState,
+    save_incremental_state,
+)
 
 
 def _make_response(token_count=1420, repo_tokens=47000, context="JWT tokens...",
@@ -22,6 +28,20 @@ def _make_response(token_count=1420, repo_tokens=47000, context="JWT tokens...",
         "attribution_hints": hints or [{"hint": "soft deletes", "source": "hand_authored"}],
         "health_warnings": warnings or [],
     }
+
+
+def _git_init(path):
+    subprocess.run(["git", "init"], cwd=str(path), capture_output=True, check=False)
+    subprocess.run(["git", "config", "user.email", "test@test.com"],
+                   cwd=str(path), capture_output=True, check=False)
+    subprocess.run(["git", "config", "user.name", "Test"],
+                   cwd=str(path), capture_output=True, check=False)
+
+
+def _git_commit(path, msg):
+    subprocess.run(["git", "add", "-A"], cwd=str(path), capture_output=True, check=False)
+    subprocess.run(["git", "commit", "-m", msg, "--allow-empty"],
+                   cwd=str(path), capture_output=True, check=False)
 
 
 class TestSessionTracker:
@@ -316,6 +336,65 @@ class TestHealthNudges:
         assert nudges[0]["issue"] == "accuracy_degraded"
         assert "message" in nudges[0]
         assert "suggestion" in nudges[0]
+
+    def test_stale_nudge_uses_refresh_state_instead_of_scope_mtime(self, tmp_path):
+        _git_init(tmp_path)
+
+        auth = tmp_path / "auth"
+        auth.mkdir()
+        (auth / "handler.py").write_text("def login():\n    return True\n")
+        (auth / ".scope").write_text(
+            "description: Auth\n"
+            "includes:\n"
+            "  - auth/\n"
+        )
+        _git_commit(tmp_path, "initial")
+
+        old_time = time.time() - (40 * 86400)
+        os.utime(auth / ".scope", (old_time, old_time))
+        (auth / "handler.py").write_text("def login():\n    return False\n")
+        _git_commit(tmp_path, "behavior change")
+
+        save_incremental_state(
+            str(tmp_path),
+            IncrementalState(
+                scope_refresh_timestamps={
+                    "auth/.scope": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                },
+            ),
+        )
+
+        assert check_health_nudges([], "auth", repo_root=str(tmp_path)) == []
+
+    def test_stale_nudge_uses_old_refresh_state(self, tmp_path):
+        _git_init(tmp_path)
+
+        auth = tmp_path / "auth"
+        auth.mkdir()
+        (auth / "handler.py").write_text("def login():\n    return True\n")
+        (auth / ".scope").write_text(
+            "description: Auth\n"
+            "includes:\n"
+            "  - auth/\n"
+        )
+        _git_commit(tmp_path, "initial")
+
+        old_refresh = time.strftime(
+            "%Y-%m-%dT%H:%M:%SZ",
+            time.gmtime(time.time() - (40 * 86400)),
+        )
+        save_incremental_state(
+            str(tmp_path),
+            IncrementalState(scope_refresh_timestamps={"auth/.scope": old_refresh}),
+        )
+
+        (auth / "handler.py").write_text("def login():\n    return False\n")
+        _git_commit(tmp_path, "behavior change")
+
+        nudges = check_health_nudges([], "auth", repo_root=str(tmp_path))
+        assert len(nudges) == 1
+        assert nudges[0]["issue"] == "stale"
+        assert "hasn't been refreshed" in nudges[0]["message"]
 
 
 class TestNearMissDetection:

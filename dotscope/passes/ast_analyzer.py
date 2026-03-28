@@ -17,6 +17,7 @@ from ..models import (
     FunctionInfo,
     ResolvedImport,
 )
+from ..paths import normalize_relative_path
 
 # Cache: (path, mtime) → FileAnalysis
 _analysis_cache: dict[tuple[str, float], FileAnalysis] = {}
@@ -484,7 +485,7 @@ def _find_python_module(candidate_base: str, root: str) -> Optional[str]:
     ]
     for c in candidates:
         if os.path.isfile(c):
-            return os.path.relpath(c, root)
+            return normalize_relative_path(os.path.relpath(c, root))
     return None
 
 
@@ -500,9 +501,9 @@ def resolve_js_import(imp: ResolvedImport, source_file: str, root: str) -> Optio
     exts = [".ts", ".tsx", ".js", ".jsx"]
     for ext in exts:
         if os.path.isfile(os.path.join(root, rel_base + ext)):
-            return rel_base + ext
+            return normalize_relative_path(rel_base + ext)
     for idx in ["index.ts", "index.tsx", "index.js", "index.jsx"]:
         candidate = os.path.join(rel_base, idx)
         if os.path.isfile(os.path.join(root, candidate)):
-            return candidate
+            return normalize_relative_path(candidate)
     return None

@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional
 
-from .discovery import find_scope, find_repo_root
+from .discovery import find_repo_root, find_resolution_scope
 from .models import ResolvedScope
 from .resolver import resolve
 from .tokens import estimate_scope_tokens, estimate_context_tokens
@@ -105,7 +105,7 @@ def compose(
 
     for op in ops:
         # Resolve the scope reference
-        config = find_scope(op.ref.name, root)
+        config = find_resolution_scope(op.ref.name, root)
         if config is None:
             # Lazy ingest: generate scope on demand
             from .passes.lazy import lazy_ingest_module

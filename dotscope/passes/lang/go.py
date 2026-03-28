@@ -15,6 +15,7 @@ from ._treesitter import (
 from ...models.core import (
     FileAnalysis, ResolvedImport, ClassInfo, FunctionInfo, ExportedSymbol,
 )
+from ...paths import normalize_relative_path
 
 
 class GoAnalyzer(BaseAnalyzer):
@@ -303,7 +304,7 @@ def resolve_go_import(
         # Find a .go file in the directory
         for f in sorted(os.listdir(candidate)):
             if f.endswith(".go") and not f.endswith("_test.go"):
-                return os.path.join(rel, f)
+                return normalize_relative_path(os.path.join(rel, f))
 
     return None
 

@@ -16,7 +16,9 @@ from ..history import HistoryAnalysis, analyze_history
 from ..models.core import ScopeConfig
 from ..models.passes import PlannedScope
 from ..parser import serialize_scope
+from ..paths import normalize_directory_include, normalize_relative_path
 from ..progress import ProgressEmitter
+from ..runtime_overlay import write_runtime_scope
 from ..tokens import estimate_scope_tokens
 
 
@@ -24,12 +26,15 @@ def lazy_ingest_module(
     root: str,
     module_name: str,
     quiet: bool = True,
+    write_runtime: bool = True,
+    write_tracked: bool = False,
+    mark_needs_full_ingest: bool = False,
 ) -> Optional[ScopeConfig]:
     """Ingest a single module on demand.
 
     Returns the ScopeConfig if successful, None if module dir doesn't exist.
     """
-    module_name = module_name.rstrip("/")
+    module_name = normalize_relative_path(module_name).rstrip("/")
     module_path = os.path.join(root, module_name)
     if not os.path.isdir(module_path):
         return None
@@ -39,9 +44,10 @@ def lazy_ingest_module(
     # Collect module files
     from .graph_builder import _collect_source_files, build_partial_graph
     all_files = _collect_source_files(root)
+    module_prefix = normalize_directory_include(module_name)
     module_files = [
         (rel, lang) for rel, lang in all_files
-        if rel.startswith(module_name + "/") or rel.startswith(module_name + os.sep)
+        if rel.startswith(module_prefix)
     ]
     if not module_files:
         return None
@@ -64,13 +70,13 @@ def lazy_ingest_module(
 
     # Synthesize one scope
     scope_path = os.path.join(root, module_name, ".scope")
-    includes = [module_name + "/"]
+    includes = [module_prefix]
 
     # Add cross-module imports from the partial graph
     for path, node in graph.files.items():
-        if path.startswith(module_name + "/"):
+        if path.startswith(module_prefix):
             for imp in node.imports:
-                if not imp.startswith(module_name + "/") and imp not in includes:
+                if not imp.startswith(module_prefix) and imp not in includes:
                     includes.append(imp)
 
     # Context from history
@@ -118,30 +124,49 @@ def lazy_ingest_module(
         tokens_estimate=token_est,
     )
 
-    # Write scope file
-    os.makedirs(os.path.dirname(scope_path), exist_ok=True)
-    content = serialize_scope(config)
-    with open(scope_path, "w", encoding="utf-8") as f:
-        f.write(content)
+    if write_tracked:
+        os.makedirs(os.path.dirname(scope_path), exist_ok=True)
+        content = serialize_scope(config)
+        with open(scope_path, "w", encoding="utf-8") as f:
+            f.write(content)
 
-    # Update .scopes index
-    from ..ingest import append_to_index
-    planned = PlannedScope(
-        directory=module_name,
-        config=config,
-        confidence=0.5,
-        signals=["lazy: on-demand ingest"],
-    )
+        from ..ingest import append_to_index
+
+        planned = PlannedScope(
+            directory=module_name,
+            config=config,
+            confidence=0.5,
+            signals=["lazy: on-demand ingest"],
+        )
+        try:
+            append_to_index(root, planned)
+        except Exception:
+            pass  # Index update is best-effort
+
+    if write_runtime:
+        try:
+            write_runtime_scope(root, config, scope_name=module_name)
+        except Exception:
+            pass
+
     try:
-        append_to_index(root, planned)
-    except Exception:
-        pass  # Index update is best-effort
+        from ..storage.incremental_state import (
+            load_incremental_state,
+            mark_scope_refreshed,
+            save_incremental_state,
+        )
 
-    # Mark that a full re-ingest is needed
-    dot_dir = os.path.join(root, ".dotscope")
-    os.makedirs(dot_dir, exist_ok=True)
-    marker = os.path.join(dot_dir, "needs_full_ingest")
-    Path(marker).touch()
+        state = load_incremental_state(root)
+        mark_scope_refreshed(root, state, scope_path)
+        save_incremental_state(root, state)
+    except Exception:
+        pass
+
+    if mark_needs_full_ingest:
+        dot_dir = os.path.join(root, ".dotscope")
+        os.makedirs(dot_dir, exist_ok=True)
+        marker = os.path.join(dot_dir, "needs_full_ingest")
+        Path(marker).touch()
 
     if not quiet:
         print(

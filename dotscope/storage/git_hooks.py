@@ -18,6 +18,9 @@ from pathlib import Path
 
 _POST_MARKER = "# dotscope auto-observer"
 _INCREMENTAL_MARKER = "# dotscope incremental"
+_REFRESH_MARKER = "# dotscope refresh"
+_POST_CHECKOUT_MARKER = "# dotscope post-checkout"
+_POST_MERGE_MARKER = "# dotscope post-merge"
 _PRE_MARKER = "# dotscope pre-commit"
 
 # ---------------------------------------------------------------------------
@@ -84,6 +87,9 @@ if [ -n "$OUTPUT" ]; then
 fi
 # dotscope incremental
 python3 -m dotscope.cli incremental "$COMMIT_HASH" 2>/dev/null || true
+# dotscope refresh
+python3 -m dotscope.cli refresh enqueue --commit "$COMMIT_HASH" 2>/dev/null || true
+python3 -m dotscope.cli refresh run --drain 2>/dev/null || true &
 """
 
 _POST_COMMIT_PY = """\
@@ -100,8 +106,56 @@ try:
         # dotscope incremental
         subprocess.run([sys.executable, "-m", "dotscope.cli", "incremental", commit],
                        timeout=30, capture_output=True)
+        # dotscope refresh
+        subprocess.run([sys.executable, "-m", "dotscope.cli", "refresh", "enqueue", "--commit", commit],
+                       timeout=30, capture_output=True)
+        subprocess.Popen([sys.executable, "-m", "dotscope.cli", "refresh", "run", "--drain"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 except Exception:
     pass  # Never block commits
+"""
+
+_POST_CHECKOUT_SH = """\
+#!/bin/sh
+# dotscope post-checkout
+if [ "$3" = "1" ]; then
+    python3 -m dotscope.cli refresh enqueue --repo --reason "branch switch" 2>/dev/null || true
+    python3 -m dotscope.cli refresh run --drain 2>/dev/null || true &
+fi
+"""
+
+_POST_CHECKOUT_PY = """\
+#!/usr/bin/env python3
+# dotscope post-checkout
+import subprocess, sys
+try:
+    if len(sys.argv) >= 4 and sys.argv[3] == "1":
+        subprocess.run([sys.executable, "-m", "dotscope.cli", "refresh", "enqueue", "--repo", "--reason", "branch switch"],
+                       timeout=30, capture_output=True)
+        subprocess.Popen([sys.executable, "-m", "dotscope.cli", "refresh", "run", "--drain"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+except Exception:
+    pass
+"""
+
+_POST_MERGE_SH = """\
+#!/bin/sh
+# dotscope post-merge
+python3 -m dotscope.cli refresh enqueue --repo --reason "post-merge" 2>/dev/null || true
+python3 -m dotscope.cli refresh run --drain 2>/dev/null || true &
+"""
+
+_POST_MERGE_PY = """\
+#!/usr/bin/env python3
+# dotscope post-merge
+import subprocess, sys
+try:
+    subprocess.run([sys.executable, "-m", "dotscope.cli", "refresh", "enqueue", "--repo", "--reason", "post-merge"],
+                   timeout=30, capture_output=True)
+    subprocess.Popen([sys.executable, "-m", "dotscope.cli", "refresh", "run", "--drain"],
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+except Exception:
+    pass
 """
 
 
@@ -158,7 +212,9 @@ def _remove_hook_lines(hook_path: Path, marker: str) -> bool:
                          or line.strip().startswith("print(") or line.strip().startswith("sys.exit")
                          or line.strip().startswith("result =") or line.strip().startswith("output =")
                          or line.strip().startswith("except") or line.strip().startswith("try:")
-                         or line.strip().startswith("pass")):
+                         or line.strip().startswith("pass")
+                         or line.strip().startswith("commit =")
+                         or line.strip().startswith("Popen(")):
             continue
         in_block = False
         filtered.append(line)
@@ -209,6 +265,14 @@ def install_hook(repo_root: str) -> str:
                 )
                 with open(post_path, "a", encoding="utf-8") as f:
                     f.write(f"\n{incremental_line}")
+            if _REFRESH_MARKER not in existing:
+                refresh_block = (
+                    '# dotscope refresh\n'
+                    'python3 -m dotscope.cli refresh enqueue --commit "$COMMIT_HASH" 2>/dev/null || true\n'
+                    'python3 -m dotscope.cli refresh run --drain 2>/dev/null || true &\n'
+                )
+                with open(post_path, "a", encoding="utf-8") as f:
+                    f.write(f"\n{refresh_block}")
             results.append(f"post-commit: {post_path} (existing, upgraded)")
         else:
             path = _write_hook(post_path, post_content, _POST_MARKER)
@@ -216,6 +280,16 @@ def install_hook(repo_root: str) -> str:
     else:
         path = _write_hook(post_path, post_content, _POST_MARKER)
         results.append(f"post-commit: {path}")
+
+    checkout_path = hooks_dir / "post-checkout"
+    checkout_content = _POST_CHECKOUT_PY if _is_windows_native() else _POST_CHECKOUT_SH
+    path = _write_hook(checkout_path, checkout_content, _POST_CHECKOUT_MARKER)
+    results.append(f"post-checkout: {path}")
+
+    merge_path = hooks_dir / "post-merge"
+    merge_content = _POST_MERGE_PY if _is_windows_native() else _POST_MERGE_SH
+    path = _write_hook(merge_path, merge_content, _POST_MERGE_MARKER)
+    results.append(f"post-merge: {path}")
 
     # Onboarding
     try:
@@ -235,6 +309,9 @@ def uninstall_hook(repo_root: str) -> bool:
     removed |= _remove_hook_lines(hooks_dir / "pre-commit", _PRE_MARKER)
     removed |= _remove_hook_lines(hooks_dir / "post-commit", _POST_MARKER)
     removed |= _remove_hook_lines(hooks_dir / "post-commit", _INCREMENTAL_MARKER)
+    removed |= _remove_hook_lines(hooks_dir / "post-commit", _REFRESH_MARKER)
+    removed |= _remove_hook_lines(hooks_dir / "post-checkout", _POST_CHECKOUT_MARKER)
+    removed |= _remove_hook_lines(hooks_dir / "post-merge", _POST_MERGE_MARKER)
 
     return removed
 
@@ -245,6 +322,8 @@ def is_hook_installed(repo_root: str) -> bool:
 
     pre_installed = False
     post_installed = False
+    checkout_installed = False
+    merge_installed = False
 
     pre_path = hooks_dir / "pre-commit"
     if pre_path.exists():
@@ -254,7 +333,15 @@ def is_hook_installed(repo_root: str) -> bool:
     if post_path.exists():
         post_installed = _POST_MARKER in post_path.read_text(encoding="utf-8")
 
-    return pre_installed or post_installed
+    checkout_path = hooks_dir / "post-checkout"
+    if checkout_path.exists():
+        checkout_installed = _POST_CHECKOUT_MARKER in checkout_path.read_text(encoding="utf-8")
+
+    merge_path = hooks_dir / "post-merge"
+    if merge_path.exists():
+        merge_installed = _POST_MERGE_MARKER in merge_path.read_text(encoding="utf-8")
+
+    return pre_installed or post_installed or checkout_installed or merge_installed
 
 
 def hook_status(repo_root: str) -> str:
@@ -273,5 +360,17 @@ def hook_status(repo_root: str) -> str:
         parts.append("post-commit: installed (feedback loop)")
     else:
         parts.append("post-commit: not installed")
+
+    checkout_path = hooks_dir / "post-checkout"
+    if checkout_path.exists() and _POST_CHECKOUT_MARKER in checkout_path.read_text(encoding="utf-8"):
+        parts.append("post-checkout: installed (branch refresh)")
+    else:
+        parts.append("post-checkout: not installed")
+
+    merge_path = hooks_dir / "post-merge"
+    if merge_path.exists() and _POST_MERGE_MARKER in merge_path.read_text(encoding="utf-8"):
+        parts.append("post-merge: installed (merge refresh)")
+    else:
+        parts.append("post-merge: not installed")
 
     return "\n".join(parts)

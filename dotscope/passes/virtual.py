@@ -20,10 +20,16 @@ from ..context import parse_context
 from ..graph import DependencyGraph
 from ..models.core import ScopeConfig
 from ..models.passes import VirtualScope  # noqa: F401
+from ..paths import make_relative, normalize_relative_path, normalize_scope_ref
 from ..tokens import estimate_scope_tokens
 
 # Utility directories whose files connect everything (not meaningful clusters)
 _UTILITY_DIRS = {"utils", "helpers", "common", "shared", "lib", "core"}
+
+
+def virtual_scope_directory(name: str) -> str:
+    """Return the canonical directory for a virtual scope."""
+    return normalize_relative_path(f"virtual/{name}")
 
 
 def detect_virtual_scopes(
@@ -209,9 +215,11 @@ def _cluster_to_scope(cluster: VirtualScope, root: str) -> Optional[ScopeConfig]
     token_est = estimate_scope_tokens(full_paths)
 
     related = [f"{d}/.scope" for d in sorted(dirs_spanned)]
+    related = [normalize_scope_ref(path) for path in related]
+    scope_dir = virtual_scope_directory(cluster.name)
 
     return ScopeConfig(
-        path=os.path.join(root, "virtual", f"{cluster.name}.scope"),
+        path=os.path.join(root, scope_dir, ".scope"),
         description=description,
         includes=cluster.files,
         excludes=[],
@@ -229,7 +237,7 @@ def format_virtual_scopes(scopes: List[ScopeConfig], root: str) -> str:
 
     lines = [f"Detected {len(scopes)} virtual scope(s):", ""]
     for scope in scopes:
-        lines.append(f"  {os.path.relpath(scope.path, root)}")
+        lines.append(f"  {make_relative(scope.path, root)}")
         lines.append(f"    {scope.description}")
         lines.append(f"    files: {len(scope.includes)}, ~{scope.tokens_estimate:,} tokens")
         if scope.related:

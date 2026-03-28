@@ -179,25 +179,20 @@ def _load_related(
     related_path: str, scope_dir: str, root: str
 ) -> Optional[ScopeConfig]:
     """Load a related scope file."""
-    from .parser import parse_scope_file
-
+    from .discovery import find_resolution_scope
     from .paths import strip_inline_comment
     related_path = strip_inline_comment(related_path)
 
     # Try relative to scope directory first
     candidate = os.path.normpath(os.path.join(scope_dir, related_path))
-    if os.path.isfile(candidate):
-        try:
-            return parse_scope_file(candidate)
-        except (ValueError, IOError):
-            return None
+    config = find_resolution_scope(candidate, root=root)
+    if config is not None:
+        return config
 
     # Try relative to root
     candidate = os.path.normpath(os.path.join(root, related_path))
-    if os.path.isfile(candidate):
-        try:
-            return parse_scope_file(candidate)
-        except (ValueError, IOError):
-            return None
+    config = find_resolution_scope(candidate, root=root)
+    if config is not None:
+        return config
 
     return None

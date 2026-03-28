@@ -13,6 +13,7 @@ Usage: dotscope <command>
   conventions               View and manage conventions
   voice                     View and manage code style
   health                    Scope staleness and drift
+  refresh                   Runtime refresh queue and worker
 
   ingest .                  Re-ingest (full scan)
   intent                    Declare architectural direction
@@ -167,13 +168,25 @@ Options:
 HELP_HOOK = """\
 Usage: dotscope hook <action>
 
-  dotscope hook install                Install pre-commit + post-commit hooks
+  dotscope hook install                Install pre-commit + refresh hooks
   dotscope hook claude                 Install Claude Code pre-commit enforcement
   dotscope hook uninstall              Remove all dotscope hooks
   dotscope hook status                 Check what's installed
 
 Pre-commit blocks on GUARDs only. NUDGEs and NOTEs pass through.
-Post-commit records observations for the feedback loop."""
+Post-commit records observations, runs incremental upkeep, and queues refresh."""
+
+HELP_REFRESH = """\
+Usage: dotscope refresh <action> [options]
+
+  dotscope refresh enqueue --commit <sha>     Classify a commit into refresh work
+  dotscope refresh enqueue auth api           Queue runtime scope refreshes
+  dotscope refresh enqueue --repo             Queue full runtime repo refresh
+  dotscope refresh run --drain                Drain the refresh queue now
+  dotscope refresh status                     Show worker + queue state
+
+Automatic refresh writes only to .dotscope/. Tracked .scope files stay stable
+until you run dotscope ingest."""
 
 HELP_COMMANDS = {
     "ingest": HELP_INGEST,
@@ -188,6 +201,7 @@ HELP_COMMANDS = {
     "debug": HELP_DEBUG,
     "health": HELP_HEALTH,
     "hook": HELP_HOOK,
+    "refresh": HELP_REFRESH,
 }
 
 

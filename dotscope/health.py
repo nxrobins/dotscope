@@ -3,36 +3,48 @@
 
 import os
 import re
-from typing import List, Optional, Set
+from typing import Iterable, List, Optional, Set
 
 from .constants import SKIP_DIRS, SOURCE_EXTS
 from .models import HealthIssue, HealthReport, ScopeConfig
+from .paths import make_relative, normalize, normalize_relative_path
 
 
-def full_health_report(root: str) -> HealthReport:
+STALE_TOLERANCE_SECONDS = 2.0
+
+
+def full_health_report(root: str, use_runtime: bool = True) -> HealthReport:
     """Run all health checks and return a combined report."""
-    from .discovery import find_all_scopes
+    from .discovery import find_all_scopes, load_resolution_scopes
     from .parser import parse_scope_file
+    from .storage.incremental_state import load_incremental_state
 
-    scope_files = find_all_scopes(root)
     issues: List[HealthIssue] = []
     scoped_dirs: Set[str] = set()
+    state = load_incremental_state(root)
+    configs: List[ScopeConfig] = []
 
-    for sf in scope_files:
-        try:
-            config = parse_scope_file(sf)
-        except (ValueError, IOError) as e:
-            issues.append(HealthIssue(
-                scope_path=sf, severity="error",
-                category="parse", message=str(e),
-            ))
-            continue
+    if use_runtime:
+        for logical_path, config, _source in load_resolution_scopes(root):
+            if not config.path:
+                config.path = os.path.join(root, logical_path.replace("/", os.sep))
+            configs.append(config)
+    else:
+        for sf in find_all_scopes(root):
+            try:
+                configs.append(parse_scope_file(sf))
+            except (ValueError, IOError) as e:
+                issues.append(HealthIssue(
+                    scope_path=sf, severity="error",
+                    category="parse", message=str(e),
+                ))
+                continue
 
-        scoped_dirs.add(os.path.dirname(sf))
-
-        issues.extend(check_staleness(config, root))
+    for config in configs:
+        scoped_dirs.add(os.path.dirname(config.path))
+        issues.extend(check_staleness(config, root, state=state))
         issues.extend(check_broken_paths(config, root))
-        issues.extend(check_import_drift(config))
+        issues.extend(check_import_drift(config, root))
 
     # Coverage check
     all_dirs = _find_source_dirs(root)
@@ -42,41 +54,35 @@ def full_health_report(root: str) -> HealthReport:
 
     return HealthReport(
         issues=issues,
-        scopes_checked=len(scope_files),
+        scopes_checked=len(configs),
         directories_total=len(all_dirs),
         directories_covered=len(scoped_dirs),
     )
 
 
-def check_staleness(config: ScopeConfig, root: str) -> List[HealthIssue]:
-    """Check if files in scope have been modified more recently than the .scope file."""
+def check_staleness(
+    config: ScopeConfig,
+    root: str,
+    state=None,
+    tolerance_seconds: float = STALE_TOLERANCE_SECONDS,
+) -> List[HealthIssue]:
+    """Check if files in scope have been modified more recently than the last refresh."""
     issues = []
-    scope_mtime = _get_mtime(config.path)
-    if scope_mtime is None:
+    refreshed_at = _get_scope_refresh_baseline(root, config, state=state)
+    if refreshed_at is None:
         return issues
 
     stale_files = []
 
-    for inc in config.includes:
-        full = os.path.normpath(os.path.join(root, inc))
-        if inc.endswith("/") or os.path.isdir(full.rstrip("/")):
-            dir_path = full.rstrip("/")
-            if os.path.isdir(dir_path):
-                for dirpath, _, filenames in os.walk(dir_path):
-                    for fn in filenames:
-                        fp = os.path.join(dirpath, fn)
-                        fmtime = _get_mtime(fp)
-                        if fmtime and fmtime > scope_mtime:
-                            stale_files.append(os.path.relpath(fp, root))
-        elif os.path.isfile(full):
-            fmtime = _get_mtime(full)
-            if fmtime and fmtime > scope_mtime:
-                stale_files.append(os.path.relpath(full, root))
+    for filepath in _iter_included_files(config, root):
+        fmtime = _get_mtime(filepath)
+        if fmtime and fmtime > refreshed_at + tolerance_seconds:
+            stale_files.append(make_relative(filepath, root))
 
     if stale_files:
         count = len(stale_files)
         sample = stale_files[:3]
-        msg = f"{count} file(s) modified since .scope was last updated: {', '.join(sample)}"
+        msg = f"{count} file(s) modified since scope was last refreshed: {', '.join(sample)}"
         if count > 3:
             msg += f" (+{count - 3} more)"
         issues.append(HealthIssue(
@@ -114,51 +120,42 @@ def check_broken_paths(config: ScopeConfig, root: str = "") -> List[HealthIssue]
     return issues
 
 
-def check_import_drift(config: ScopeConfig) -> List[HealthIssue]:
+def check_import_drift(config: ScopeConfig, root: str = "") -> List[HealthIssue]:
     """Check if imports in scoped files reference modules not in includes."""
     issues = []
-    scope_dir = config.directory
+    scope_root = root or _infer_scope_root(config)
+    if not scope_root:
+        return issues
+
+    scope_name = normalize_relative_path(make_relative(config.directory, scope_root)).split("/")[0]
     included_dirs = set()
 
     for inc in config.includes:
-        full = os.path.normpath(os.path.join(scope_dir, inc))
-        if inc.endswith("/") or os.path.isdir(full.rstrip("/")):
-            included_dirs.add(os.path.basename(full.rstrip("/")))
-        else:
-            included_dirs.add(os.path.dirname(inc).split("/")[0] if "/" in inc else "")
+        normalized = normalize_relative_path(inc)
+        if normalized.endswith("/"):
+            included_dirs.add(normalized.rstrip("/").split("/")[0])
+        elif "/" in normalized:
+            included_dirs.add(normalized.split("/")[0])
 
     # Find Python files in includes and check their imports
     drifted = set()
-    parent = os.path.dirname(scope_dir)
-
-    for inc in config.includes:
-        full = os.path.normpath(os.path.join(scope_dir, inc))
-        files = []
-        if os.path.isdir(full.rstrip("/")):
-            for dp, _, fns in os.walk(full.rstrip("/")):
-                for fn in fns:
-                    if fn.endswith(".py"):
-                        files.append(os.path.join(dp, fn))
-        elif full.endswith(".py") and os.path.isfile(full):
-            files.append(full)
-
-        for f in files:
-            try:
-                with open(f, "r", encoding="utf-8", errors="replace") as fh:
-                    for line in fh:
-                        m = re.match(r"from\s+([\w.]+)\s+import", line.strip())
-                        if m:
-                            module = m.group(1).split(".")[0]
-                            candidate = os.path.join(parent, module)
-                            if (
-                                os.path.isdir(candidate)
-                                and module not in included_dirs
-                                and candidate != scope_dir
-                                and module not in SKIP_DIRS
-                            ):
-                                drifted.add(module)
-            except (IOError, OSError):
-                continue
+    for f in _iter_included_files(config, scope_root, suffixes=(".py",)):
+        try:
+            with open(f, "r", encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    m = re.match(r"from\s+([\w.]+)\s+import", line.strip())
+                    if m:
+                        module = m.group(1).split(".")[0]
+                        candidate = os.path.join(scope_root, module)
+                        if (
+                            os.path.isdir(candidate)
+                            and module not in included_dirs
+                            and module != scope_name
+                            and module not in SKIP_DIRS
+                        ):
+                            drifted.add(module)
+        except (IOError, OSError):
+            continue
 
     if drifted:
         msg = f"imports reference modules not in includes: {', '.join(sorted(drifted))}"
@@ -210,3 +207,46 @@ def _get_mtime(path: str) -> Optional[float]:
         return os.path.getmtime(path)
     except OSError:
         return None
+
+
+def _infer_scope_root(config: ScopeConfig) -> Optional[str]:
+    """Infer the repository root for a scope when one is not passed in."""
+    from .discovery import find_repo_root
+
+    return find_repo_root(config.directory) or os.path.dirname(config.directory)
+
+
+def _get_scope_refresh_baseline(root: str, config: ScopeConfig, state=None) -> Optional[float]:
+    """Return the baseline timestamp for freshness comparisons."""
+    from .storage.incremental_state import get_scope_refresh_epoch
+
+    refreshed_at = get_scope_refresh_epoch(root, config.path, state=state)
+    if refreshed_at is not None:
+        return refreshed_at
+    return _get_mtime(config.path)
+
+
+def _iter_included_files(
+    config: ScopeConfig,
+    root: str,
+    suffixes: Optional[Iterable[str]] = None,
+) -> Iterable[str]:
+    """Yield concrete files covered by scope includes."""
+    allowed_suffixes = tuple(suffixes) if suffixes else None
+
+    for include in config.includes:
+        full = normalize(root, include)
+        if include.endswith("/") or os.path.isdir(full.rstrip("/\\")):
+            dir_path = full.rstrip("/\\")
+            if not os.path.isdir(dir_path):
+                continue
+            for dirpath, _, filenames in os.walk(dir_path):
+                for filename in filenames:
+                    filepath = os.path.join(dirpath, filename)
+                    if allowed_suffixes and not filepath.endswith(allowed_suffixes):
+                        continue
+                    yield filepath
+        elif os.path.isfile(full):
+            if allowed_suffixes and not full.endswith(allowed_suffixes):
+                continue
+            yield full

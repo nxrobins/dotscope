@@ -5,6 +5,10 @@ import time
 import pytest
 from dotscope.health import full_health_report, check_staleness, check_broken_paths
 from dotscope.parser import parse_scope_file
+from dotscope.storage.incremental_state import (
+    IncrementalState,
+    save_incremental_state,
+)
 
 
 class TestHealth:
@@ -50,6 +54,57 @@ class TestHealth:
         issues = check_staleness(config, str(tmp_path))
         assert len(issues) >= 1
         assert issues[0].category == "staleness"
+
+    def test_staleness_cleared_by_refresh_state(self, tmp_path):
+        (tmp_path / ".git").mkdir()
+        mod = tmp_path / "fresh"
+        mod.mkdir()
+        (mod / "code.py").write_text("# code\n")
+        (mod / ".scope").write_text(
+            "description: Fresh scope\n"
+            "includes:\n"
+            "  - fresh/\n"
+        )
+
+        scope_path = str(mod / ".scope")
+        old_time = time.time() - 1000
+        os.utime(scope_path, (old_time, old_time))
+
+        save_incremental_state(
+            str(tmp_path),
+            IncrementalState(
+                scope_refresh_timestamps={
+                    "fresh/.scope": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                },
+            ),
+        )
+
+        config = parse_scope_file(scope_path)
+        assert check_staleness(config, str(tmp_path)) == []
+
+    def test_staleness_uses_refresh_state_when_older(self, tmp_path):
+        (tmp_path / ".git").mkdir()
+        mod = tmp_path / "tracked"
+        mod.mkdir()
+        (mod / "code.py").write_text("# code\n")
+        (mod / ".scope").write_text(
+            "description: Tracked scope\n"
+            "includes:\n"
+            "  - tracked/\n"
+        )
+
+        refreshed_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 1000))
+        save_incremental_state(
+            str(tmp_path),
+            IncrementalState(
+                scope_refresh_timestamps={"tracked/.scope": refreshed_at},
+            ),
+        )
+
+        config = parse_scope_file(str(mod / ".scope"))
+        issues = check_staleness(config, str(tmp_path))
+        assert len(issues) == 1
+        assert "last refreshed" in issues[0].message
 
     def test_coverage_gap_detected(self, tmp_path):
         (tmp_path / ".git").mkdir()

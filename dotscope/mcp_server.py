@@ -126,9 +126,17 @@ def main():
         from .passes.budget_allocator import apply_budget
         from .discovery import find_repo_root
         from .formatter import format_resolved
+        from .refresh import ensure_resolution_freshness, refresh_status_summary
 
         root = find_repo_root()
         dot_dir = Path(root) / ".dotscope" if root else None
+        freshness = ensure_resolution_freshness(root, scope) if root else {
+            "state": "fresh",
+            "source": "tracked_snapshot",
+            "last_refreshed": "",
+            "healed": False,
+            "job_kind": None,
+        }
         resolved = compose(scope, root=root, follow_related=follow_related)
 
         # Wire 1: inject lessons and invariants into context
@@ -220,6 +228,7 @@ def main():
                     graph_hubs=_cached_graph_hubs,
                     scope_directory=module,
                 )
+                data["freshness"] = freshness
 
                 # Constraints (prophylactic enforcement)
                 try:
@@ -348,13 +357,23 @@ def main():
                     nudges = check_health_nudges(
                         observations, scope, repo_root=root,
                     )
-                    # Check for needs_full_ingest marker
-                    _marker = os.path.join(root, ".dotscope", "needs_full_ingest")
-                    if os.path.exists(_marker):
+                    refresh_status = refresh_status_summary(root)
+                    if refresh_status.get("running") and refresh_status.get("current_job") == "repo":
                         nudges = nudges or []
-                        nudges.append(
-                            "Full re-ingest recommended: run `dotscope ingest .`"
-                        )
+                        nudges.append({
+                            "scope": module,
+                            "issue": "repo_refresh_running",
+                            "message": "A background repo refresh is rebuilding live scopes.",
+                            "suggestion": "dotscope refresh status",
+                        })
+                    elif any(job.get("kind") == "repo" for job in refresh_status.get("queued_jobs", [])):
+                        nudges = nudges or []
+                        nudges.append({
+                            "scope": module,
+                            "issue": "repo_refresh_queued",
+                            "message": "A background repo refresh is queued for live scope updates.",
+                            "suggestion": "dotscope refresh status",
+                        })
                     if nudges:
                         data["health_warnings"] = nudges
 
@@ -408,28 +427,22 @@ def main():
             task: Natural language description of what you're working on
         """
         from .discovery import find_repo_root, load_index, find_all_scopes
+        from .discovery import load_resolution_index, load_resolution_scopes
         from .matcher import match_task
-        from .parser import parse_scope_file
 
         root = find_repo_root()
         if root is None:
             return json.dumps({"error": "Could not find repository root"})
 
-        index = load_index(root)
-        scope_files = find_all_scopes(root)
+        index = load_resolution_index(root)
 
         scopes = []
         if index:
             for name, entry in index.scopes.items():
                 scopes.append((name, entry.keywords, entry.description or ""))
         else:
-            for sf in scope_files:
-                try:
-                    config = parse_scope_file(sf)
-                    name = os.path.relpath(os.path.dirname(sf), root)
-                    scopes.append((name, config.tags, config.description))
-                except (ValueError, IOError):
-                    continue
+            for logical_path, config, _source in load_resolution_scopes(root):
+                scopes.append((os.path.dirname(logical_path) or ".", config.tags, config.description))
 
         matches = match_task(task, scopes)
 
@@ -452,11 +465,14 @@ def main():
             scope: Scope name or path
             section: Optional section name to filter (e.g., "invariants", "gotchas")
         """
-        from .discovery import find_scope, find_repo_root
+        from .discovery import find_repo_root, find_resolution_scope
         from .context import query_context
+        from .refresh import ensure_resolution_freshness
 
         root = find_repo_root()
-        config = find_scope(scope, root)
+        if root is not None:
+            ensure_resolution_freshness(root, scope)
+        config = find_resolution_scope(scope, root)
         if config is None:
             return json.dumps({"error": f"Scope not found: {scope}"})
 
@@ -474,15 +490,18 @@ def main():
 
         Searches the .scopes index and/or walks the directory tree for .scope files.
         """
-        from .discovery import find_repo_root, load_index, find_all_scopes
-        from .parser import parse_scope_file
+        from .discovery import (
+            find_repo_root,
+            load_resolution_index,
+            load_resolution_scopes,
+        )
 
         root = find_repo_root()
         if root is None:
             return json.dumps({"error": "Could not find repository root"})
 
         scopes = []
-        index = load_index(root)
+        index = load_resolution_index(root)
 
         if index:
             for name, entry in index.scopes.items():
@@ -493,18 +512,15 @@ def main():
                     "description": entry.description,
                 })
         else:
-            for sf in find_all_scopes(root):
-                try:
-                    config = parse_scope_file(sf)
-                    scopes.append({
-                        "name": os.path.relpath(os.path.dirname(sf), root),
-                        "path": os.path.relpath(sf, root),
-                        "tags": config.tags,
-                        "description": config.description,
-                        "tokens_estimate": config.tokens_estimate,
-                    })
-                except (ValueError, IOError):
-                    continue
+            for logical_path, config, source in load_resolution_scopes(root):
+                scopes.append({
+                    "name": os.path.dirname(logical_path) or ".",
+                    "path": logical_path,
+                    "tags": config.tags,
+                    "description": config.description,
+                    "tokens_estimate": config.tokens_estimate,
+                    "source": source,
+                })
 
         return json.dumps({"scopes": scopes, "count": len(scopes)}, indent=2)
 
@@ -565,7 +581,7 @@ def main():
         if root is None:
             return json.dumps({"error": "Could not find repository root"})
 
-        report = full_health_report(root)
+        report = full_health_report(root, use_runtime=True)
         return json.dumps({
             "scopes_checked": report.scopes_checked,
             "coverage_pct": round(report.coverage_pct, 1),

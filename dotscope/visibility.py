@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Set
 
 from .models.state import ObservationLog, SessionLog, SessionStats  # noqa: F401
+from .paths import normalize_relative_path
 
 
 class SessionTracker:
@@ -452,6 +453,7 @@ def check_health_nudges(
     threshold_drop: float = ACCURACY_DROP_THRESHOLD,
 ) -> List[dict]:
     """Generate health warnings for a scope on resolve."""
+    scope = normalize_relative_path(scope).rstrip("/")
     warnings = []
 
     # 1. Accuracy degradation
@@ -472,24 +474,38 @@ def check_health_nudges(
                     "suggestion": f"dotscope health {scope}",
                 })
 
-    # 2. Staleness (scope file age + commits since)
+    # 2. Staleness (scope refresh age + commits since)
     if repo_root:
-        scope_path = os.path.join(repo_root, scope, ".scope")
-        if os.path.exists(scope_path):
-            mtime = os.path.getmtime(scope_path)
-            days_since = int((time.time() - mtime) / 86400)
-            if days_since > STALENESS_DAYS:
-                commits = _count_commits_since(repo_root, scope, mtime)
-                if commits > 0:
-                    warnings.append({
-                        "scope": scope,
-                        "issue": "stale",
-                        "message": (
-                            f"{scope}/ hasn't been updated in {days_since} days"
-                            f" . {commits} commits have touched this module"
-                        ),
-                        "suggestion": f"dotscope ingest {scope}/",
-                    })
+        try:
+            from .discovery import find_resolution_scope_with_source
+            from .storage.incremental_state import (
+                get_scope_refresh_epoch,
+                load_incremental_state,
+            )
+
+            config, _source = find_resolution_scope_with_source(scope, root=repo_root)
+            if config is not None:
+                state = load_incremental_state(repo_root)
+                refreshed_at = get_scope_refresh_epoch(repo_root, config.path, state=state)
+                baseline = refreshed_at
+                if baseline is None and os.path.exists(config.path):
+                    baseline = os.path.getmtime(config.path)
+                if baseline is not None:
+                    days_since = int((time.time() - baseline) / 86400)
+                    if days_since > STALENESS_DAYS:
+                        commits = _count_commits_since(repo_root, config.includes, baseline)
+                        if commits > 0:
+                            warnings.append({
+                                "scope": scope,
+                                "issue": "stale",
+                                "message": (
+                                    f"{scope}/ hasn't been refreshed in {days_since} days"
+                                    f" . {commits} commits have touched files in this scope"
+                                ),
+                                "suggestion": "dotscope refresh status",
+                            })
+        except Exception:
+            pass
 
     # 3. Uncovered files
     if repo_root:
@@ -508,16 +524,23 @@ def check_health_nudges(
     return warnings
 
 
-def _count_commits_since(repo_root: str, scope: str, since_ts: float) -> int:
-    """Count commits touching files in this scope's directory since a timestamp."""
+def _count_commits_since(repo_root: str, paths: List[str], since_ts: float) -> int:
+    """Count commits touching any included path since a timestamp."""
     import subprocess
     from datetime import datetime, timezone
+
+    normalized_paths = list(dict.fromkeys(
+        normalize_relative_path(path) for path in paths if path
+    ))
+    if not normalized_paths:
+        return 0
+
     since_dt = datetime.fromtimestamp(since_ts, tz=timezone.utc)
     try:
         result = subprocess.run(
             ["git", "log", "--oneline",
              f"--since={since_dt.isoformat()}",
-             "--", f"{scope}/"],
+             "--", *normalized_paths],
             capture_output=True, text=True, cwd=repo_root, timeout=10,
         )
         return len(result.stdout.strip().splitlines()) if result.stdout.strip() else 0
@@ -546,17 +569,17 @@ def _count_uncovered_files(repo_root: str, scope: str) -> int:
     # Subtract the files that ARE in includes (rough: count files under scope/)
     # The includes typically have "scope/" which covers all, so uncovered = 0 in that case
     # Only flag if the scope file exists but doesn't include the directory
-    scope_path = os.path.join(repo_root, scope, ".scope")
-    if os.path.exists(scope_path):
-        try:
-            from .parser import parse_scope_file
-            config = parse_scope_file(scope_path)
-            # If the scope includes the directory itself, all files are covered
-            if any(inc.rstrip("/") == scope or inc.startswith(scope + "/")
-                   for inc in config.includes):
-                return 0
-        except Exception:
-            pass
+    try:
+        from .discovery import find_resolution_scope
+
+        config = find_resolution_scope(scope, root=repo_root)
+        if config and any(
+            inc.rstrip("/") == scope or inc.startswith(scope + "/")
+            for inc in config.includes
+        ):
+            return 0
+    except Exception:
+        pass
 
     return count
 

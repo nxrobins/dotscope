@@ -69,3 +69,27 @@ class TestVirtualScopes:
         graph = build_graph(str(tmp_path))
         text = format_virtual_scopes([], str(tmp_path))
         assert "No cross-cutting" in text
+
+    def test_virtual_scope_paths_are_canonical(self, tmp_path):
+        models = tmp_path / "models"
+        models.mkdir()
+        (models / "__init__.py").write_text("")
+        (models / "user.py").write_text("class User: pass\n")
+
+        for name in ("auth", "api", "admin"):
+            d = tmp_path / name
+            d.mkdir()
+            (d / "__init__.py").write_text("")
+            (d / "handler.py").write_text("from models.user import User\n")
+
+        (tmp_path / ".git").mkdir()
+        graph = build_graph(str(tmp_path))
+        scopes = detect_virtual_scopes(graph, min_importers=3, min_directories=2)
+
+        user_scope = next(scope for scope in scopes if "user_lifecycle" in scope.description)
+        assert user_scope.path.endswith("virtual/user_lifecycle/.scope")
+        assert all("\\" not in include for include in user_scope.includes)
+        assert all("\\" not in related for related in user_scope.related)
+
+        formatted = format_virtual_scopes([user_scope], str(tmp_path))
+        assert "virtual/user_lifecycle/.scope" in formatted

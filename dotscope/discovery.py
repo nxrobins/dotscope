@@ -1,8 +1,8 @@
-"""Discover repo roots, .scope files, and .scopes index files."""
+"""Discover repo roots, tracked scopes, and runtime-effective scope views."""
 
 
 import os
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from .constants import SKIP_DIRS
 from .models import ScopeConfig, ScopesIndex
@@ -56,6 +56,13 @@ def load_index(root: str) -> Optional[ScopesIndex]:
     return None
 
 
+def load_resolution_index(root: str) -> Optional[ScopesIndex]:
+    """Load the merged tracked + runtime index used for live resolution."""
+    from .runtime_overlay import load_effective_index
+
+    return load_effective_index(root)
+
+
 def find_scope(name_or_path: str, root: Optional[str] = None) -> Optional[ScopeConfig]:
     """Resolve a scope by name (from index), path, or directory.
 
@@ -102,3 +109,30 @@ def find_scope(name_or_path: str, root: Optional[str] = None) -> Optional[ScopeC
         return parse_scope_file(candidate)
 
     return None
+
+
+def find_resolution_scope(
+    name_or_path: str,
+    root: Optional[str] = None,
+) -> Optional[ScopeConfig]:
+    """Resolve a scope using runtime overlay first, then tracked fallback."""
+    from .runtime_overlay import find_effective_scope
+
+    return find_effective_scope(name_or_path, root=root)
+
+
+def find_resolution_scope_with_source(
+    name_or_path: str,
+    root: Optional[str] = None,
+) -> Tuple[Optional[ScopeConfig], Optional[str]]:
+    """Resolve a scope plus its source: runtime overlay or tracked snapshot."""
+    from .runtime_overlay import find_effective_scope_with_source
+
+    return find_effective_scope_with_source(name_or_path, root=root)
+
+
+def load_resolution_scopes(root: str) -> List[Tuple[str, ScopeConfig, str]]:
+    """Load every live scope config, preferring runtime overlay entries."""
+    from .runtime_overlay import load_effective_scope_configs
+
+    return load_effective_scope_configs(root)

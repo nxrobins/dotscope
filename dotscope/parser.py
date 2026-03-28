@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .context import parse_context
 from .models import ScopeConfig, ScopeEntry, ScopesIndex
+from .paths import normalize_relative_path, normalize_scope_ref
 
 
 def parse_scope_file(path: str) -> ScopeConfig:
@@ -35,10 +36,10 @@ def parse_scope_file(path: str) -> ScopeConfig:
     return ScopeConfig(
         path=path,
         description=str(description),
-        includes=_as_list(data.get("includes", [])),
-        excludes=_as_list(data.get("excludes", [])),
+        includes=[normalize_relative_path(p) for p in _as_list(data.get("includes", []))],
+        excludes=[normalize_relative_path(p) for p in _as_list(data.get("excludes", []))],
         context=context,
-        related=_as_list(data.get("related", [])),
+        related=[normalize_scope_ref(p) for p in _as_list(data.get("related", []))],
         owners=_as_list(data.get("owners", [])),
         tags=_as_list(data.get("tags", [])),
         tokens_estimate=tokens_est,
@@ -69,7 +70,7 @@ def parse_scopes_index(path: str) -> ScopesIndex:
                     keywords = _parse_inline_list(keywords)
                 scopes[name] = ScopeEntry(
                     name=name,
-                    path=str(entry_data.get("path", "")),
+                    path=normalize_scope_ref(str(entry_data.get("path", ""))),
                     keywords=keywords,
                     description=entry_data.get("description"),
                 )

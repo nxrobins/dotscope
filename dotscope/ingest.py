@@ -21,6 +21,11 @@ from .models.core import ScopeConfig, ScopesIndex, ScopeEntry
 from .models.passes import IngestPlan, PlannedScope  # noqa: F401
 from .models.state import BacktestReport
 from .parser import serialize_scope
+from .paths import (
+    normalize_directory_include,
+    normalize_relative_path,
+    normalize_scope_ref,
+)
 from .tokens import estimate_scope_tokens
 
 
@@ -33,6 +38,7 @@ def ingest(
     dry_run: bool = False,
     quiet: bool = False,
     voice_override: Optional[str] = None,
+    respect_existing_scopes: bool = True,
 ) -> IngestPlan:
     """Ingest a codebase and produce .scope files.
 
@@ -131,7 +137,15 @@ def ingest(
     # Step 4: Synthesize scope files
     progress.start("generating scopes")
     for module in graph.modules:
-        planned = synthesize_scope(module, graph, history, docs, root, synthesize)
+        planned = synthesize_scope(
+            module,
+            graph,
+            history,
+            docs,
+            root,
+            synthesize,
+            respect_existing_scopes=respect_existing_scopes,
+        )
         if planned:
             plan.scopes.append(planned)
 
@@ -141,7 +155,7 @@ def ingest(
     plan.virtual_scopes = virtual_scopes
     for vs in virtual_scopes:
         plan.scopes.append(PlannedScope(
-            directory=f"virtual/{vs.description.split('(')[0].strip().split(':')[-1].strip()}",
+            directory=_planned_scope_directory(root, vs),
             config=vs,
             confidence=0.7,
             signals=["graph: cross-cutting hub detection"],
@@ -200,10 +214,18 @@ def ingest(
         # Reset incremental state + remove needs_full_ingest marker
         try:
             from .storage.incremental_state import reset_incremental_state
-            reset_incremental_state(root)
+            reset_incremental_state(
+                root,
+                scope_paths=_refreshed_scope_paths(root, graph.modules, virtual_scopes),
+            )
             marker = os.path.join(root, ".dotscope", "needs_full_ingest")
             if os.path.exists(marker):
                 os.remove(marker)
+        except Exception:
+            pass
+        try:
+            from .runtime_overlay import sync_runtime_overlay
+            sync_runtime_overlay(root)
         except Exception:
             pass
 
@@ -217,13 +239,14 @@ def synthesize_scope(
     docs: AbsorptionResult,
     root: str,
     use_llm: bool,
+    respect_existing_scopes: bool = True,
 ) -> Optional[PlannedScope]:
     """Synthesize a single .scope file from all available signals."""
     directory = module.directory
     scope_path = os.path.join(root, directory, ".scope")
 
     # Skip if .scope already exists
-    if os.path.exists(scope_path):
+    if respect_existing_scopes and os.path.exists(scope_path):
         return None
 
     signals = []
@@ -247,9 +270,10 @@ def synthesize_scope(
         description = f"{directory} -- {lang} module ({file_count} files)"
 
     signals.append(f"graph: {file_count} files, cohesion {module.cohesion:.0%}")
+    directory_prefix = normalize_directory_include(directory)
 
     # --- Includes ---
-    includes = [f"{directory}/"]
+    includes = [directory_prefix]
 
     # Add cross-module dependencies detected from imports
     for dep in module.external_deps:
@@ -263,10 +287,11 @@ def synthesize_scope(
 
     # Add change-coupled files from other modules
     for coupling in history.change_couplings:
-        for f in [coupling.file_a, coupling.file_b]:
-            if f.startswith(directory + "/"):
-                other = coupling.file_b if f == coupling.file_a else coupling.file_a
-                if not other.startswith(directory + "/") and coupling.coupling_strength >= 0.7:
+        file_a = normalize_relative_path(coupling.file_a)
+        file_b = normalize_relative_path(coupling.file_b)
+        for current, other in ((file_a, file_b), (file_b, file_a)):
+            if current.startswith(directory_prefix):
+                if not other.startswith(directory_prefix) and coupling.coupling_strength >= 0.7:
                     if other not in includes:
                         includes.append(other)
                         signals.append(f"history: {other} coupled at {coupling.coupling_strength:.0%}")
@@ -280,8 +305,8 @@ def synthesize_scope(
     # 1. Implicit contracts FIRST — the thing nobody documented
     relevant_contracts = [
         ic for ic in history.implicit_contracts
-        if ic.trigger_file.startswith(directory + "/")
-        or ic.coupled_file.startswith(directory + "/")
+        if normalize_relative_path(ic.trigger_file).startswith(directory_prefix)
+        or normalize_relative_path(ic.coupled_file).startswith(directory_prefix)
     ]
     if relevant_contracts:
         context_parts.append("## Implicit Contracts (from git history)")
@@ -355,10 +380,10 @@ def synthesize_scope(
     # --- Related ---
     related = []
     for dep in module.external_deps:
-        scope_candidate = f"{dep}/.scope"
+        scope_candidate = normalize_scope_ref(f"{dep}/.scope")
         related.append(scope_candidate)
     for dep_by in module.depended_on_by:
-        scope_candidate = f"{dep_by}/.scope"
+        scope_candidate = normalize_scope_ref(f"{dep_by}/.scope")
         if scope_candidate not in related:
             related.append(scope_candidate)
 
@@ -398,6 +423,27 @@ def synthesize_scope(
     )
 
 
+def _planned_scope_directory(root: str, config: ScopeConfig) -> str:
+    """Return the canonical directory segment for a planned scope."""
+    return normalize_relative_path(os.path.relpath(os.path.dirname(config.path), root))
+
+
+def _scope_index_path(directory: str) -> str:
+    """Return the canonical .scopes entry path for a scope directory."""
+    return normalize_scope_ref(f"{directory}/.scope")
+
+
+def _refreshed_scope_paths(
+    root: str,
+    modules: List[ModuleBoundary],
+    virtual_scopes: List[ScopeConfig],
+) -> List[str]:
+    """Return every discovered scope path that should be marked freshly ingested."""
+    scope_paths = [os.path.join(root, module.directory, ".scope") for module in modules]
+    scope_paths.extend(scope.path for scope in virtual_scopes)
+    return scope_paths
+
+
 def _find_cross_module_imports(
     module: ModuleBoundary, dep_module: str, graph: DependencyGraph
 ) -> List[str]:
@@ -408,7 +454,7 @@ def _find_cross_module_imports(
         if not node:
             continue
         for imp in node.imports:
-            if imp.startswith(dep_module + "/"):
+            if imp.startswith(normalize_directory_include(dep_module)):
                 imported.add(imp)
     return sorted(imported)
 
@@ -424,7 +470,7 @@ def _default_excludes(directory: str, files: List[str]) -> List[str]:
     # Detect test/fixture/migration directories
     subdirs = set()
     for f in files:
-        parts = f.split("/")
+        parts = normalize_relative_path(f).split("/")
         if len(parts) > 2:  # directory/subdir/file
             subdirs.add(parts[1])
 
@@ -454,7 +500,7 @@ def _build_index(
 
         entries[name] = ScopeEntry(
             name=name,
-            path=f"{ps.directory}/.scope",
+            path=_scope_index_path(ps.directory),
             keywords=keywords[:15],  # Cap at 15
             description=ps.config.description,
         )
@@ -483,7 +529,7 @@ def append_to_index(root: str, planned: PlannedScope) -> None:
 
     index.scopes[name] = ScopeEntry(
         name=name,
-        path=f"{planned.directory}/.scope",
+        path=_scope_index_path(planned.directory),
         keywords=keywords[:15],
         description=planned.config.description,
     )
@@ -499,7 +545,7 @@ def _write_scopes(plan: IngestPlan) -> None:
     written = 0
 
     for ps in plan.scopes:
-        scope_path = os.path.join(plan.root, ps.directory, ".scope")
+        scope_path = ps.config.path
         # Don't overwrite existing
         if os.path.exists(scope_path):
             continue
@@ -627,6 +673,8 @@ def format_ingest_report(plan: IngestPlan) -> str:
 
 def _is_cross_module(file_a: str, file_b: str) -> bool:
     """True if two files are in different top-level directories."""
+    file_a = normalize_relative_path(file_a)
+    file_b = normalize_relative_path(file_b)
     dir_a = file_a.split("/")[0] if "/" in file_a else ""
     dir_b = file_b.split("/")[0] if "/" in file_b else ""
     return dir_a != dir_b and bool(dir_a) and bool(dir_b)
@@ -679,15 +727,16 @@ def _find_volatility_surprises(
     for path, fh in history.file_histories.items():
         if fh.stability != "volatile":
             continue
-        parts = path.split("/")
+        parts = normalize_relative_path(path).split("/")
         if len(parts) > 1 and parts[0].lower() in _EXPECTED_STABLE:
-            surprises.append((path, fh))
+            surprises.append((normalize_relative_path(path), fh))
 
     # Also include the repo's most-changed file if high churn
     if history.hotspots:
         top_path, _top_churn = history.hotspots[0]
         top_fh = history.file_histories.get(top_path)
         if top_fh and top_fh.commit_count >= 10:
+            top_path = normalize_relative_path(top_path)
             if not any(p == top_path for p, _ in surprises):
                 surprises.insert(0, (top_path, top_fh))
 
