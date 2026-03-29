@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .models import CheckReport, CheckResult, Severity
+from ...textio import read_repo_text
 from .checks.boundary import check_boundaries
 from .checks.contracts import check_contracts
 from .checks.antipattern import check_antipatterns
@@ -266,8 +267,7 @@ def _load_scopes_with_antipatterns(repo_root: str) -> Dict[str, dict]:
                 rel_dir = ""
 
             # Parse the raw YAML to get anti_patterns (not in ScopeConfig model)
-            with open(sf, "r", encoding="utf-8") as f:
-                raw = _parse_yaml(f.read())
+            raw = _parse_yaml(read_repo_text(sf).text)
 
             scopes[rel_dir] = {
                 "anti_patterns": raw.get("anti_patterns", []),

@@ -124,6 +124,19 @@ class TestHealth:
         coverage_issues = [i for i in report.issues if i.category == "coverage"]
         assert any("unscoped" in i.message for i in coverage_issues)
 
+    def test_encoding_issue_detected(self, tmp_path):
+        (tmp_path / ".git").mkdir()
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        (docs / "README.md").write_bytes(b"# Caf\xe9\n")
+
+        report = full_health_report(str(tmp_path))
+
+        encoding_issues = [i for i in report.issues if i.category == "encoding"]
+        assert len(encoding_issues) == 1
+        assert encoding_issues[0].severity == "warning"
+        assert encoding_issues[0].scope_path.endswith("docs/README.md")
+
     def test_scoped_dirs_counted(self, tmp_project):
         report = full_health_report(str(tmp_project))
         assert report.directories_covered >= 2  # auth + payments have scopes

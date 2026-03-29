@@ -125,6 +125,22 @@ class TestIngest:
         assert plan.index is not None
         assert len(plan.index.scopes) >= 3
 
+    def test_ingest_survives_non_utf8_source(self, tmp_path):
+        _git_init(tmp_path)
+
+        mod = tmp_path / "legacy"
+        mod.mkdir()
+        (mod / "__init__.py").write_text("")
+        (mod / "main.py").write_bytes(
+            b"# Caf\xe9\n"
+            b"def run():\n"
+            b"    return 1\n"
+        )
+
+        plan = ingest(str(tmp_path), mine_history=False, dry_run=True)
+
+        assert any(scope.directory == "legacy" for scope in plan.scopes)
+
     def test_virtual_scope_bookkeeping_is_consistent(self, tmp_path):
         _git_init(tmp_path)
 

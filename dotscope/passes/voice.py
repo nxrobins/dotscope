@@ -5,6 +5,7 @@ import os
 from typing import Dict, List, Optional
 
 from ..models.intent import CanonicalExample
+from ..textio import read_repo_text
 
 
 def build_voice_response(
@@ -78,10 +79,9 @@ def extract_canonical_snippet(
         return None
 
     try:
-        with open(full_path, "r", encoding="utf-8") as f:
-            source = f.read()
+        source = read_repo_text(full_path).text
         tree = ast.parse(source)
-    except (SyntaxError, IOError, UnicodeDecodeError):
+    except (SyntaxError, IOError, OSError):
         return None
 
     # Find the first class or function definition
@@ -144,9 +144,8 @@ def select_canonical(
         fp = getattr(n, "file_path", "")
         full = os.path.join(repo_root, fp)
         try:
-            with open(full, "r", encoding="utf-8") as f:
-                length = len(f.readlines())
-        except (IOError, UnicodeDecodeError):
+            length = len(read_repo_text(full).text.splitlines())
+        except (IOError, OSError):
             length = 0
         lengths.append((n, length))
 

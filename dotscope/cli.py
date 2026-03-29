@@ -15,6 +15,10 @@ def _safe_print(text, **kwargs):
 
 
 def main(argv=None):
+    from .textio import consume_decode_warnings
+
+    consume_decode_warnings()
+
     # Intercept help before argparse touches it
     args_list = argv if argv is not None else sys.argv[1:]
     if not args_list or args_list == ["help"] or args_list == ["--help"] or args_list == ["-h"]:
@@ -236,6 +240,16 @@ def main(argv=None):
     except (ValueError, FileNotFoundError) as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+    finally:
+        warnings = consume_decode_warnings()
+        if warnings:
+            count = len(warnings)
+            noun = "file" if count == 1 else "files"
+            _safe_print(
+                f"dotscope: decoded {count} repo {noun} with replacement; "
+                "run `dotscope health` for details",
+                file=sys.stderr,
+            )
 
 
 # ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ Defined in intent.yaml (project-wide) or .scope files (per-scope).
 from typing import Dict, List, Optional
 
 from .models.intent import Assertion, ContextExhaustionError  # noqa: F401
+from .textio import read_repo_text
 
 
 def load_assertions(repo_root: str, scope_name: str = "") -> List[Assertion]:
@@ -26,8 +27,7 @@ def load_assertions(repo_root: str, scope_name: str = "") -> List[Assertion]:
     intent_path = os.path.join(repo_root, "intent.yaml")
     if os.path.exists(intent_path):
         from .parser import _parse_yaml
-        with open(intent_path, "r", encoding="utf-8") as f:
-            data = _parse_yaml(f.read())
+        data = _parse_yaml(read_repo_text(intent_path).text)
         for item in _to_list_of_dicts(data.get("assertions", [])):
             assertions.append(_parse_assertion(item))
 
@@ -38,8 +38,7 @@ def load_assertions(repo_root: str, scope_name: str = "") -> List[Assertion]:
         if scope_path:
             try:
                 from .parser import _parse_yaml
-                with open(scope_path, "r", encoding="utf-8") as f:
-                    data = _parse_yaml(f.read())
+                data = _parse_yaml(read_repo_text(scope_path).text)
                 raw = data.get("assertions", {})
                 if isinstance(raw, dict):
                     a = Assertion(scope=scope_name)

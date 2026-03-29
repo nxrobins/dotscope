@@ -127,3 +127,17 @@ class TestDefaults:
         d = prescriptive_defaults()
         assert "typing" in d.rules
         assert "docstrings" in d.rules
+
+
+class TestUtfHandling:
+    def test_discover_voice_handles_non_utf8_source(self, tmp_path):
+        path = tmp_path / "mod.py"
+        path.write_bytes(
+            b"# Caf\xe9\n"
+            b"def process(data):\n"
+            b"    return data\n"
+        )
+
+        voice = discover_voice({"mod.py": object()}, str(tmp_path))
+
+        assert voice.stats["files_analyzed"] == 1

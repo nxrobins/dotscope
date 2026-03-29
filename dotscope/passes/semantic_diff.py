@@ -5,6 +5,7 @@ import subprocess
 from typing import Dict, List, Optional
 
 from ..models import ConventionNode, ConventionRule, FileAnalysis, SemanticDiffReport
+from ..textio import decode_repo_bytes, read_repo_text
 from .convention_parser import parse_conventions
 
 
@@ -42,12 +43,11 @@ def semantic_diff(
         full_path = os.path.join(repo_root, filepath)
         if os.path.exists(full_path):
             try:
-                with open(full_path, "r", encoding="utf-8") as f:
-                    source = f.read()
+                source = read_repo_text(full_path).text
                 analysis = _parse_source(source, filepath)
                 if analysis:
                     working_ast[filepath] = analysis
-            except (IOError, UnicodeDecodeError):
+            except (IOError, OSError):
                 pass
 
     nodes_after = parse_conventions(working_ast, conventions)
@@ -130,10 +130,10 @@ def _git_show_head(repo_root: str, filepath: str) -> Optional[str]:
     try:
         result = subprocess.run(
             ["git", "show", f"HEAD:{filepath}"],
-            cwd=repo_root, capture_output=True, text=True, timeout=5,
+            cwd=repo_root, capture_output=True, timeout=5,
         )
         if result.returncode == 0:
-            return result.stdout
+            return decode_repo_bytes(result.stdout, source=f"git show HEAD:{filepath}").text
     except (subprocess.TimeoutExpired, FileNotFoundError):
         pass
     return None

@@ -5,6 +5,7 @@ import os
 from typing import Dict, List, Optional
 
 from ..models import CheckCategory, CheckResult, Severity
+from ....textio import read_repo_text
 
 
 def check_voice(
@@ -32,10 +33,9 @@ def check_voice(
             continue
 
         try:
-            with open(full_path, "r", encoding="utf-8") as f:
-                source = f.read()
+            source = read_repo_text(full_path).text
             tree = ast.parse(source)
-        except (SyntaxError, IOError, UnicodeDecodeError):
+        except (SyntaxError, IOError, OSError):
             continue
 
         # Bare excepts

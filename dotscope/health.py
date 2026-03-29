@@ -8,6 +8,7 @@ from typing import Iterable, List, Optional, Set
 from .constants import SKIP_DIRS, SOURCE_EXTS
 from .models import HealthIssue, HealthReport, ScopeConfig
 from .paths import make_relative, normalize, normalize_relative_path
+from .textio import iter_repo_text_files, read_repo_text
 
 
 STALE_TOLERANCE_SECONDS = 2.0
@@ -51,6 +52,7 @@ def full_health_report(root: str, use_runtime: bool = True) -> HealthReport:
     uncovered = all_dirs - scoped_dirs
     coverage_issues = check_coverage(uncovered, root)
     issues.extend(coverage_issues)
+    issues.extend(check_encoding(root))
 
     return HealthReport(
         issues=issues,
@@ -141,21 +143,21 @@ def check_import_drift(config: ScopeConfig, root: str = "") -> List[HealthIssue]
     drifted = set()
     for f in _iter_included_files(config, scope_root, suffixes=(".py",)):
         try:
-            with open(f, "r", encoding="utf-8", errors="replace") as fh:
-                for line in fh:
-                    m = re.match(r"from\s+([\w.]+)\s+import", line.strip())
-                    if m:
-                        module = m.group(1).split(".")[0]
-                        candidate = os.path.join(scope_root, module)
-                        if (
-                            os.path.isdir(candidate)
-                            and module not in included_dirs
-                            and module != scope_name
-                            and module not in SKIP_DIRS
-                        ):
-                            drifted.add(module)
+            source = read_repo_text(f).text
         except (IOError, OSError):
             continue
+        for line in source.splitlines():
+            m = re.match(r"from\s+([\w.]+)\s+import", line.strip())
+            if m:
+                module = m.group(1).split(".")[0]
+                candidate = os.path.join(scope_root, module)
+                if (
+                    os.path.isdir(candidate)
+                    and module not in included_dirs
+                    and module != scope_name
+                    and module not in SKIP_DIRS
+                ):
+                    drifted.add(module)
 
     if drifted:
         msg = f"imports reference modules not in includes: {', '.join(sorted(drifted))}"
@@ -184,6 +186,24 @@ def check_coverage(uncovered: Set[str], root: str) -> List[HealthIssue]:
                 category="coverage", message=f"no .scope file: {rel}/",
             ))
 
+    return issues
+
+
+def check_encoding(root: str) -> List[HealthIssue]:
+    """Report repo-authored text files that required lossy decode fallback."""
+    issues = []
+    for path in iter_repo_text_files(root):
+        try:
+            decoded = read_repo_text(path)
+        except OSError:
+            continue
+        if decoded.used_replacement:
+            issues.append(HealthIssue(
+                scope_path=path,
+                severity="warning",
+                category="encoding",
+                message="decoded with replacement characters; file is not valid UTF-8",
+            ))
     return issues
 
 

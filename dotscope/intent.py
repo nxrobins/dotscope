@@ -15,6 +15,7 @@ import os
 from typing import List, Optional
 
 from .check.models import ConventionRule, IntentDirective
+from .textio import read_repo_text
 
 
 def load_intents(repo_root: str) -> List[IntentDirective]:
@@ -23,8 +24,7 @@ def load_intents(repo_root: str) -> List[IntentDirective]:
     if not os.path.exists(path):
         return []
 
-    with open(path, "r", encoding="utf-8") as f:
-        text = f.read()
+    text = read_repo_text(path).text
 
     raw_intents = _parse_intent_list(text)
     results = []
@@ -217,8 +217,7 @@ def load_conventions(repo_root: str) -> List[ConventionRule]:
     if not os.path.exists(path):
         return []
 
-    with open(path, "r", encoding="utf-8") as f:
-        text = f.read()
+    text = read_repo_text(path).text
 
     raw = _parse_conventions_list(text)
     results = []
@@ -261,8 +260,7 @@ def save_conventions(repo_root: str, conventions: List[ConventionRule]) -> str:
     # Preserve existing content before the conventions block
     existing = ""
     if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            existing = f.read()
+        existing = read_repo_text(path).text
 
     # Strip any existing conventions block
     lines_out = []
@@ -454,8 +452,7 @@ def load_voice_config(repo_root: str) -> Optional[dict]:
     if not os.path.exists(path):
         return None
 
-    with open(path, "r", encoding="utf-8") as f:
-        text = f.read()
+    text = read_repo_text(path).text
 
     return _parse_voice_block(text)
 
@@ -466,8 +463,7 @@ def save_voice_config(repo_root: str, voice) -> str:
 
     existing = ""
     if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            existing = f.read()
+        existing = read_repo_text(path).text
 
     # Strip any existing voice block
     lines_out = []

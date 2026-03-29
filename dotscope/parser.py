@@ -12,13 +12,17 @@ from typing import Any, Dict, List, Optional, Tuple
 from .context import parse_context
 from .models import ScopeConfig, ScopeEntry, ScopesIndex
 from .paths import normalize_relative_path, normalize_scope_ref
+from .textio import is_dotscope_internal_path, read_repo_text
 
 
 def parse_scope_file(path: str) -> ScopeConfig:
     """Parse a .scope file into a ScopeConfig."""
     path = os.path.abspath(path)
-    with open(path, "r", encoding="utf-8") as f:
-        text = f.read()
+    if is_dotscope_internal_path(path):
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read()
+    else:
+        text = read_repo_text(path).text
 
     data = _parse_yaml(text)
 
@@ -49,8 +53,11 @@ def parse_scope_file(path: str) -> ScopeConfig:
 def parse_scopes_index(path: str) -> ScopesIndex:
     """Parse a .scopes index file."""
     path = os.path.abspath(path)
-    with open(path, "r", encoding="utf-8") as f:
-        text = f.read()
+    if is_dotscope_internal_path(path):
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read()
+    else:
+        text = read_repo_text(path).text
 
     data = _parse_yaml(text)
 

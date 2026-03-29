@@ -89,6 +89,19 @@ class TestParseScope:
         assert config.excludes == ["auth/tests/fixtures/"]
         assert config.related == ["payments/.scope"]
 
+    def test_non_utf8_scope_file_decodes_with_replacement(self, tmp_path):
+        scope_file = tmp_path / ".scope"
+        scope_file.write_bytes(
+            b"description: Caf\xe9 scope\n"
+            b"includes:\n"
+            b"  - auth\\\n"
+        )
+
+        config = parse_scope_file(str(scope_file))
+
+        assert config.description == "Caf\ufffd scope"
+        assert config.includes == ["auth/"]
+
 
 class TestParseScopesIndex:
     def test_full_index(self, tmp_path):
@@ -131,6 +144,22 @@ class TestParseScopesIndex:
         index = parse_scopes_index(str(tmp_path / ".scopes"))
 
         assert index.scopes["auth"].path == "auth/.scope"
+
+    def test_non_utf8_index_decodes_with_replacement(self, tmp_path):
+        index_path = tmp_path / ".scopes"
+        index_path.write_bytes(
+            b"version: 1\n"
+            b"\n"
+            b"scopes:\n"
+            b"  auth:\n"
+            b"    path: auth\\.scope\n"
+            b"    description: Caf\xe9 auth\n"
+        )
+
+        index = parse_scopes_index(str(index_path))
+
+        assert index.scopes["auth"].path == "auth/.scope"
+        assert index.scopes["auth"].description == "Caf\ufffd auth"
 
 
 class TestSerialize:

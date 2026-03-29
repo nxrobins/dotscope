@@ -66,6 +66,23 @@ class TestCLIValidate:
         output = capsys.readouterr().out
         assert "scope(s)" in output
 
+    def test_validate_emits_decode_summary_to_stderr(self, tmp_path, capsys):
+        (tmp_path / ".git").mkdir()
+        mod = tmp_path / "auth"
+        mod.mkdir()
+        (mod / "handler.py").write_text("def login(): pass\n")
+        (mod / ".scope").write_bytes(
+            b"description: Caf\xe9 scope\n"
+            b"includes:\n"
+            b"  - auth/\n"
+        )
+
+        os.chdir(str(tmp_path))
+        main(["validate"])
+        captured = capsys.readouterr()
+
+        assert "decoded 1 repo file with replacement" in captured.err
+
 
 class TestCLIStats:
     def test_stats(self, tmp_project, capsys):

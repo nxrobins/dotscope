@@ -6,6 +6,7 @@ Uses tiktoken if available, otherwise falls back to len(text) // 4.
 
 import os
 from typing import List
+from .textio import read_repo_text
 
 # Try tiktoken for accurate counts, fall back to approximation
 try:
@@ -27,8 +28,7 @@ except ImportError:
 def estimate_file_tokens(path: str) -> int:
     """Read a file and estimate its token count."""
     try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            return estimate_tokens(f.read())
+        return estimate_tokens(read_repo_text(path).text)
     except (OSError, IOError):
         return 0
 

@@ -59,6 +59,18 @@ class TestBareExcepts:
             )
             assert len(results) == 0
 
+    def test_non_utf8_file_still_checks_bare_except(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "bad.py")
+            with open(path, "wb") as f:
+                f.write(b"# Caf\xe9\ntry:\n    pass\nexcept:\n    pass\n")
+            results = check_voice(
+                ["bad.py"], {"bad.py": ["    pass"]},
+                {"enforce": {"bare_excepts": "hold"}}, d,
+            )
+            assert len(results) == 1
+            assert results[0].category == CheckCategory.VOICE
+
 
 class TestMissingTypeHints:
     def test_fires_on_new_untyped_function(self):
