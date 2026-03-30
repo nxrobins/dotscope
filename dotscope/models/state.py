@@ -17,6 +17,7 @@ class SessionLog:
     task: Optional[str] = None
     predicted_files: List[str] = field(default_factory=list)
     context_hash: str = ""
+    constraints_surfaced: List[str] = field(default_factory=list)
 
 
 @dataclass

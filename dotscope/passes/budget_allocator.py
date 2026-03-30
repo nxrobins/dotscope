@@ -102,8 +102,18 @@ def _rank_files(
     files: List[str],
     task: Optional[str] = None,
     utility_scores: Optional[dict] = None,
+    file_scores: Optional[dict] = None,
+    co_change_index: Optional[dict] = None,
 ) -> List[tuple]:
-    """Rank files by relevance, layering historical utility over static heuristics."""
+    """Rank files by relevance, layering multiple signals.
+
+    Signals (in priority order):
+    1. Scope match score — files from higher-scoring scopes rank higher
+    2. Co-change affinity — files that co-change with other candidates get boosted
+    3. Task-path overlap — task description words matching path components
+    4. Historical utility — files agents actually modify rank higher
+    5. Static heuristics — test/fixture penalty, file size bonus/penalty
+    """
     import os
     from ..utility import effective_score as _effective_score
 
@@ -111,27 +121,49 @@ def _rank_files(
     if task:
         task_words = {w.lower() for w in task.split() if len(w) > 2}
 
+    file_set = set(files)
+
     scored = []
     for path in files:
         score = 1.0
         basename = os.path.basename(path).lower()
         rel_parts = path.lower().split(os.sep)
 
+        # Static heuristics
         if any(p in ("tests", "test", "fixtures", "migrations", "__pycache__") for p in rel_parts):
             score *= 0.5
 
         if basename.endswith((".generated.py", ".generated.ts", ".lock", ".min.js")):
             score *= 0.3
 
-        if task_words:
-            name_words = set(
-                w for w in basename.replace("_", " ").replace("-", " ").replace(".", " ").split()
-                if len(w) > 2
+        # Signal 1: Scope match score — files from better-matching scopes rank higher
+        if file_scores and path in file_scores:
+            scope_score = file_scores[path]
+            score *= 1.0 + scope_score  # e.g., 0.35 match → 1.35x boost
+
+        # Signal 2: Co-change affinity — boost files that co-change with other candidates
+        if co_change_index:
+            partners = co_change_index.get(path, {})
+            affinity = sum(
+                conf for partner, conf in partners.items()
+                if partner in file_set and partner != path
             )
-            overlap = len(task_words & name_words)
+            if affinity > 0:
+                score *= 1.0 + min(affinity, 1.0)  # cap at 2x boost
+
+        # Signal 3: Task-path overlap
+        if task_words:
+            path_words = set()
+            for part in rel_parts:
+                path_words.update(
+                    w for w in part.replace("_", " ").replace("-", " ").replace(".", " ").split()
+                    if len(w) > 2
+                )
+            overlap = len(task_words & path_words)
             if overlap:
                 score *= 1.0 + (overlap * 0.5)
 
+        # Signal 5: File size heuristics
         tokens = estimate_file_tokens(path)
         if tokens > 0:
             if tokens < 200:
@@ -139,14 +171,40 @@ def _rank_files(
             elif tokens > 2000:
                 score *= 0.8
 
-        # Layer utility data on top of heuristics
+        # Signal 4: Historical utility
         utility = utility_scores.get(path) if utility_scores else None
         score = _effective_score(score, utility, is_explicit_include=True)
 
         scored.append((path, score, tokens))
 
-    scored.sort(key=lambda x: (-x[1], x[2]))
-    return [(path, score) for path, score, _ in scored]
+    # Signal 6: Test companion — if a source file scores high, boost its test file
+    # Build source→score lookup (non-test files only)
+    source_scores = {
+        path: score for path, score, _ in scored
+        if not any(p in ("tests", "test") for p in path.lower().split(os.sep))
+    }
+    final = []
+    for path, score, tokens in scored:
+        rel_parts_check = path.lower().split(os.sep)
+        if any(p in ("tests", "test") for p in rel_parts_check):
+            basename_test = os.path.basename(path).lower()
+            # test_cli.py → cli.py; strip leading test_ or trailing _test
+            source_name = basename_test
+            if source_name.startswith("test_"):
+                source_name = source_name[5:]  # strip test_
+            elif source_name.endswith("_test.py"):
+                source_name = source_name[:-8] + ".py"
+            # Search pool for matching source file
+            best_source_score = 0.0
+            for src_path, src_score in source_scores.items():
+                if os.path.basename(src_path).lower() == source_name:
+                    best_source_score = max(best_source_score, src_score)
+            if best_source_score > 0:
+                score *= 1.0 + (best_source_score * 0.5)  # companion lift
+        final.append((path, score, tokens))
+
+    final.sort(key=lambda x: (-x[1], x[2]))
+    return [(path, score) for path, score, _ in final]
 
 
 def _boost_required(

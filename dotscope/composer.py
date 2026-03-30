@@ -145,3 +145,85 @@ def compose(
             )
 
     return result or ResolvedScope()
+
+
+def compose_for_task(
+    task: str,
+    root: Optional[str] = None,
+    max_scopes: int = 3,
+    threshold: float = 0.05,
+) -> ResolvedScope:
+    """Auto-compose scopes by matching a task description.
+
+    Discovers all scopes, ranks them by task relevance, and merges
+    the top N into a single ResolvedScope using the + operator.
+
+    Args:
+        task: Natural language task description.
+        root: Repository root (auto-detected if None).
+        max_scopes: Maximum scopes to compose (default 3).
+        threshold: Minimum match score to include a scope.
+
+    Returns:
+        Composed ResolvedScope, or empty if no scopes match.
+    """
+    import os
+    from .discovery import find_all_scopes
+    from .matcher import match_task
+    from .parser import parse_scope_file
+
+    if root is None:
+        root = find_repo_root()
+    if root is None:
+        return ResolvedScope()
+
+    scope_files = find_all_scopes(root)
+    if not scope_files:
+        return ResolvedScope()
+
+    # Build (name, keywords, description) tuples for the matcher
+    # Enrich keywords with scope name and include path components
+    scope_tuples = []
+    seen_names = set()
+    for sf in scope_files:
+        try:
+            config = parse_scope_file(sf)
+            name = os.path.basename(os.path.dirname(config.path)) or "root"
+            if name not in seen_names:
+                keywords = list(config.tags)
+                # Add scope name and include path components as keywords
+                keywords.append(name)
+                for inc in config.includes:
+                    for part in inc.replace("/", " ").replace("_", " ").replace("-", " ").split():
+                        if len(part) > 2 and part not in keywords:
+                            keywords.append(part.lower())
+                scope_tuples.append((name, keywords, config.description))
+                seen_names.add(name)
+        except Exception:
+            continue
+
+    if not scope_tuples:
+        return ResolvedScope()
+
+    matches = match_task(task, scope_tuples, threshold)
+    if not matches:
+        return ResolvedScope()
+
+    # Resolve each matched scope and tag files with match score
+    top_matches = matches[:max_scopes]
+    result: Optional[ResolvedScope] = None
+
+    for name, score in top_matches:
+        config = find_resolution_scope(name, root)
+        if config is None:
+            continue
+        resolved = resolve(config, follow_related=True, root=root)
+        # Tag each file with the scope's match score
+        resolved.file_scores = {f: score for f in resolved.files}
+
+        if result is None:
+            result = resolved
+        else:
+            result = result.merge(resolved)
+
+    return result or ResolvedScope()

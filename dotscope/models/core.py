@@ -90,6 +90,7 @@ class ResolvedScope:
     scope_chain: List[str] = field(default_factory=list)
     truncated: bool = False
     excluded_files: List[str] = field(default_factory=list)
+    file_scores: Dict[str, float] = field(default_factory=dict)
 
     def merge(self, other: "ResolvedScope") -> "ResolvedScope":
         """Merge two resolved scopes (union)."""
@@ -100,6 +101,11 @@ class ResolvedScope:
                 merged_files.append(f)
                 seen.add(f)
 
+        # Merge file scores, keeping the higher score for duplicates
+        merged_scores = dict(self.file_scores)
+        for f, s in other.file_scores.items():
+            merged_scores[f] = max(merged_scores.get(f, 0.0), s)
+
         ctx_parts = [p for p in [self.context, other.context] if p]
         return ResolvedScope(
             files=merged_files,
@@ -107,6 +113,7 @@ class ResolvedScope:
             token_estimate=self.token_estimate + other.token_estimate,
             scope_chain=list(dict.fromkeys(self.scope_chain + other.scope_chain)),
             truncated=self.truncated or other.truncated,
+            file_scores=merged_scores,
         )
 
     def subtract(self, other: "ResolvedScope") -> "ResolvedScope":

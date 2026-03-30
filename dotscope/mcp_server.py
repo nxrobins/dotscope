@@ -137,7 +137,15 @@ def main():
             "healed": False,
             "job_kind": None,
         }
-        resolved = compose(scope, root=root, follow_related=follow_related)
+        # Auto-compose from task when scope is a simple name and task is provided
+        _is_simple_name = not any(c in scope for c in "+-&@")
+        if task and _is_simple_name:
+            from .composer import compose_for_task
+            resolved = compose_for_task(task, root=root, max_scopes=3)
+            if not resolved.files:
+                resolved = compose(scope, root=root, follow_related=follow_related)
+        else:
+            resolved = compose(scope, root=root, follow_related=follow_related)
 
         # Wire 1: inject lessons and invariants into context
         if dot_dir and dot_dir.exists():
