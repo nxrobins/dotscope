@@ -15,6 +15,7 @@ from ..models import (
     ExportedSymbol,
     FileAnalysis,
     FunctionInfo,
+    NetworkEndpoint,
     ResolvedImport,
 )
 from ..paths import normalize_relative_path
@@ -165,6 +166,7 @@ def _analyze_python(filepath: str, source: str) -> Optional[FileAnalysis]:
                 api.is_entry_point = True
 
     api.decorators_used = sorted(all_decorators)
+    api.network_endpoints = _extract_endpoints(tree, filepath)
 
     # Detect re-exports: names in __all__ that are also imported
     if api.all_list:
@@ -507,3 +509,119 @@ def resolve_js_import(imp: ResolvedImport, source_file: str, root: str) -> Optio
         if os.path.isfile(os.path.join(root, candidate)):
             return normalize_relative_path(candidate)
     return None
+
+
+# ---------------------------------------------------------------------------
+# Polyglot Context: Network endpoint extraction
+# ---------------------------------------------------------------------------
+
+# HTTP methods recognised in route decorators
+_HTTP_METHODS = {"get", "post", "put", "delete", "patch", "head", "options"}
+_ROUTE_DECORATORS = _HTTP_METHODS | {"route", "api_route", "websocket"}
+
+
+def _extract_endpoints(tree: ast.AST, filepath: str) -> list:
+    """Extract HTTP route definitions from function decorators.
+
+    Recognises FastAPI, Flask, Django-ninja, Starlette, and similar
+    frameworks where routes are declared with decorators like
+    ``@router.get("/api/users/{id}")``.
+    """
+    endpoints: list = []
+
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for dec in node.decorator_list:
+            ep = _parse_route_decorator(dec, node.name, filepath)
+            if ep:
+                endpoints.append(ep)
+
+    return endpoints
+
+
+def _parse_route_decorator(
+    dec: ast.expr, func_name: str, filepath: str
+) -> "NetworkEndpoint | None":
+    """Try to interpret a decorator as a route definition."""
+    # Pattern: @something.get("/path") or @app.route("/path", methods=[...])
+    if not isinstance(dec, ast.Call):
+        return None
+
+    method = "ALL"
+    func = dec.func if hasattr(dec, "func") else None
+    if func is None:
+        return None
+
+    # Extract method from attribute name: router.get → "GET"
+    if isinstance(func, ast.Attribute):
+        attr = func.attr.lower()
+        if attr in _HTTP_METHODS:
+            method = attr.upper()
+        elif attr not in _ROUTE_DECORATORS:
+            return None  # Not a route decorator
+    elif isinstance(func, ast.Name):
+        if func.id.lower() not in _ROUTE_DECORATORS:
+            return None
+    else:
+        return None
+
+    # Extract path from first positional argument
+    if not dec.args:
+        return None
+    first_arg = dec.args[0]
+    if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
+        raw_path = first_arg.value
+    elif isinstance(first_arg, ast.JoinedStr):
+        # f-string route path — unparse to get a readable form
+        try:
+            raw_path = ast.unparse(first_arg)
+        except Exception:
+            return None
+    else:
+        return None
+
+    # Check for explicit methods kwarg: @app.route("/path", methods=["GET", "POST"])
+    if method == "ALL":
+        for kw in dec.keywords:
+            if kw.arg == "methods" and isinstance(kw.value, (ast.List, ast.Tuple)):
+                methods = []
+                for elt in kw.value.elts:
+                    if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                        methods.append(elt.value.upper())
+                if methods:
+                    method = methods[0]  # Use first declared method
+                break
+
+    regex_path = _route_path_to_regex(raw_path)
+
+    return NetworkEndpoint(
+        method=method,
+        raw_path=raw_path,
+        regex_path=regex_path,
+        handler_name=func_name,
+        file=filepath,
+    )
+
+
+def _route_path_to_regex(raw_path: str) -> str:
+    """Convert a route path to a regex for matching.
+
+    ``/api/users/{user_id}`` → ``^/api/users/[^/]+$``
+    ``/api/users/<int:user_id>`` → ``^/api/users/[^/]+$``  (Flask)
+    """
+    # Replace Python path variables: {name} or {name:type}
+    pattern = re.sub(r"\{[^}]+\}", "[^/]+", raw_path)
+    # Replace Flask-style variables: <type:name> or <name>
+    pattern = re.sub(r"<[^>]+>", "[^/]+", pattern)
+    # Escape remaining regex-special chars (except [^/]+)
+    # We do this carefully: protect our wildcards, escape the rest
+    parts = re.split(r"(\[\^/\]\+)", pattern)
+    escaped = []
+    for part in parts:
+        if part == "[^/]+":
+            escaped.append(part)
+        else:
+            escaped.append(re.escape(part))
+    pattern = "".join(escaped)
+    return f"^{pattern}$"

@@ -64,6 +64,23 @@ def cache_ingest_data(
             with open(dot_dir / "graph_hubs.json", "w", encoding="utf-8") as f:
                 json.dump(hubs, f, indent=2)
 
+        # Network contract edges (polyglot context)
+        if hasattr(graph, "network_edges") and graph.network_edges:
+            edges_data = {}
+            for provider, consumers in graph.network_edges.items():
+                edges_data[provider] = {}
+                for consumer, endpoints in consumers.items():
+                    edges_data[provider][consumer] = [
+                        {
+                            "method": getattr(ep, "method", ""),
+                            "path": getattr(ep, "raw_path", ""),
+                            "handler": getattr(ep, "handler_name", ""),
+                        }
+                        for ep in endpoints
+                    ]
+            with open(dot_dir / "network_edges.json", "w", encoding="utf-8") as f:
+                json.dump(edges_data, f, indent=2)
+
 
 def load_cached_history(root: str) -> Optional[HistoryAnalysis]:
     """Load cached history from ..dotscope/history.json."""
@@ -104,6 +121,22 @@ def load_cached_graph_hubs(root: str) -> dict:
     Returns: {path: {"imported_by_count": int, "imported_by_dirs": [str]}}
     """
     path = Path(root) / ".dotscope" / "graph_hubs.json"
+    if not path.exists():
+        return {}
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, KeyError):
+        return {}
+
+
+def load_cached_network_edges(root: str) -> dict:
+    """Load cached network contract edges from .dotscope/network_edges.json.
+
+    Returns: {provider_file: {consumer_file: [{"method", "path", "handler"}]}}
+    """
+    path = Path(root) / ".dotscope" / "network_edges.json"
     if not path.exists():
         return {}
 

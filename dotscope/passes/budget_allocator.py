@@ -150,12 +150,15 @@ def _rank_files(
     utility_scores: Optional[dict] = None,
     file_scores: Optional[dict] = None,
     co_change_index: Optional[dict] = None,
+    network_edges: Optional[dict] = None,
+    reverse_network_edges: Optional[dict] = None,
 ) -> List[tuple]:
     """Rank files by relevance, layering multiple signals.
 
     Signals (in priority order):
     1. Scope match score — files from higher-scoring scopes rank higher
     2. Co-change affinity — files that co-change with other candidates get boosted
+    2b. Network companion — cross-language contract partners get boosted
     3. Task-path overlap — task description words matching path components
     4. Historical utility — files agents actually modify rank higher
     5. Static heuristics — test/fixture penalty, file size bonus/penalty
@@ -208,6 +211,22 @@ def _rank_files(
             )
             if affinity > 0:
                 score *= 1.0 + min(affinity, 1.0)  # cap at 2x boost
+
+        # Signal 2b: Network companion — cross-language contract partners
+        if network_edges or reverse_network_edges:
+            has_companion = False
+            if network_edges:
+                for companion in network_edges.get(path, {}):
+                    if companion in file_set:
+                        has_companion = True
+                        break
+            if not has_companion and reverse_network_edges:
+                for provider in reverse_network_edges.get(path, []):
+                    if provider in file_set:
+                        has_companion = True
+                        break
+            if has_companion:
+                score *= 1.5
 
         # Signal 3: BM25 task-path matching (IDF-weighted, penalizes common terms)
         if task_words and all_path_word_sets:

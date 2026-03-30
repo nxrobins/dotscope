@@ -65,6 +65,9 @@ def build_graph(root: str) -> DependencyGraph:
             if imp in graph.files:
                 graph.files[imp].imported_by.append(path)
 
+    # Polyglot Context: cross-language network edges
+    build_network_edges(graph)
+
     graph.modules = _detect_modules(graph)
     return graph
 
@@ -298,3 +301,116 @@ def format_graph_summary(graph: DependencyGraph) -> str:
             lines.append(f"    used by: {', '.join(mod.depended_on_by)}")
 
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Polyglot Context: cross-language network edge builder
+# ---------------------------------------------------------------------------
+
+def build_network_edges(graph: DependencyGraph) -> None:
+    """Draw edges between files containing matching endpoints and consumers.
+
+    Populates ``graph.network_edges`` (provider → consumer) and
+    ``graph.reverse_network_edges`` (consumer → provider list) for O(1)
+    lookups in both directions.
+    """
+    from collections import defaultdict
+
+    # Collect providers and consumers from AST data
+    providers = []  # (file_path, NetworkEndpoint)
+    consumers = []  # (file_path, NetworkConsumer)
+
+    for path, api in graph.apis.items():
+        for ep in getattr(api, "network_endpoints", []):
+            providers.append((path, ep))
+        for cons in getattr(api, "network_consumers", []):
+            consumers.append((path, cons))
+
+    if not providers or not consumers:
+        return
+
+    # Match providers to consumers
+    forward: Dict[str, Dict[str, list]] = defaultdict(lambda: defaultdict(list))
+    reverse: Dict[str, list] = defaultdict(list)
+
+    for p_path, ep in providers:
+        for c_path, cons in consumers:
+            if p_path == c_path:
+                continue  # Same file — skip self-edges
+            if not _methods_match(ep.method, cons.method):
+                continue
+            if _routes_match(ep, cons):
+                forward[p_path][c_path].append(ep)
+
+    # Build reverse lookup
+    for p_path, consumer_dict in forward.items():
+        for c_path in consumer_dict:
+            if p_path not in reverse.get(c_path, []):
+                reverse[c_path].append(p_path)
+
+    graph.network_edges = dict(forward)
+    graph.reverse_network_edges = dict(reverse)
+
+
+def _methods_match(provider_method: str, consumer_method: str) -> bool:
+    """Check if HTTP methods are compatible."""
+    if provider_method == "ALL" or consumer_method == "ALL":
+        return True
+    return provider_method.upper() == consumer_method.upper()
+
+
+def _routes_match(ep, cons) -> bool:
+    """Check if a provider endpoint matches a consumer call.
+
+    Both extractors produce regex_path fields using the same ``[^/]+``
+    wildcard language, so we can match regex against raw paths in both
+    directions.
+    """
+    import re
+
+    # Primary: provider regex matches consumer raw path
+    try:
+        if ep.regex_path and re.match(ep.regex_path, cons.raw_path):
+            return True
+    except re.error:
+        pass
+
+    # Reverse: consumer regex matches provider raw path
+    try:
+        if getattr(cons, "regex_path", "") and re.match(cons.regex_path, ep.raw_path):
+            return True
+    except re.error:
+        pass
+
+    # Fallback: suffix alignment for base URL differences
+    return _paths_fuzzy_match(ep.raw_path, cons.raw_path)
+
+
+def _paths_fuzzy_match(provider_path: str, consumer_path: str) -> bool:
+    """Suffix-aligned fuzzy match for paths with different base URLs.
+
+    Handles the case where Python exports ``/api/v1/users`` and
+    JS calls ``apiClient.get('/users')`` with a base URL prefix.
+    """
+    # Normalize: strip trailing slashes
+    p = provider_path.rstrip("/")
+    c = consumer_path.rstrip("/")
+
+    if p == c:
+        return True
+
+    # Strip common API prefixes and try suffix match
+    prefixes = ["/api/v1", "/api/v2", "/api"]
+    for prefix in prefixes:
+        stripped = p[len(prefix):] if p.startswith(prefix) else p
+        if stripped == c or c == stripped:
+            return True
+
+    # Suffix alignment: does the consumer path match the tail of the provider path?
+    p_parts = p.split("/")
+    c_parts = c.split("/")
+    if len(c_parts) <= len(p_parts):
+        if p_parts[-len(c_parts):] == c_parts:
+            return True
+
+    return False

@@ -15,6 +15,7 @@ from ._treesitter import (
 )
 from ...models.core import (
     FileAnalysis, ResolvedImport, ClassInfo, FunctionInfo, ExportedSymbol,
+    NetworkConsumer,
 )
 
 
@@ -40,6 +41,7 @@ class JavaScriptAnalyzer(BaseAnalyzer):
         functions = self._extract_functions(root, source_bytes)
         exports = self._extract_exports(root, source_bytes)
         decorators = self._extract_all_decorators(root, source_bytes)
+        consumers = self._extract_network_consumers(root, source_bytes, filepath)
         docstring = self._extract_module_docstring(root, source_bytes)
 
         return FileAnalysis(
@@ -50,6 +52,7 @@ class JavaScriptAnalyzer(BaseAnalyzer):
             functions=functions,
             exports=exports,
             decorators_used=sorted(set(decorators)),
+            network_consumers=consumers,
             docstring=docstring,
             node_count=self._count_nodes(root),
         )
@@ -319,6 +322,79 @@ class JavaScriptAnalyzer(BaseAnalyzer):
             text = node_text(dec, source_bytes).lstrip("@").split("(")[0]
             decorators.append(text)
         return decorators
+
+    # -- Polyglot Context: network consumer extraction --
+
+    _HTTP_METHODS = {"get", "post", "put", "delete", "patch", "head", "options", "request"}
+
+    def _extract_network_consumers(
+        self, root, source_bytes, filepath: str
+    ) -> List[NetworkConsumer]:
+        """Extract HTTP client calls (fetch, axios, api.get, etc.)."""
+        import re as _re
+        consumers: List[NetworkConsumer] = []
+
+        for call_node in walk_type(root, "call_expression"):
+            func = find_child(call_node, "member_expression")
+            func_id = find_child(call_node, "identifier")
+            method = "GET"
+            is_http_call = False
+
+            if func:
+                # Pattern: axios.post("/path"), api.get("/path"), apiClient.delete("/path")
+                prop = find_child(func, "property_identifier")
+                if prop:
+                    prop_text = node_text(prop, source_bytes).lower()
+                    if prop_text in self._HTTP_METHODS:
+                        method = prop_text.upper()
+                        if method == "REQUEST":
+                            method = "ALL"
+                        is_http_call = True
+            elif func_id:
+                # Pattern: fetch("/path")
+                id_text = node_text(func_id, source_bytes)
+                if id_text == "fetch":
+                    is_http_call = True
+                    method = "GET"  # Default; could be overridden by options
+
+            if not is_http_call:
+                continue
+
+            # Extract the first string or template_string argument
+            args = find_child(call_node, "arguments")
+            if not args:
+                continue
+
+            raw_path = None
+            for child in args.children:
+                if child.type in ("string", "template_string"):
+                    raw_path = _strip_quotes(node_text(child, source_bytes))
+                    break
+
+            if not raw_path or not raw_path.startswith("/"):
+                continue  # Not an absolute path — skip relative or variable-only
+
+            # Convert JS template variables ${...} → [^/]+ regex
+            # Same language as Python's {var} → [^/]+
+            regex_path = _re.sub(r"\$\{[^}]*\}", "[^/]+", raw_path)
+            # Escape remaining regex-special chars, protect wildcards
+            parts = _re.split(r"(\[\^/\]\+)", regex_path)
+            escaped = []
+            for part in parts:
+                if part == "[^/]+":
+                    escaped.append(part)
+                else:
+                    escaped.append(_re.escape(part))
+            regex_path = "^" + "".join(escaped) + "$"
+
+            consumers.append(NetworkConsumer(
+                method=method,
+                raw_path=raw_path,
+                regex_path=regex_path,
+                file=filepath,
+            ))
+
+        return consumers
 
     def _extract_module_docstring(self, root, source_bytes) -> Optional[str]:
         """Extract leading JSDoc comment as module docstring."""

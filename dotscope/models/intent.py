@@ -25,6 +25,7 @@ class CheckCategory(Enum):
     INTENT = "architectural_intent"
     CONVENTION = "convention_violation"
     VOICE = "voice_violation"
+    NETWORK = "network_contract"
 
 
 @dataclass
