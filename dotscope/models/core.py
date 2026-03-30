@@ -206,6 +206,25 @@ class FunctionInfo:
 
 
 @dataclass
+class NetworkEndpoint:
+    """A backend route definition (the Provider)."""
+    method: str          # "GET", "POST", "PUT", "DELETE", "ALL"
+    raw_path: str        # "/api/users/{user_id}"
+    regex_path: str      # "^/api/users/[^/]+$"
+    handler_name: str    # The function name handling the route
+    file: str = ""       # File path where this endpoint lives
+
+
+@dataclass
+class NetworkConsumer:
+    """A frontend HTTP call (the Consumer)."""
+    method: str          # "GET", "POST", etc. ("GET" default for fetch)
+    raw_path: str        # "/api/users/${id}" or string literal
+    regex_path: str = "" # JS ${var} → [^/]+ regex, same language as Python
+    file: str = ""       # File path where this call lives
+
+
+@dataclass
 class FileAnalysis:
     """Complete structural analysis of a single source file."""
     path: str
@@ -215,6 +234,8 @@ class FileAnalysis:
     classes: List[ClassInfo] = field(default_factory=list)
     functions: List[FunctionInfo] = field(default_factory=list)
     decorators_used: List[str] = field(default_factory=list)  # All unique decorators
+    network_endpoints: List[NetworkEndpoint] = field(default_factory=list)
+    network_consumers: List[NetworkConsumer] = field(default_factory=list)
     is_init: bool = False                  # True for __init__.py
     reexports: List[str] = field(default_factory=list)  # Imported then re-exported
     node_count: int = 0                    # Total AST nodes (complexity proxy)
@@ -283,6 +304,11 @@ class DependencyGraph:
     edges: List[tuple] = field(default_factory=list)
     modules: List[ModuleBoundary] = field(default_factory=list)
     apis: Dict[str, ModuleAPI] = field(default_factory=dict)
+    # Network contract edges (polyglot context)
+    network_edges: Dict[str, Dict[str, list]] = field(default_factory=dict)
+    # { provider_file: { consumer_file: [NetworkEndpoint] } }
+    reverse_network_edges: Dict[str, List[str]] = field(default_factory=dict)
+    # { consumer_file: [provider_file, ...] } — O(1) reverse lookup
 
 
 @dataclass

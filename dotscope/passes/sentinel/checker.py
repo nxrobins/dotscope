@@ -18,6 +18,7 @@ from .checks.convention import check_conventions
 from .checks.intent import check_intent_holds, check_intent_notes
 from .checks.voice import check_voice
 from .checks.spatial import check_colocation
+from .checks.network import check_network_contracts
 from .acknowledge import is_acknowledged
 
 
@@ -65,6 +66,8 @@ def check_diff(
     results.extend(check_intent_holds(modified_files, added_lines, intents))
     results.extend(check_conventions(modified_files, added_lines, conventions, convention_ast))
     results.extend(check_voice(modified_files, added_lines, voice_config, repo_root))
+    network_edges = _load_network_edges(repo_root)
+    results.extend(check_network_contracts(modified_files, network_edges))
 
     # NOTEs
     results.extend(check_dependency_direction(added_lines, graph_hubs, scopes))
@@ -285,6 +288,15 @@ def _load_graph_hubs(repo_root: str) -> Dict[str, object]:
     try:
         from ...cache import load_cached_graph_hubs
         return load_cached_graph_hubs(repo_root)
+    except Exception:
+        return {}
+
+
+def _load_network_edges(repo_root: str) -> dict:
+    """Load cached network contract edges."""
+    try:
+        from ...cache import load_cached_network_edges
+        return load_cached_network_edges(repo_root)
     except Exception:
         return {}
 
