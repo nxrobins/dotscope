@@ -98,6 +98,52 @@ def apply_budget(
     )
 
 
+def _bm25_task_path_score(
+    task_words: set,
+    all_path_word_sets: dict,
+    target_path: str,
+    k1: float = 1.2,
+    b: float = 0.75,
+) -> float:
+    """BM25 score for task words against a file's path components.
+
+    Uses IDF to upweight rare path terms ("ast") and downweight common ones
+    ("test", "utils"). Binary TF since each word appears at most once per path.
+    """
+    import math
+
+    target_words = all_path_word_sets.get(target_path, set())
+    if not target_words:
+        return 0.0
+
+    N = len(all_path_word_sets)
+    if N == 0:
+        return 0.0
+
+    # Average document length (in words)
+    avgdl = sum(len(ws) for ws in all_path_word_sets.values()) / N
+    dl = len(target_words)
+
+    score = 0.0
+    for term in task_words:
+        if term not in target_words:
+            continue
+
+        # Document frequency: how many files contain this term
+        df = sum(1 for ws in all_path_word_sets.values() if term in ws)
+
+        # IDF: rare terms score higher
+        idf = math.log((N - df + 0.5) / (df + 0.5) + 1.0)
+
+        # TF is binary (0 or 1); BM25 TF normalization
+        tf = 1.0
+        tf_norm = (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * dl / avgdl))
+
+        score += idf * tf_norm
+
+    return score
+
+
 def _rank_files(
     files: List[str],
     task: Optional[str] = None,
@@ -122,6 +168,18 @@ def _rank_files(
         task_words = {w.lower() for w in task.split() if len(w) > 2}
 
     file_set = set(files)
+
+    # Pre-compute path word sets for BM25
+    all_path_word_sets: dict = {}
+    for path in files:
+        rel_parts = path.lower().split(os.sep)
+        words = set()
+        for part in rel_parts:
+            words.update(
+                w for w in part.replace("_", " ").replace("-", " ").replace(".", " ").split()
+                if len(w) > 2
+            )
+        all_path_word_sets[path] = words
 
     scored = []
     for path in files:
@@ -151,17 +209,13 @@ def _rank_files(
             if affinity > 0:
                 score *= 1.0 + min(affinity, 1.0)  # cap at 2x boost
 
-        # Signal 3: Task-path overlap
-        if task_words:
-            path_words = set()
-            for part in rel_parts:
-                path_words.update(
-                    w for w in part.replace("_", " ").replace("-", " ").replace(".", " ").split()
-                    if len(w) > 2
-                )
-            overlap = len(task_words & path_words)
-            if overlap:
-                score *= 1.0 + (overlap * 0.5)
+        # Signal 3: BM25 task-path matching (IDF-weighted, penalizes common terms)
+        if task_words and all_path_word_sets:
+            bm25 = _bm25_task_path_score(
+                task_words, all_path_word_sets, path,
+            )
+            if bm25 > 0:
+                score *= 1.0 + min(bm25, 3.0)  # cap at 4x boost
 
         # Signal 5: File size heuristics
         tokens = estimate_file_tokens(path)

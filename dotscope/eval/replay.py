@@ -185,8 +185,10 @@ def _replay_single_task(
                 return None
             resolved = result
 
-        # Trim large composed results: keep top-K files by task relevance
-        if len(resolved.files) > 10:
+        # Trim to top-K files by task relevance
+        _TOP_K = 12
+
+        if len(resolved.files) > _TOP_K:
             from ..passes.budget_allocator import _rank_files
             ranked = _rank_files(
                 resolved.files,
@@ -195,14 +197,14 @@ def _replay_single_task(
                 file_scores=resolved.file_scores or None,
                 co_change_index=co_change_index,
             )
-            top_files = [path for path, _score in ranked[:10]]
+            top_files = [path for path, _score in ranked[:_TOP_K]]
             from ..models import ResolvedScope as _RS
             resolved = _RS(
                 files=top_files,
                 context=resolved.context,
                 token_estimate=resolved.token_estimate,
                 scope_chain=resolved.scope_chain,
-                truncated=True,
+                truncated=len(top_files) < len(ranked),
             )
 
         predicted_files = set(
@@ -288,11 +290,17 @@ def _match_directories_multi(
 
 
 def _build_co_change_index(corpus: EvalCorpus) -> dict:
-    """Build a co-change affinity index from corpus commit history.
+    """Build a co-change affinity index using NPMI.
 
-    Returns {file: {partner: confidence}} where confidence is the fraction
-    of that file's appearances where the partner also changed.
+    Returns {file: {partner: npmi}} where NPMI (Normalized Pointwise Mutual
+    Information) measures symbiotic co-change relationships, controlling for
+    each file's baseline frequency. This prevents "god files" (constants.py,
+    __init__.py) from getting inflated co-change scores.
+
+    NPMI = PMI / -log2(P(A,B))
+    PMI  = log2(P(A,B) / (P(A) * P(B)))
     """
+    import math
     from collections import Counter, defaultdict
 
     file_freq: Counter = Counter()
@@ -306,14 +314,32 @@ def _build_co_change_index(corpus: EvalCorpus) -> dict:
                 pair = tuple(sorted([f1, f2]))
                 pair_count[pair] += 1
 
-    # Build {file: {partner: confidence}}
+    N = len(corpus.tasks)
+    if N == 0:
+        return {}
+
+    # Build {file: {partner: npmi}}
     index: dict = defaultdict(dict)
     for (f1, f2), count in pair_count.items():
-        if count >= 2:  # only pairs seen together 2+ times
-            conf1 = count / max(file_freq[f1], 1)
-            conf2 = count / max(file_freq[f2], 1)
-            index[f1][f2] = conf1
-            index[f2][f1] = conf2
+        if count < 2:  # only pairs seen together 2+ times
+            continue
+
+        p_a = file_freq[f1] / N
+        p_b = file_freq[f2] / N
+        p_ab = count / N
+
+        denom = p_a * p_b
+        if denom <= 0 or p_ab <= 0:
+            continue
+
+        pmi = math.log2(p_ab / denom)
+        neg_log_pab = -math.log2(p_ab)
+        npmi = pmi / neg_log_pab if neg_log_pab > 0 else 0.0
+        npmi = max(0.0, npmi)  # clamp anti-correlated pairs to 0
+
+        # NPMI is symmetric
+        index[f1][f2] = npmi
+        index[f2][f1] = npmi
 
     return dict(index)
 
