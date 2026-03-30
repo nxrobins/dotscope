@@ -17,6 +17,7 @@ from .checks.stability import check_stability
 from .checks.convention import check_conventions
 from .checks.intent import check_intent_holds, check_intent_notes
 from .checks.voice import check_voice
+from .checks.spatial import check_colocation
 from .acknowledge import is_acknowledged
 
 
@@ -69,6 +70,7 @@ def check_diff(
     results.extend(check_dependency_direction(added_lines, graph_hubs, scopes))
     results.extend(check_stability(modified_files, diff_text, invariants))
     results.extend(check_intent_notes(modified_files, added_lines, intents))
+    results.extend(check_colocation(modified_files, graph_hubs, repo_root))
 
     # Warn if files were capped
     if capped:

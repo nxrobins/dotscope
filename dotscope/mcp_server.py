@@ -1098,7 +1098,129 @@ def main():
 
         return json.dumps({"matches": matches}, indent=2)
 
+    @mcp.tool()
+    def dotscope_route_file(
+        file_purpose: str,
+        planned_imports: Optional[list] = None,
+    ) -> str:
+        """Ask dotscope where a new file should be saved based on the
+        repo's architecture.
+
+        Uses discovered conventions (allowed_paths) and the dependency
+        graph to suggest the correct directory. Call this *before* writing
+        a file so it lands in the right place on the first try.
+
+        Args:
+            file_purpose: What the file does, e.g. "Stripe webhook retry task"
+            planned_imports: Modules this file will import, e.g.
+                ["domains.billing.models", "stripe"]
+        """
+        from .discovery import find_repo_root
+        from .intent import load_conventions
+
+        root = find_repo_root()
+        if root is None:
+            return json.dumps({"error": "Could not find repository root"})
+
+        conventions = load_conventions(root)
+
+        # Strategy 1: Match purpose against conventions with allowed_paths
+        suggestion = _route_by_convention(file_purpose, conventions)
+        if suggestion:
+            return json.dumps(suggestion, indent=2)
+
+        # Strategy 2: Match planned_imports against the dependency graph
+        if planned_imports:
+            suggestion = _route_by_imports(planned_imports, root)
+            if suggestion:
+                return json.dumps(suggestion, indent=2)
+
+        return json.dumps({
+            "suggested_path": None,
+            "convention_matched": None,
+            "reason": "No matching convention or import target found. "
+                      "Place the file near its primary consumer.",
+        }, indent=2)
+
     mcp.run(transport="stdio")
+
+
+def _route_by_convention(purpose: str, conventions) -> Optional[dict]:
+    """Match a file purpose against conventions with allowed_paths."""
+    if not conventions:
+        return None
+
+    purpose_lower = purpose.lower()
+    purpose_words = {w for w in purpose_lower.split() if len(w) > 2}
+
+    for conv in conventions:
+        paths = conv.rules.get("allowed_paths")
+        if not paths:
+            continue
+
+        # Check if purpose words overlap with convention name/description
+        conv_words = {
+            w.lower() for w in (conv.name + " " + conv.description).split()
+            if len(w) > 2
+        }
+        if purpose_words & conv_words:
+            # Extract a concrete directory suggestion from the regex
+            import re
+            suggested_dir = paths[0]
+            # Strip trailing file pattern
+            suggested_dir = re.sub(r"/\.\*\\\.\w+$", "/", suggested_dir)
+            # Replace regex wildcards with placeholders
+            suggested_dir = suggested_dir.replace("[^/]+", "<module>")
+            suggested_dir = suggested_dir.replace("\\", "")
+
+            return {
+                "suggested_path": suggested_dir,
+                "convention_matched": conv.name,
+                "reason": f"Matches convention '{conv.name}': {conv.description or paths[0]}",
+            }
+
+    return None
+
+
+def _route_by_imports(planned_imports: list, root: str) -> Optional[dict]:
+    """Suggest a directory based on where planned imports live."""
+    import os
+
+    try:
+        from .storage.cache import load_cached_graph_hubs
+        hubs = load_cached_graph_hubs(root)
+    except Exception:
+        return None
+
+    if not hubs:
+        return None
+
+    # Find directories of the import targets
+    target_dirs = set()
+    for imp in planned_imports:
+        # Convert module path to file path guess
+        imp_path = imp.replace(".", "/") + ".py"
+        if imp_path in hubs or os.path.isfile(os.path.join(root, imp_path)):
+            target_dirs.add(os.path.dirname(imp_path))
+        # Also try as package
+        pkg_path = imp.replace(".", "/") + "/__init__.py"
+        if os.path.isfile(os.path.join(root, pkg_path)):
+            target_dirs.add(imp.replace(".", "/"))
+
+    if not target_dirs:
+        return None
+
+    # LCA of target directories
+    dirs_list = list(target_dirs)
+    lca = os.path.commonpath(dirs_list) if len(dirs_list) > 1 else dirs_list[0]
+    if lca in ("", "."):
+        lca = "shared/utils"
+
+    return {
+        "suggested_path": lca + "/",
+        "convention_matched": None,
+        "reason": f"Lowest Common Ancestor of import targets: {', '.join(sorted(target_dirs))}",
+    }
 
 
 if __name__ == "__main__":

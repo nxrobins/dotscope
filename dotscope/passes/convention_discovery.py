@@ -78,6 +78,18 @@ def discover_conventions(
             if conv:
                 conventions.append(conv)
 
+    # Pass 4: Spatial centroid — discover dominant directory pattern per convention
+    from .convention_parser import matches_convention
+
+    for conv in conventions:
+        matched = [
+            p for p, a in ast_data.items()
+            if matches_convention(a, p, conv.match_criteria)
+        ]
+        centroid = discover_spatial_centroid(matched)
+        if centroid:
+            conv.rules["allowed_paths"] = [centroid]
+
     return conventions
 
 
@@ -245,3 +257,89 @@ def _import_frequency(module: str, graph: DependencyGraph) -> int:
                 count += 1
                 break
     return count
+
+
+# ---------------------------------------------------------------------------
+# Spatial Concierge: Centroid Discovery
+# ---------------------------------------------------------------------------
+
+from collections import Counter
+
+
+def discover_spatial_centroid(
+    convention_files: List[str],
+) -> Optional[str]:
+    """Find the dominant directory pattern for a convention.
+
+    If 80% of files matching a convention share a directory structure,
+    that structure becomes the ``allowed_paths`` regex.
+
+    Returns a regex string or None.
+    """
+    if not convention_files:
+        return None
+
+    # Extract directory paths
+    dirs = [os.path.dirname(f) for f in convention_files]
+
+    # Group by exact directory
+    dir_counts = Counter(dirs)
+    most_common_dir, count = dir_counts.most_common(1)[0]
+
+    if count / len(convention_files) >= 0.8:
+        # 80% consensus on exact directory
+        return f"{re.escape(most_common_dir)}/.*\\.py"
+
+    # If no exact match, look for structural consensus (e.g., Domain-Driven)
+    domain_pattern = _extract_domain_pattern(dirs)
+    if domain_pattern:
+        return domain_pattern
+
+    return None
+
+
+def _extract_domain_pattern(dirs: List[str]) -> Optional[str]:
+    """Detect structural patterns like ``domains/*/api/``.
+
+    Splits each directory path into segments, aligns them by position,
+    and replaces segments with > 20% variation with ``[^/]+`` wildcards.
+    Requires 80% consensus on the overall structural pattern.
+    """
+    if not dirs or len(dirs) < 3:
+        return None
+
+    # Split into segments
+    splits = [d.split("/") for d in dirs if d]
+    if not splits:
+        return None
+
+    # All paths must have the same depth for structural matching
+    lengths = [len(s) for s in splits]
+    length_counts = Counter(lengths)
+    dominant_len, dominant_count = length_counts.most_common(1)[0]
+
+    if dominant_count / len(splits) < 0.8:
+        return None  # No consensus on depth
+
+    # Filter to paths with the dominant depth
+    aligned = [s for s in splits if len(s) == dominant_len]
+    if len(aligned) < 3:
+        return None
+
+    # Build pattern: literal where all agree, wildcard where they differ
+    pattern_parts = []
+    for pos in range(dominant_len):
+        segments_at_pos = [s[pos] for s in aligned]
+        seg_counts = Counter(segments_at_pos)
+        top_seg, top_count = seg_counts.most_common(1)[0]
+
+        if top_count / len(aligned) >= 0.8:
+            pattern_parts.append(re.escape(top_seg))
+        else:
+            pattern_parts.append("[^/]+")
+
+    # Must have at least one wildcard to be a useful domain pattern
+    if "[^/]+" not in pattern_parts:
+        return None
+
+    return "/".join(pattern_parts) + "/.*\\.py"

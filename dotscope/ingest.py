@@ -127,6 +127,14 @@ def ingest(
         maturity = detect_codebase_maturity(graph.apis, history, voice_override)
         if maturity == "new":
             discovered_voice = prescriptive_defaults()
+            # Inject prescriptive spatial conventions for greenfield repos
+            if not plan.discovered_conventions:
+                from .passes.voice_defaults import prescriptive_spatial_conventions
+                spatial_convs = prescriptive_spatial_conventions()
+                plan.discovered_conventions = spatial_convs
+                if not dry_run:
+                    from .intent import save_conventions
+                    save_conventions(root, spatial_convs)
         else:
             discovered_voice = discover_voice(graph.apis, root)
         if not dry_run:

@@ -152,6 +152,18 @@ def check_convention_rules(
                     f"Missing matching file: {pattern} (resolved: {expected_pattern})"
                 )
 
+    # Spatial Concierge: check allowed_paths
+    if "allowed_paths" in rules:
+        path_ok = False
+        for pattern in rules["allowed_paths"]:
+            if re.match(pattern, file_path):
+                path_ok = True
+                break
+        if not path_ok:
+            violations.append(
+                f"File not in allowed path: expected {rules['allowed_paths']}"
+            )
+
     return violations
 
 
