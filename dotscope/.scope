@@ -10,6 +10,21 @@ includes:
   - dotscope/discovery.py
   - dotscope/parser.py
   - dotscope/visibility.py
+  - dotscope/hooks.py
+  - dotscope/budget.py
+  - dotscope/models.py
+  - dotscope/assertions.py
+  - dotscope/health.py
+  - dotscope/utility.py
+  - dotscope/sessions.py
+  - dotscope/virtual.py
+  - dotscope/lessons.py
+  - dotscope/graph.py
+  - dotscope/textio.py
+  - dotscope/tokens.py
+  - dotscope/matcher.py
+  - dotscope/ast_analyzer.py
+  - .scopes
 excludes:
   - dotscope/__pycache__/
   - dotscope/models/

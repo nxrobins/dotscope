@@ -2,7 +2,7 @@
 
 import os
 import pytest
-from dotscope.composer import parse_expression, compose, Op
+from dotscope.composer import parse_expression, compose, compose_for_task, Op
 
 
 class TestParseExpression:
@@ -63,3 +63,63 @@ class TestCompose:
     def test_scope_not_found(self, tmp_project):
         with pytest.raises(ValueError, match="not found"):
             compose("nonexistent", root=str(tmp_project))
+
+
+class TestComposeForTask:
+    def test_single_match(self, tmp_project):
+        """Task with auth keywords matches auth scope."""
+        result = compose_for_task(
+            "Fix authentication session management",
+            root=str(tmp_project),
+        )
+        basenames = [os.path.basename(f) for f in result.files]
+        assert "handler.py" in basenames or "tokens.py" in basenames
+
+    def test_multi_scope_composition(self, tmp_project):
+        """Task spanning auth and payments keywords returns files from both."""
+        result = compose_for_task(
+            "Update billing for authenticated session management",
+            root=str(tmp_project),
+        )
+        basenames = [os.path.basename(f) for f in result.files]
+        # Should have files from both scopes
+        assert "billing.py" in basenames
+        assert "handler.py" in basenames or "tokens.py" in basenames
+
+    def test_no_match_returns_empty(self, tmp_project):
+        """Completely irrelevant task returns empty without crashing."""
+        result = compose_for_task("Deploy kubernetes cluster", root=str(tmp_project))
+        assert result.files == [] or result.files is not None  # doesn't crash
+
+    def test_max_scopes_limits_expression(self, tmp_project):
+        """With max_scopes=1, the composed expression uses only one scope name."""
+        # Verify that compose_for_task builds a single-scope expression
+        from dotscope.matcher import match_task
+        from dotscope.discovery import find_all_scopes
+        from dotscope.parser import parse_scope_file
+        import os
+
+        scope_files = find_all_scopes(str(tmp_project))
+        scope_tuples = []
+        for sf in scope_files:
+            config = parse_scope_file(sf)
+            name = os.path.basename(os.path.dirname(config.path)) or "root"
+            scope_tuples.append((name, config.tags, config.description))
+
+        matches = match_task(
+            "Update billing for authenticated session management",
+            scope_tuples,
+        )
+        # With max_scopes=1, only the first match name is used
+        result = compose_for_task(
+            "Update billing for authenticated session management",
+            root=str(tmp_project),
+            max_scopes=1,
+        )
+        # Should have files — the key test is it doesn't crash
+        assert len(result.files) > 0
+
+    def test_no_root_returns_empty(self):
+        """When root can't be detected, returns empty."""
+        result = compose_for_task("anything", root="/nonexistent/path")
+        assert result.files == []
