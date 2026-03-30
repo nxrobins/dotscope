@@ -60,7 +60,7 @@ def _passing_gates():
 class TestGateShortCircuit:
     def test_all_gates_pass(self):
         gates = _passing_gates()
-        primary = EditFrontierScore(mean_f1=0.8, invariant_recall=0.9,
+        primary = EditFrontierScore(mean_f1=0.8, mean_f2=0.8, invariant_recall=0.9,
                                     test_precision=0.85, freshness_accuracy=0.95)
         secondary = DownstreamScore(task_success=0.7, test_pass_rate=0.8)
         assert fitness(gates, primary, secondary) > 0
@@ -68,7 +68,7 @@ class TestGateShortCircuit:
     def test_single_gate_failure_zeros_fitness(self):
         gates = _passing_gates()
         gates[0] = GateResult(name="correctness", passed=False, value=0.5, threshold=0.78)
-        primary = EditFrontierScore(mean_f1=1.0, invariant_recall=1.0,
+        primary = EditFrontierScore(mean_f1=1.0, mean_f2=1.0, invariant_recall=1.0,
                                     test_precision=1.0, freshness_accuracy=1.0)
         secondary = DownstreamScore(task_success=1.0, test_pass_rate=1.0)
         assert fitness(gates, primary, secondary) == 0.0
@@ -76,7 +76,7 @@ class TestGateShortCircuit:
     def test_all_gates_fail(self):
         gates = [GateResult(name=f"g{i}", passed=False, value=0, threshold=1)
                  for i in range(6)]
-        primary = EditFrontierScore(mean_f1=1.0)
+        primary = EditFrontierScore(mean_f1=1.0, mean_f2=1.0)
         secondary = DownstreamScore(task_success=1.0)
         assert fitness(gates, primary, secondary) == 0.0
 
@@ -91,13 +91,13 @@ class TestPrimaryDominance:
         gates = _passing_gates()
 
         better_primary = EditFrontierScore(
-            mean_f1=0.9, invariant_recall=0.9,
+            mean_f1=0.9, mean_f2=0.9, invariant_recall=0.9,
             test_precision=0.9, freshness_accuracy=0.9,
         )
         worse_secondary = DownstreamScore()  # all zeros
 
         worse_primary = EditFrontierScore(
-            mean_f1=0.5, invariant_recall=0.5,
+            mean_f1=0.5, mean_f2=0.5, invariant_recall=0.5,
             test_precision=0.5, freshness_accuracy=0.5,
         )
         perfect_secondary = DownstreamScore(
@@ -115,7 +115,7 @@ class TestPrimaryDominance:
         """When primary is identical, secondary determines winner."""
         gates = _passing_gates()
         same_primary = EditFrontierScore(
-            mean_f1=0.8, invariant_recall=0.8,
+            mean_f1=0.8, mean_f2=0.8, invariant_recall=0.8,
             test_precision=0.8, freshness_accuracy=0.8,
         )
 
@@ -129,7 +129,7 @@ class TestPrimaryDominance:
     def test_secondary_contributes_at_most_001(self):
         """Secondary composite is scaled by 0.01."""
         gates = _passing_gates()
-        primary = EditFrontierScore(mean_f1=0.5)
+        primary = EditFrontierScore(mean_f1=0.5, mean_f2=0.5)
         perfect = DownstreamScore(
             task_success=1.0, test_pass_rate=1.0,
             scope_expansions=1.0, irrelevant_files=1.0,
@@ -151,29 +151,29 @@ class TestMonotonicity:
     def test_higher_f1_higher_fitness(self):
         gates = _passing_gates()
         secondary = DownstreamScore()
-        low = EditFrontierScore(mean_f1=0.3)
-        high = EditFrontierScore(mean_f1=0.9)
+        low = EditFrontierScore(mean_f1=0.3, mean_f2=0.3)
+        high = EditFrontierScore(mean_f1=0.9, mean_f2=0.9)
         assert fitness(gates, high, secondary) > fitness(gates, low, secondary)
 
     def test_higher_invariant_recall_higher_fitness(self):
         gates = _passing_gates()
         secondary = DownstreamScore()
-        low = EditFrontierScore(mean_f1=0.5, invariant_recall=0.3)
-        high = EditFrontierScore(mean_f1=0.5, invariant_recall=0.9)
+        low = EditFrontierScore(mean_f1=0.5, mean_f2=0.5, invariant_recall=0.3)
+        high = EditFrontierScore(mean_f1=0.5, mean_f2=0.5, invariant_recall=0.9)
         assert fitness(gates, high, secondary) > fitness(gates, low, secondary)
 
     def test_higher_test_precision_higher_fitness(self):
         gates = _passing_gates()
         secondary = DownstreamScore()
-        low = EditFrontierScore(mean_f1=0.5, test_precision=0.3)
-        high = EditFrontierScore(mean_f1=0.5, test_precision=0.9)
+        low = EditFrontierScore(mean_f1=0.5, mean_f2=0.5, test_precision=0.3)
+        high = EditFrontierScore(mean_f1=0.5, mean_f2=0.5, test_precision=0.9)
         assert fitness(gates, high, secondary) > fitness(gates, low, secondary)
 
     def test_higher_freshness_higher_fitness(self):
         gates = _passing_gates()
         secondary = DownstreamScore()
-        low = EditFrontierScore(mean_f1=0.5, freshness_accuracy=0.3)
-        high = EditFrontierScore(mean_f1=0.5, freshness_accuracy=0.9)
+        low = EditFrontierScore(mean_f1=0.5, mean_f2=0.5, freshness_accuracy=0.3)
+        high = EditFrontierScore(mean_f1=0.5, mean_f2=0.5, freshness_accuracy=0.9)
         assert fitness(gates, high, secondary) > fitness(gates, low, secondary)
 
 
@@ -190,7 +190,7 @@ class TestWeightNormalization:
 
     def test_perfect_primary_composite_is_one(self):
         perfect = EditFrontierScore(
-            mean_f1=1.0, invariant_recall=1.0,
+            mean_f1=1.0, mean_f2=1.0, invariant_recall=1.0,
             test_precision=1.0, freshness_accuracy=1.0,
         )
         assert abs(perfect.composite - 1.0) < 1e-9
@@ -301,13 +301,13 @@ class TestComparison:
         baseline = EvalRun(
             candidate_id="base", corpus_id="c1", fitness=0.5,
             gates=_passing_gates(),
-            primary=EditFrontierScore(mean_f1=0.5, mean_recall=0.5, mean_precision=0.5),
+            primary=EditFrontierScore(mean_f1=0.5, mean_f2=0.5, mean_recall=0.5, mean_precision=0.5),
             secondary=DownstreamScore(task_success=0.5),
         )
         candidate = EvalRun(
             candidate_id="new", corpus_id="c1", fitness=0.7,
             gates=_passing_gates(),
-            primary=EditFrontierScore(mean_f1=0.7, mean_recall=0.7, mean_precision=0.7),
+            primary=EditFrontierScore(mean_f1=0.7, mean_f2=0.7, mean_recall=0.7, mean_precision=0.7),
             secondary=DownstreamScore(task_success=0.7),
         )
         report = compare_runs(baseline, candidate)
@@ -318,7 +318,7 @@ class TestComparison:
         run = EvalRun(
             candidate_id="same", corpus_id="c1", fitness=0.5,
             gates=_passing_gates(),
-            primary=EditFrontierScore(mean_f1=0.5),
+            primary=EditFrontierScore(mean_f1=0.5, mean_f2=0.5),
             secondary=DownstreamScore(),
         )
         report = compare_runs(run, run)
@@ -349,7 +349,7 @@ class TestEdgeCases:
         """Fitness is bounded [0.0, ~1.01]."""
         gates = _passing_gates()
         perfect_p = EditFrontierScore(
-            mean_f1=1.0, invariant_recall=1.0,
+            mean_f1=1.0, mean_f2=1.0, invariant_recall=1.0,
             test_precision=1.0, freshness_accuracy=1.0,
         )
         perfect_s = DownstreamScore(

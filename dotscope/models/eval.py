@@ -20,6 +20,7 @@ class EditFrontierScore:
     mean_recall: float = 0.0
     mean_precision: float = 0.0
     mean_f1: float = 0.0
+    mean_f2: float = 0.0
     invariant_recall: float = 1.0
     test_precision: float = 1.0
     freshness_accuracy: float = 1.0
@@ -27,7 +28,7 @@ class EditFrontierScore:
     @property
     def composite(self) -> float:
         return (
-            0.50 * self.mean_f1
+            0.50 * self.mean_f2
             + 0.25 * self.invariant_recall
             + 0.15 * self.test_precision
             + 0.10 * self.freshness_accuracy

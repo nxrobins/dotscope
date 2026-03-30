@@ -135,16 +135,20 @@ def compute_primary(
     if not observations:
         return EditFrontierScore()
 
-    # R, P, F1 — per-observation, then averaged
+    # R, P, F1, F2 — per-observation, then averaged
     recalls = [o.recall for o in observations]
     precisions = [o.precision for o in observations]
     f1s = []
+    f2s = []
     for r, p in zip(recalls, precisions):
         f1s.append(2 * r * p / (r + p) if (r + p) > 0 else 0.0)
+        # F-beta with beta=2: weights recall 2x over precision
+        f2s.append(5 * r * p / (4 * p + r) if (4 * p + r) > 0 else 0.0)
 
     mean_r = _mean(recalls)
     mean_p = _mean(precisions)
     mean_f1 = _mean(f1s)
+    mean_f2 = _mean(f2s)
 
     # IR — invariant recall
     ir = _invariant_recall(constraints_violated, constraints_surfaced)
@@ -159,6 +163,7 @@ def compute_primary(
         mean_recall=round(mean_r, 4),
         mean_precision=round(mean_p, 4),
         mean_f1=round(mean_f1, 4),
+        mean_f2=round(mean_f2, 4),
         invariant_recall=round(ir, 4),
         test_precision=round(tp, 4),
         freshness_accuracy=round(fa, 4),
