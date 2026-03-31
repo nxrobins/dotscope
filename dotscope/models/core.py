@@ -309,6 +309,8 @@ class DependencyGraph:
     # { provider_file: { consumer_file: [NetworkEndpoint] } }
     reverse_network_edges: Dict[str, List[str]] = field(default_factory=dict)
     # { consumer_file: [provider_file, ...] } — O(1) reverse lookup
+    network_confidence: Dict[tuple, float] = field(default_factory=dict)
+    # { (provider_file, consumer_file): confidence } — 1.0/0.8/0.5
 
 
 @dataclass

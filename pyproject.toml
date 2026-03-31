@@ -1,7 +1,7 @@
 [project]
 name = "dotscope"
 version = "0.1.0"
-description = "Directory-scoped context boundaries for AI coding agents"
+description = "Your codebase's memory. Agents write code that fits in on the first try."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"

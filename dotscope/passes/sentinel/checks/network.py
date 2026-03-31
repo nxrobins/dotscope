@@ -1,18 +1,14 @@
 """Network contract check: backend changes must update their frontend consumers.
 
-If an agent modifies a file that serves HTTP endpoints consumed by frontend
-files, and those frontend files are NOT in the diff, this is a HOLD — the
-commit is blocked until the agent either updates the consumer or explicitly
-acknowledges that the payload contract is unchanged.
-
-Why HOLD (not NUDGE): AI agents ignore non-blocking warnings. A NUDGE lets
-the agent sail past a broken contract into production. HOLD forces the
-agent's execution loop to stop. If the payload truly didn't change, the
-agent runs ``dotscope check --acknowledge <id> "Payload unchanged"``
-creating a permanent audit trail.
+Severity is determined by match confidence:
+  - Confidence >= 0.8 (exact regex or suffix match): HOLD — hard block.
+    The agent must update the consumer or acknowledge "payload unchanged".
+  - Confidence == 0.5 (semantic root substring match): NOTE — soft warning.
+    Lower confidence means the link may be a false positive (e.g.,
+    UserViewSet matching /api/user-settings/ by substring).
 """
 
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 from ..models import CheckCategory, CheckResult, Severity
 
@@ -20,18 +16,21 @@ from ..models import CheckCategory, CheckResult, Severity
 def check_network_contracts(
     modified_files: List[str],
     network_edges: Dict[str, Dict[str, list]],
+    network_confidence: Optional[Dict[Tuple[str, str], float]] = None,
 ) -> List[CheckResult]:
     """Check if modified backend endpoints have unupdated frontend consumers.
 
     Args:
         modified_files: Relative paths of files changed in the diff.
         network_edges: {provider_file: {consumer_file: [endpoint_info]}}.
+        network_confidence: {(provider, consumer): confidence} from the linker.
     """
     if not network_edges:
         return []
 
     results = []
     modified_set = set(modified_files)
+    confidence = network_confidence or {}
 
     for filepath in modified_files:
         consumers = network_edges.get(filepath)
@@ -56,15 +55,30 @@ def check_network_contracts(
         if len(unmodified) > 5:
             consumer_list += f"\n  ... and {len(unmodified) - 5} more"
 
+        # Determine severity from confidence
+        # Max confidence across all unmodified consumers for this provider
+        max_conf = max(
+            confidence.get((filepath, c), 1.0)  # default to 1.0 if no confidence data
+            for c in unmodified
+        )
+
+        if max_conf >= 0.8:
+            severity = Severity.HOLD
+            severity_label = "HOLD"
+        else:
+            severity = Severity.NOTE
+            severity_label = "NOTE (low-confidence link)"
+
         results.append(CheckResult(
             passed=False,
             category=CheckCategory.NETWORK,
-            severity=Severity.HOLD,
-            message=f"Unresolved Network Contract: {filepath}",
+            severity=severity,
+            message=f"Unresolved Network Contract ({severity_label}): {filepath}",
             detail=(
                 f"You modified backend endpoints ({ep_label}) in {filepath}.\n"
                 f"These routes are consumed by frontend files that were not updated:\n"
-                f"{consumer_list}\n\n"
+                f"{consumer_list}\n"
+                f"Match confidence: {max_conf:.1f}\n\n"
                 f"If the payload or contract changed, you must update the consumers.\n"
                 f"If this is an internal refactor with no payload change, acknowledge it."
             ),

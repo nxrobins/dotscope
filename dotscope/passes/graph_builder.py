@@ -333,14 +333,20 @@ def build_network_edges(graph: DependencyGraph) -> None:
     forward: Dict[str, Dict[str, list]] = defaultdict(lambda: defaultdict(list))
     reverse: Dict[str, list] = defaultdict(list)
 
+    # Confidence dict: { (provider_file, consumer_file): max_confidence }
+    confidence_map: Dict[tuple, float] = {}
+
     for p_path, ep in providers:
         for c_path, cons in consumers:
             if p_path == c_path:
                 continue  # Same file — skip self-edges
             if not _methods_match(ep.method, cons.method):
                 continue
-            if _routes_match(ep, cons):
+            conf = _routes_match_confidence(ep, cons)
+            if conf > 0:
                 forward[p_path][c_path].append(ep)
+                key = (p_path, c_path)
+                confidence_map[key] = max(confidence_map.get(key, 0), conf)
 
     # Build reverse lookup
     for p_path, consumer_dict in forward.items():
@@ -350,6 +356,7 @@ def build_network_edges(graph: DependencyGraph) -> None:
 
     graph.network_edges = dict(forward)
     graph.reverse_network_edges = dict(reverse)
+    graph.network_confidence = confidence_map
 
 
 def _methods_match(provider_method: str, consumer_method: str) -> bool:
@@ -359,44 +366,45 @@ def _methods_match(provider_method: str, consumer_method: str) -> bool:
     return provider_method.upper() == consumer_method.upper()
 
 
-def _routes_match(ep, cons) -> bool:
-    """Check if a provider endpoint matches a consumer call.
+def _routes_match_confidence(ep, cons) -> float:
+    """Score how confidently a provider endpoint matches a consumer call.
 
-    Both extractors produce regex_path fields using the same ``[^/]+``
-    wildcard language, so we can match regex against raw paths in both
-    directions.
+    Returns:
+        1.0 — exact regex match (provider's regex matches consumer's path)
+        0.8 — suffix-aligned match (base URL stripped)
+        0.5 — ViewSet semantic root substring match
+        0.0 — no match
     """
     import re
 
-    # Primary: provider regex matches consumer raw path
+    # Primary: provider regex matches consumer raw path → confidence 1.0
     try:
         if ep.regex_path and re.match(ep.regex_path, cons.raw_path):
-            return True
+            return 1.0
     except re.error:
         pass
 
-    # Reverse: consumer regex matches provider raw path
+    # Reverse: consumer regex matches provider raw path → confidence 1.0
     try:
         if getattr(cons, "regex_path", "") and re.match(cons.regex_path, ep.raw_path):
-            return True
+            return 1.0
     except re.error:
         pass
 
-    # Fallback: suffix alignment for base URL differences
+    # Fallback: suffix alignment for base URL differences → confidence 0.8
     if _paths_fuzzy_match(ep.raw_path, cons.raw_path):
-        return True
+        return 0.8
 
     # ViewSet semantic matching: "DocumentTypeViewSet" → "documenttype"
-    # matches consumer "/api/document-types/" or "/api/document_types/"
+    # matches consumer "/api/document-types/" → confidence 0.5
     if getattr(ep, "handler_name", "") and "ViewSet" in ep.handler_name:
         semantic_root = ep.handler_name.replace("ViewSet", "").lower()
         if semantic_root:
-            # Normalize: strip hyphens and underscores from consumer path
             normalized = re.sub(r"[-_]", "", cons.raw_path.lower())
             if semantic_root in normalized:
-                return True
+                return 0.5
 
-    return False
+    return 0.0
 
 
 def _paths_fuzzy_match(provider_path: str, consumer_path: str) -> bool:

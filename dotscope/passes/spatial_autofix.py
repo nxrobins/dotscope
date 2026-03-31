@@ -13,6 +13,37 @@ from typing import Dict, List, Optional
 from ..models import DependencyGraph, ProposedFix
 
 
+def is_move_blocked_by_swarm(
+    old_path: str,
+    new_path: str,
+    repo_root: str,
+) -> Optional[str]:
+    """Check if a file move is blocked by an active swarm lock.
+
+    A ``git mv`` changes file paths, which can break active locks that
+    reference the source or destination. Returns a blocking message, or
+    None if the move is safe.
+    """
+    try:
+        from ..storage.swarm_state import load_swarm_state, gc_expired_locks
+        state = load_swarm_state(repo_root)
+        gc_expired_locks(state)
+
+        for lock_id, lock in state.locks.items():
+            all_locked = set(lock.primary_files + lock.exclusive_files + lock.shared_files)
+            if old_path in all_locked or new_path in all_locked:
+                return (
+                    f"Swarm Halt: cannot move {old_path} → {new_path}. "
+                    f"Agent {lock.agent_id} holds a lock that includes this path "
+                    f"(lock {lock_id}, task: {lock.task_description}). "
+                    f"Wait for the lock to expire or be released."
+                )
+    except Exception:
+        pass
+
+    return None
+
+
 def generate_spatial_autofix(
     old_path: str,
     new_path: str,
@@ -29,8 +60,17 @@ def generate_spatial_autofix(
 
     Returns:
         ProposedFix with shell commands and a unified diff covering all
-        import rewrites.
+        import rewrites. If a swarm lock blocks the move, the fix includes
+        a blocking message instead of commands.
     """
+    # Check swarm locks before generating the move
+    blocked = is_move_blocked_by_swarm(old_path, new_path, repo_root)
+    if blocked:
+        return ProposedFix(
+            file=old_path,
+            reason=blocked,
+            confidence=0.0,
+        )
     old_module = _path_to_module(old_path)
     new_module = _path_to_module(new_path)
 

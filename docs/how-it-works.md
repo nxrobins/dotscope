@@ -38,6 +38,29 @@ Before every commit, dotscope checks the agent's work:
 
 Most of the time, nothing fires. The routing is good enough that agents follow the rules without needing to be corrected.
 
+## It knows where files go
+
+Agents dump utility functions in `src/utils/` and helpers in `src/helpers/`. Six months later, nobody can find anything.
+
+dotscope prevents this. Before an agent creates a file, it can ask:
+
+```
+dotscope_route_file("Stripe webhook retry task", imports=["domains.billing.models"])
+→ domains/billing/tasks/
+```
+
+dotscope looks at the dependency graph, finds the conventions for that part of the codebase, and routes the file to the right folder. If an agent ignores the suggestion and puts the file somewhere wrong, the commit gets a note explaining where it should live — with a `git mv` command to fix it.
+
+On new projects, dotscope scaffolds a clean domain-driven structure from the first commit. On existing projects, it learns from what's already there.
+
+## It sees across languages
+
+Your Python backend and your TypeScript frontend share an invisible contract: the HTTP API. dotscope sees both sides.
+
+When an agent modifies a Django view that serves `/api/documents/`, dotscope knows that `document-list.component.ts` calls that endpoint. If the agent changes the backend without updating the frontend, the commit is blocked.
+
+This works for FastAPI, Flask, Django REST Framework, Angular, React — any combination of Python routes and JavaScript fetch/axios calls. dotscope extracts both sides from the AST and links them automatically.
+
 ## It gets smarter over time
 
 Every commit teaches dotscope something. Did the agent need a file that wasn't included? Next time, it will be. Did a convention hold up across 50 commits? Its enforcement gets stronger. Did a rule get overridden three times in a month? It gets quieter.
@@ -74,7 +97,7 @@ Both are plain text. You can read them, edit them, or ignore them entirely.
 
 ## Languages supported
 
-Python, JavaScript, TypeScript, and Go get full analysis — every function, every class, every import relationship mapped.
+Python, JavaScript, TypeScript, and Go get full analysis — every function, every class, every import relationship mapped. Python and JS/TS also get cross-language network contract detection (backend routes linked to frontend API calls).
 
 Other languages get basic import detection (enough for the dependency graph and git history analysis, but no convention or style discovery).
 

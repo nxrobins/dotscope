@@ -291,6 +291,11 @@ def install_hook(repo_root: str) -> str:
     path = _write_hook(merge_path, merge_content, _POST_MERGE_MARKER)
     results.append(f"post-merge: {path}")
 
+    # AST merge driver registration
+    merge_result = install_merge_driver(repo_root)
+    if merge_result:
+        results.append(merge_result)
+
     # Onboarding
     try:
         from .onboarding import mark_milestone
@@ -374,3 +379,122 @@ def hook_status(repo_root: str) -> str:
         parts.append("post-merge: not installed")
 
     return "\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# AST Merge Driver: scope-aware .gitattributes wiring
+# ---------------------------------------------------------------------------
+
+_GITATTRIBUTES_MARKER = "# dotscope AST merge driver"
+_MERGE_DRIVER_NAME = "dotscope-ast"
+
+
+def install_merge_driver(repo_root: str) -> str:
+    """Register the AST merge driver in .git/config and generate .gitattributes.
+
+    Only files actively analyzed by dotscope (matching scope includes)
+    receive the custom merge driver. Unscoped files fall through to
+    Git's default line-level merger.
+    """
+    import subprocess
+
+    git_dir = Path(repo_root) / ".git"
+    if not git_dir.is_dir():
+        return ""
+
+    # Register the driver in .git/config
+    driver_cmd = "python3 -m dotscope.merge.driver %O %A %B"
+    try:
+        subprocess.run(
+            ["git", "config", f"merge.{_MERGE_DRIVER_NAME}.driver", driver_cmd],
+            cwd=repo_root, capture_output=True, timeout=5,
+        )
+        subprocess.run(
+            ["git", "config", f"merge.{_MERGE_DRIVER_NAME}.name",
+             "dotscope AST-aware semantic merge"],
+            cwd=repo_root, capture_output=True, timeout=5,
+        )
+    except Exception:
+        return ""
+
+    # Generate .gitattributes from active scopes
+    _update_gitattributes(repo_root)
+
+    return f"merge-driver: {_MERGE_DRIVER_NAME} registered"
+
+
+def _update_gitattributes(repo_root: str) -> None:
+    """Write scope-aware .gitattributes entries for the AST merge driver.
+
+    Scans .scope files to find which file patterns dotscope actively
+    analyzes. Only those patterns get the custom merge driver — everything
+    else uses Git's default.
+    """
+    from ..discovery import find_all_scopes
+    from ..parser import parse_scope_file
+
+    scope_files = find_all_scopes(repo_root)
+    patterns = set()
+
+    for sf in scope_files:
+        try:
+            config = parse_scope_file(sf)
+            for inc in config.includes:
+                # Convert scope includes to gitattributes glob patterns
+                if inc.endswith("/"):
+                    # Directory pattern → all source files under it
+                    patterns.add(f"{inc}*.py merge={_MERGE_DRIVER_NAME}")
+                    patterns.add(f"{inc}*.ts merge={_MERGE_DRIVER_NAME}")
+                    patterns.add(f"{inc}*.js merge={_MERGE_DRIVER_NAME}")
+                elif inc.endswith((".py", ".ts", ".tsx", ".js", ".jsx", ".go")):
+                    patterns.add(f"{inc} merge={_MERGE_DRIVER_NAME}")
+                elif "*" in inc or "?" in inc:
+                    patterns.add(f"{inc} merge={_MERGE_DRIVER_NAME}")
+        except Exception:
+            continue
+
+    if not patterns:
+        return
+
+    # Write .gitattributes (preserve existing non-dotscope entries)
+    attr_path = Path(repo_root) / ".gitattributes"
+    existing_lines = []
+    if attr_path.exists():
+        existing_lines = [
+            line for line in attr_path.read_text(encoding="utf-8").splitlines()
+            if _MERGE_DRIVER_NAME not in line and _GITATTRIBUTES_MARKER not in line
+        ]
+
+    dotscope_block = [_GITATTRIBUTES_MARKER]
+    dotscope_block.extend(sorted(patterns))
+
+    all_lines = existing_lines + [""] + dotscope_block if existing_lines else dotscope_block
+    attr_path.write_text("\n".join(all_lines) + "\n", encoding="utf-8")
+
+
+def uninstall_merge_driver(repo_root: str) -> bool:
+    """Remove the AST merge driver from .git/config and .gitattributes."""
+    import subprocess
+    removed = False
+
+    try:
+        subprocess.run(
+            ["git", "config", "--remove-section", f"merge.{_MERGE_DRIVER_NAME}"],
+            cwd=repo_root, capture_output=True, timeout=5,
+        )
+        removed = True
+    except Exception:
+        pass
+
+    attr_path = Path(repo_root) / ".gitattributes"
+    if attr_path.exists():
+        lines = attr_path.read_text(encoding="utf-8").splitlines()
+        filtered = [
+            line for line in lines
+            if _MERGE_DRIVER_NAME not in line and _GITATTRIBUTES_MARKER not in line
+        ]
+        if len(filtered) < len(lines):
+            attr_path.write_text("\n".join(filtered) + "\n", encoding="utf-8")
+            removed = True
+
+    return removed
