@@ -94,6 +94,8 @@ class ResolvedScope:
     # Compiled Retrieval extensions (populated by codebase_search only)
     flattened_abstractions: Dict[str, dict] = field(default_factory=dict)
     retrieval_metadata: Optional[dict] = None
+    # Action hints: imperative directives derived from constraints and locks
+    action_hints: List[str] = field(default_factory=list)
 
     def merge(self, other: "ResolvedScope") -> "ResolvedScope":
         """Merge two resolved scopes (union)."""

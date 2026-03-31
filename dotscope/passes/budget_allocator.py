@@ -1,14 +1,62 @@
 """Token budgeting: rank files, fill to budget, progressive loading.
 
 Context is always included first. Then files are ranked and loaded
-until the budget is exhausted.
+until the budget is exhausted. Task-type profiles shift budget
+allocation between abstractions, network edges, companions, and routing.
 """
 
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from ..models import ResolvedScope
 from ..tokens import estimate_file_tokens, estimate_context_tokens
+
+
+# Task-type budget weight profiles
+TASK_PROFILES: Dict[Optional[str], Dict[str, float]] = {
+    "fix": {
+        "primary": 1.0,
+        "abstractions": 1.5,    # Understand call chain to find the bug
+        "network_edges": 1.0,
+        "companions": 0.5,
+        "routing": 0.3,
+    },
+    "add": {
+        "primary": 1.0,
+        "abstractions": 0.8,
+        "network_edges": 1.0,
+        "companions": 0.5,
+        "routing": 1.5,         # Need conventions to write code that fits
+    },
+    "refactor": {
+        "primary": 1.0,
+        "abstractions": 1.2,
+        "network_edges": 1.5,   # Refactoring can break consumers
+        "companions": 1.2,
+        "routing": 0.5,
+    },
+    "test": {
+        "primary": 1.0,
+        "abstractions": 1.3,    # Understand what to assert against
+        "network_edges": 0.5,
+        "companions": 1.5,      # Existing tests are the reference
+        "routing": 1.0,
+    },
+    "review": {
+        "primary": 1.0,
+        "abstractions": 1.0,
+        "network_edges": 1.2,
+        "companions": 0.8,
+        "routing": 1.0,
+    },
+    None: {                     # Default balanced allocation
+        "primary": 1.0,
+        "abstractions": 1.0,
+        "network_edges": 1.0,
+        "companions": 1.0,
+        "routing": 1.0,
+    },
+}
 
 
 def apply_budget(
