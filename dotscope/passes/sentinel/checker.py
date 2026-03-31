@@ -67,7 +67,19 @@ def check_diff(
     results.extend(check_conventions(modified_files, added_lines, conventions, convention_ast))
     results.extend(check_voice(modified_files, added_lines, voice_config, repo_root))
     network_edges = _load_network_edges(repo_root)
-    results.extend(check_network_contracts(modified_files, network_edges))
+    network_confidence = _load_network_confidence(repo_root)
+    results.extend(check_network_contracts(modified_files, network_edges, network_confidence))
+
+    # Swarm Lock enforcement
+    swarm_violations = _check_swarm_locks(modified_files, session, repo_root)
+    for sv in swarm_violations:
+        results.append(CheckResult(
+            passed=sv["passed"],
+            category=CheckCategory.BOUNDARY,
+            severity=Severity.HOLD,
+            message=sv["message"],
+            detail=sv.get("detail", ""),
+        ))
 
     # NOTEs
     results.extend(check_dependency_direction(added_lines, graph_hubs, scopes))
@@ -297,6 +309,25 @@ def _load_network_edges(repo_root: str) -> dict:
     try:
         from ...cache import load_cached_network_edges
         return load_cached_network_edges(repo_root)
+    except Exception:
+        return {}
+
+
+def _check_swarm_locks(modified_files, session, repo_root) -> list:
+    """Check if modified files violate active swarm locks."""
+    try:
+        from ...merge.swarm import check_swarm_locks
+        agent_id = session.get("agent_id") if session else None
+        return check_swarm_locks(modified_files, agent_id, repo_root)
+    except Exception:
+        return []
+
+
+def _load_network_confidence(repo_root: str) -> dict:
+    """Load cached network match confidence scores."""
+    try:
+        from ...cache import load_cached_network_confidence
+        return load_cached_network_confidence(repo_root)
     except Exception:
         return {}
 

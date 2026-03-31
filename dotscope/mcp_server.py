@@ -1142,6 +1142,105 @@ def main():
                       "Place the file near its primary consumer.",
         }, indent=2)
 
+    # -------------------------------------------------------------------
+    # Swarm Lock MCP tools
+    # -------------------------------------------------------------------
+
+    @mcp.tool()
+    def dotscope_claim_scope(
+        agent_id: str,
+        task_description: str,
+        primary_files: list,
+    ) -> str:
+        """Claim a scope for exclusive work. Returns lock status.
+
+        Before starting work, an agent claims the files it intends to
+        modify. dotscope computes the blast radius (direct + transitive
+        dependents) and either grants the lock, warns about shared
+        overlaps, or rejects if another agent holds exclusive rights.
+
+        Args:
+            agent_id: Unique identifier for the requesting agent.
+            task_description: What the agent plans to do.
+            primary_files: Files the agent intends to modify.
+        """
+        from .discovery import find_repo_root
+        from .merge.swarm import claim_scope
+
+        root = find_repo_root()
+        if root is None:
+            return json.dumps({"error": "Could not find repository root"})
+
+        try:
+            from .storage.cache import load_cached_graph_hubs, load_cached_network_edges
+            graph_hubs = load_cached_graph_hubs(root)
+            network_edges = load_cached_network_edges(root)
+        except Exception:
+            graph_hubs, network_edges = {}, {}
+
+        result = claim_scope(
+            repo_root=root,
+            agent_id=agent_id,
+            task_description=task_description,
+            primary_files=primary_files,
+            graph_hubs=graph_hubs,
+            network_edges=network_edges,
+        )
+        return json.dumps(result, indent=2)
+
+    @mcp.tool()
+    def dotscope_renew_lock(
+        lock_id: str,
+    ) -> str:
+        """Extend an active lock's expiry by 30 minutes.
+
+        Call this periodically during long-running tasks to prevent
+        the lock from expiring while the agent is still working.
+
+        Args:
+            lock_id: The lock ID returned by dotscope_claim_scope.
+        """
+        from .discovery import find_repo_root
+        from .merge.swarm import renew_lock
+
+        root = find_repo_root()
+        if root is None:
+            return json.dumps({"error": "Could not find repository root"})
+
+        renewed = renew_lock(root, lock_id)
+        return json.dumps({
+            "renewed": renewed,
+            "lock_id": lock_id,
+            "message": "Lock extended by 30 minutes" if renewed else "Lock not found or expired",
+        })
+
+    @mcp.tool()
+    def dotscope_escalate(
+        conflict_id: str,
+    ) -> str:
+        """Escalate a conflict that agents cannot resolve autonomously.
+
+        After 2 failed resolution attempts, this halts the agent loop
+        and surfaces the full conflict state to a human operator.
+
+        Args:
+            conflict_id: The conflict ID from a rejected claim.
+        """
+        from .discovery import find_repo_root
+        from .merge.swarm import check_escalation
+
+        root = find_repo_root()
+        if root is None:
+            return json.dumps({"error": "Could not find repository root"})
+
+        result = check_escalation(root, conflict_id)
+        if result:
+            return json.dumps(result, indent=2)
+        return json.dumps({
+            "escalation": False,
+            "message": "Not yet at escalation threshold. Continue resolution attempts.",
+        })
+
     mcp.run(transport="stdio")
 
 

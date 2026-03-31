@@ -81,6 +81,15 @@ def cache_ingest_data(
             with open(dot_dir / "network_edges.json", "w", encoding="utf-8") as f:
                 json.dump(edges_data, f, indent=2)
 
+        # Network confidence scores
+        if hasattr(graph, "network_confidence") and graph.network_confidence:
+            conf_data = {
+                f"{p}|{c}": score
+                for (p, c), score in graph.network_confidence.items()
+            }
+            with open(dot_dir / "network_confidence.json", "w", encoding="utf-8") as f:
+                json.dump(conf_data, f, indent=2)
+
 
 def load_cached_history(root: str) -> Optional[HistoryAnalysis]:
     """Load cached history from ..dotscope/history.json."""
@@ -144,4 +153,25 @@ def load_cached_network_edges(root: str) -> dict:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except (json.JSONDecodeError, KeyError):
+        return {}
+
+
+def load_cached_network_confidence(root: str) -> dict:
+    """Load cached network match confidence scores.
+
+    Returns: {(provider_file, consumer_file): confidence}
+    Keys are stored as "provider|consumer" in JSON, converted to tuples on load.
+    """
+    path = Path(root) / ".dotscope" / "network_confidence.json"
+    if not path.exists():
+        return {}
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return {
+            tuple(k.split("|", 1)): v
+            for k, v in data.items()
+        }
+    except (json.JSONDecodeError, KeyError, ValueError):
         return {}
