@@ -97,26 +97,28 @@ def main():
         format: str = "json",
         task: Optional[str] = None,
     ) -> str:
-        """Resolve a scope expression to a file list with architectural context.
+        """Get files, context, and constraints for a known scope.
 
-        Scope expressions support composition:
-        - "auth" — single scope
-        - "auth+payments" — merge two scopes (union of files)
-        - "auth-tests" — subtract (auth files minus test scope files)
-        - "auth&api" — intersect (only files in both)
-        - "auth@context" — context only, no files
-
-        If budget is set, returns the most relevant files fitting within
-        that token count. Context is always included first, then files are
-        ranked by historical utility and loaded until the budget is exhausted.
-
-        Response includes scope_accuracy when observation data exists.
+        Use when you already know which scope to work in (e.g., "billing",
+        "auth"). For discovery from a task description, use codebase_search.
 
         Args:
-            scope: Scope name, path, or composition expression
-            budget: Max tokens for context + files (None = no limit)
-            follow_related: Whether to follow related scope references
-            format: Output format — "json", "plain", or "cursor"
+            scope: Scope name or composition ("auth", "auth+payments",
+                "auth-tests", "auth&api", "auth@context").
+            budget: Token budget (None = no limit).
+            follow_related: Include related scopes.
+            format: "json", "plain", or "cursor".
+            task: Task description for smarter file ranking.
+
+        Returns JSON with:
+        - files: ranked by relevance, budget-fitted. Trust the ranking.
+        - context: architectural knowledge (contracts, gotchas, stability).
+        - constraints: rules to follow. GUARD severity blocks your commit.
+          Co-change contracts mean both files must change together.
+        - action_hints: imperative directives. Read these first.
+
+        Check constraints before writing. Co-change contracts require
+        paired modifications. Run dotscope_check before committing.
         """
         import time as _time
         _resolve_start = _time.perf_counter()
@@ -933,13 +935,24 @@ def main():
         diff: Optional[str] = None,
         session_id: Optional[str] = None,
     ) -> str:
-        """Check proposed changes against codebase rules and architectural intent.
+        """Pre-commit verification. Run this before every commit.
 
-        Call before committing. Returns holds (must address), notes (informational),
-        and proposed fixes for each hold.
+        Checks your changes against: implicit contracts, network contracts,
+        convention compliance, co-change requirements, swarm locks, and
+        anti-patterns.
 
-        If no diff provided, checks current git staged changes.
-        If session_id provided, uses that session for boundary checking.
+        Args:
+            diff: Git diff text. If omitted, checks staged changes.
+            session_id: Session for boundary checking.
+
+        Returns JSON with:
+        - passed: true if no blocking violations.
+        - guards: violations that BLOCK the commit. Fix each one.
+        - nudges: warnings. Self-correct if possible.
+        - notes: informational.
+
+        If violations returned, fix each one and re-check. Do not commit
+        with violations. The violations tell you exactly what broke and why.
         """
         from .passes.sentinel.checker import check_diff, check_staged
         from .discovery import find_repo_root
@@ -1150,16 +1163,14 @@ def main():
     def generate_artifacts(
         artifact: Optional[str] = None,
     ) -> str:
-        """Generate human-readable architecture documents from dotscope's analysis.
+        """Generate architecture documentation from dotscope's analysis.
 
-        Writes markdown files to the configured output directory.
-        Returns a summary of what was generated and where.
-
-        Useful when the developer asks: "What does dotscope know about
-        this codebase?" or "Generate documentation for the architecture."
+        Produces ARCHITECTURE_CONTRACTS.md, NETWORK_MAP.md, and
+        CO_CHANGE_ATLAS.md in docs/dotscope/. Use when asked to
+        "document the architecture" or "what are the implicit contracts?"
 
         Args:
-            artifact: "contracts", "network", "atlas", or None for all
+            artifact: "contracts", "network", "atlas", or None for all.
         """
         from .discovery import find_repo_root
         from .generate.engine import generate
@@ -1194,21 +1205,40 @@ def main():
         budget: Optional[int] = 8000,
         limit: Optional[int] = 10,
         artifact_only: Optional[bool] = False,
+        task_type: Optional[str] = None,
+        no_observe: Optional[bool] = False,
     ) -> str:
-        """Search the codebase with architectural context.
+        """Search the codebase and get everything needed to safely modify matching code.
 
-        Unlike resolve_scope (which starts from a scope name), this starts
-        from a natural-language query. The result is identical in shape:
-        a ResolvedScope with files, context, constraints, and routing.
-
-        The agent receives everything it needs to understand AND safely
-        modify the matching code in a single response.
+        This is your primary entry point. One call replaces manual file reading.
 
         Args:
-            query: Natural language description of what to find
-            budget: Token budget for the entire response (default 8000)
-            limit: Maximum primary results before expansion (default 10)
-            artifact_only: Filter to artifact chunks only (schemas, specs)
+            query: Natural language description of what to find.
+            budget: Token budget for the response (default 8000).
+            limit: Max primary results before expansion (default 10).
+            artifact_only: Filter to artifact chunks only (schemas, specs).
+            task_type: Optimizes budget allocation for your objective.
+                "fix" — boosts abstractions (understand call chain to find bug)
+                "add" — boosts routing/conventions (write code that fits)
+                "refactor" — boosts network edges and companions (blast radius)
+                "test" — boosts companions and abstractions (find tests + interfaces)
+                "review" — balanced with extra network edge context
+                None — default balanced allocation
+                Always provide task_type when your objective is clear.
+            no_observe: Skip retrieval logging for sensitive queries.
+
+        Returns JSON with:
+        - files: ranked by architectural relevance, trimmed to budget. Trust the ranking.
+        - flattened_abstractions: bodies of cross-file functions your code calls.
+          Check lock_status: "unlocked" = safe, "exclusive_locked" = do not modify.
+        - constraints: rules you must follow. GUARD severity blocks commit.
+          Co-change contracts mean both files must change together or neither.
+        - routing: conventions for new code (naming, imports, docstrings). Match them.
+        - action_hints: imperative directives derived from constraints and locks.
+          Read these first.
+        - retrieval_metadata: if index_freshness is "stale", run dotscope ingest first.
+
+        This replaces manual file reading. Do not read files manually.
         """
         from .discovery import find_repo_root
         from .search.synthesizer import synthesize_search
@@ -1223,6 +1253,8 @@ def main():
             budget=budget or 8000,
             limit=limit or 10,
             artifact_only=artifact_only or False,
+            task_type=task_type,
+            no_observe=no_observe or False,
         )
         return format_resolved(resolved, fmt="json", root=root)
 
@@ -1236,17 +1268,27 @@ def main():
         task_description: str,
         primary_files: list,
     ) -> str:
-        """Claim a scope for exclusive work. Returns lock status.
+        """Claim exclusive write access before modifying files.
 
-        Before starting work, an agent claims the files it intends to
-        modify. dotscope computes the blast radius (direct + transitive
-        dependents) and either grants the lock, warns about shared
-        overlaps, or rejects if another agent holds exclusive rights.
+        Call AFTER codebase_search/resolve_scope, BEFORE writing code.
+        The claim computes a blast radius: direct dependents get exclusive
+        locks, two-hop dependents get shared locks.
 
         Args:
-            agent_id: Unique identifier for the requesting agent.
-            task_description: What the agent plans to do.
-            primary_files: Files the agent intends to modify.
+            agent_id: Your unique identifier.
+            task_description: What you plan to do.
+            primary_files: Files you intend to modify.
+
+        Returns JSON with:
+        - status: "granted", "warning" (shared overlap), or "rejected" (exclusive overlap).
+        - exclusive_files: files no other agent can modify while you hold this lock.
+        - shared_files: files with soft warnings for other agents.
+        - preflight: advisory warnings about what will likely break.
+          Read preflight.missing_cochange_partners and preflight.affected_consumers
+          BEFORE writing code to avoid violations at check time.
+
+        If rejected (overlapping exclusive locks): wait for the lock to expire,
+        switch to a different task, or use dotscope_escalate. Do not force.
         """
         from .discovery import find_repo_root
         from .merge.swarm import claim_scope
@@ -1278,11 +1320,11 @@ def main():
     ) -> str:
         """Extend an active lock's expiry by 30 minutes.
 
-        Call this periodically during long-running tasks to prevent
-        the lock from expiring while the agent is still working.
+        Call when you receive an expiry warning in a resolve_scope response.
+        An expired lock means another agent can claim your files mid-work.
 
         Args:
-            lock_id: The lock ID returned by dotscope_claim_scope.
+            lock_id: The lock ID from dotscope_claim_scope.
         """
         from .discovery import find_repo_root
         from .merge.swarm import renew_lock
@@ -1302,10 +1344,15 @@ def main():
     def dotscope_escalate(
         conflict_id: str,
     ) -> str:
-        """Escalate a conflict that agents cannot resolve autonomously.
+        """Escalate an unresolvable conflict to a human operator.
+
+        Use when: interlocking locks that prevent progress, unresolvable
+        merge conflicts, or contract violations requiring cross-scope
+        changes beyond your claim.
 
         After 2 failed resolution attempts, this halts the agent loop
-        and surfaces the full conflict state to a human operator.
+        and surfaces the full conflict state (locks, merge conflicts,
+        broken contracts) as a structured document.
 
         Args:
             conflict_id: The conflict ID from a rejected claim.

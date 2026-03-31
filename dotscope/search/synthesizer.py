@@ -18,6 +18,8 @@ def synthesize_search(
     budget: int = 8000,
     limit: int = 10,
     artifact_only: bool = False,
+    task_type: Optional[str] = None,
+    no_observe: bool = False,
 ) -> ResolvedScope:
     """The main entry point. Orchestrates all 5 stages.
 
@@ -44,6 +46,20 @@ def synthesize_search(
                 retrieval_metadata={"query": query, "results_count": 0,
                                     "note": "No artifact chunks matched"},
             )
+
+    # Log retrieval for observation loop
+    if not no_observe:
+        try:
+            from .observation import log_retrieval, get_session_id
+            log_retrieval(
+                root,
+                session_id=get_session_id(),
+                query=query,
+                returned_files=[r.file_path for r in raw_results],
+                returned_scores={r.file_path: r.rrf_score for r in raw_results},
+            )
+        except Exception:
+            pass
 
     # Stage 2: Recency re-ranking
     file_histories = _load_file_histories(root)
@@ -145,7 +161,7 @@ def synthesize_search(
         else:
             break
 
-    return ResolvedScope(
+    resolved = ResolvedScope(
         files=budget_files,
         context="\n\n".join(context_parts) if context_parts else "",
         token_estimate=used,
@@ -162,6 +178,19 @@ def synthesize_search(
             "budget_limit": budget,
         },
     )
+
+    # Generate action hints
+    try:
+        from ..passes.hint_generator import generate_action_hints
+        resolved.action_hints = generate_action_hints(
+            resolved,
+            npmi_index=npmi_index,
+            network_edges=network_edges,
+        )
+    except Exception:
+        pass
+
+    return resolved
 
 
 # ---------------------------------------------------------------------------

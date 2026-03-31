@@ -196,6 +196,16 @@ def claim_scope(
             for lid in overlaps["shared"]
         ]
 
+    # Pre-flight advisory
+    try:
+        from ..passes.preflight import compute_preflight
+        result["preflight"] = compute_preflight(
+            claimed_files=primary_files,
+            repo_root=repo_root,
+        )
+    except Exception:
+        result["preflight"] = {"risk_level": "unknown"}
+
     return result
 
 
