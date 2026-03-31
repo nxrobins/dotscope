@@ -354,7 +354,14 @@ def _cmd_init(args):
     except Exception as e:
         print(f"dotscope: MCP config failed: {e}", file=sys.stderr)
 
-    # 4. Backtest as counterfactual demo
+    # 4. Write AGENT_INSTRUCTIONS.md
+    try:
+        _write_agent_instructions(root, quiet)
+    except Exception as e:
+        if not quiet:
+            print(f"dotscope: agent instructions failed: {e}", file=sys.stderr)
+
+    # 5. Backtest as counterfactual demo
     if not quiet:
         try:
             from .passes.backtest import backtest_scopes
@@ -403,6 +410,32 @@ def _print_counterfactual(ingest_result, backtest, violations):
     lines.append("")
 
     print("\n".join(lines), file=sys.stderr)
+
+
+def _write_agent_instructions(root: str, quiet: bool = False):
+    """Write AGENT_INSTRUCTIONS.md to the target repo if it doesn't exist."""
+    target = os.path.join(root, "AGENT_INSTRUCTIONS.md")
+    if os.path.exists(target):
+        if not quiet:
+            print("dotscope: AGENT_INSTRUCTIONS.md already exists, skipping", file=sys.stderr)
+        return
+
+    # Load the template from the dotscope package
+    package_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    template = os.path.join(package_dir, "AGENT_INSTRUCTIONS.md")
+
+    if os.path.isfile(template):
+        import shutil
+        shutil.copy2(template, target)
+    else:
+        # Fallback: write a minimal version
+        with open(target, "w", encoding="utf-8") as f:
+            f.write("# dotscope Agent Instructions\n\n")
+            f.write("Start every task with `codebase_search`. Run `dotscope_check` before every commit.\n\n")
+            f.write("See https://github.com/nxrobins/dotscope for full documentation.\n")
+
+    if not quiet:
+        print("dotscope: AGENT_INSTRUCTIONS.md written", file=sys.stderr)
 
 
 def _print_summary(ingest_result):
