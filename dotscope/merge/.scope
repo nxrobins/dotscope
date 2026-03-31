@@ -1,0 +1,34 @@
+description: Swarm Lock + AST Merge Driver — multi-agent coordination
+includes:
+  - dotscope/merge/swarm.py
+  - dotscope/merge/driver.py
+  - dotscope/merge/differ.py
+  - dotscope/merge/composer.py
+  - dotscope/merge/imports.py
+  - dotscope/merge/classifier.py
+  - dotscope/merge/models.py
+excludes:
+  - __pycache__/
+context: |
+  Two systems: Swarm Lock (semantic mutex) and AST Merge Driver (lossless
+  semantic 3-way merge).
+
+  swarm.py: Claim/release/renew lifecycle, depth-dampened blast radius,
+  N=2 escalation valve. Pre-flight advisory injected into claim response.
+
+  driver.py: Git merge driver entry point. Extracts mutations from each
+  agent's diff, classifies conflicts, merges imports via 3-way set logic,
+  reconstructs source via dual-pass (reverse-order replace + fresh ADD
+  insertion targets).
+
+  ## Gotchas
+  Swarm state is ephemeral (.dotscope/cache/swarm_state.json). Lock expiry
+  is 30 minutes. The escalation threshold is 2 failed resolution attempts.
+related:
+  - dotscope/storage/.scope
+  - dotscope/passes/.scope
+tags:
+  - swarm
+  - merge
+  - coordination
+  - locks

@@ -1,0 +1,24 @@
+description: Generated Artifacts — human-readable architecture documents
+includes:
+  - dotscope/generate/engine.py
+  - dotscope/generate/contracts.py
+  - dotscope/generate/network.py
+  - dotscope/generate/atlas.py
+  - dotscope/generate/models.py
+excludes:
+  - __pycache__/
+context: |
+  Three deterministic markdown renderers. Given the same cache state,
+  produces byte-identical output. No LLM generation.
+
+  contracts.py: ARCHITECTURE_CONTRACTS.md — co-change, boundary, anti-patterns.
+  network.py: NETWORK_MAP.md — cross-language topology, flow chains via BFS.
+  atlas.py: CO_CHANGE_ATLAS.md — ghost couplings, stability zones, hub files.
+  engine.py: Orchestrator with stale cache guard and deterministic timestamps.
+related:
+  - dotscope/passes/.scope
+  - dotscope/storage/.scope
+tags:
+  - artifacts
+  - documentation
+  - rendering

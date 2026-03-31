@@ -1,0 +1,29 @@
+description: Compiled Retrieval — vector/BM25 search fused with governance
+includes:
+  - dotscope/search/chunker.py
+  - dotscope/search/retriever.py
+  - dotscope/search/reranker.py
+  - dotscope/search/expander.py
+  - dotscope/search/flattener.py
+  - dotscope/search/synthesizer.py
+  - dotscope/search/observation.py
+  - dotscope/search/models.py
+excludes:
+  - __pycache__/
+context: |
+  Five-stage retrieval pipeline: base retrieval (BM25 + optional dense cosine
+  via mmap'd numpy) → recency re-ranking → dependency expansion (network edges,
+  NPMI companions, test files) → abstraction flattening (cross-file call
+  resolution with lock annotation) → compiled resolution (budget allocation,
+  constraint injection). Single codebase_search call returns everything.
+
+  chunker.py: Three-tier AST-aware chunking (AST → line → char fallback).
+  retriever.py: Hybrid search with RRF fusion, stale index detection.
+  observation.py: Session-scoped retrieval logging and usage score computation.
+related:
+  - dotscope/passes/.scope
+  - dotscope/models/.scope
+tags:
+  - search
+  - retrieval
+  - embeddings

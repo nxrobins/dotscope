@@ -1,0 +1,27 @@
+description: Eval harness — edit frontier fitness measurement
+includes:
+  - dotscope/eval/harness.py
+  - dotscope/eval/replay.py
+  - dotscope/eval/corpus.py
+  - dotscope/eval/compare.py
+  - dotscope/eval/bootstrap.py
+  - dotscope/models/eval.py
+excludes:
+  - __pycache__/
+context: |
+  Scalar fitness = primary.composite + 0.01 * secondary.composite.
+  Primary = 0.50*F2 + 0.25*invariant_recall + 0.15*test_precision + 0.10*freshness.
+  Hard-zero if any gate fails (recall regression, freshness, stability, p95 latency).
+
+  replay.py: Replays corpus tasks against scope resolution. Builds co-change
+  index (NPMI), loads utility scores, runs _rank_files with all signals.
+
+  corpus.py: Generates eval corpus from git history (2-30 file commits).
+  bootstrap.py: Seeds utility scores from synthetic sessions.
+related:
+  - dotscope/passes/.scope
+  - dotscope/.scope
+tags:
+  - eval
+  - fitness
+  - testing
