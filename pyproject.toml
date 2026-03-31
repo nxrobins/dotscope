@@ -1,7 +1,7 @@
 [project]
 name = "dotscope"
 version = "0.1.0"
-description = "Your codebase's memory. Agents write code that fits in on the first try."
+description = "The operating system for agent-driven codebases."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"

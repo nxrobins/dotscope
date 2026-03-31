@@ -2,32 +2,43 @@
   <img src="logo.png" alt="dotscope" width="400">
 </p>
 
-You hire an agent to fix one endpoint. It rewrites the auth module,
-ignores the naming convention every other file follows, puts a utility
-function in the wrong folder, and breaks a frontend component it didn't
-know existed. The code compiles. The tests pass. Production crashes at 2 AM.
+Every agent that touches your code starts from zero. It doesn't know
+which files depend on each other. It doesn't know your naming conventions.
+It doesn't know that changing a Django model will break an Angular
+component on the other side of the repo. It just writes code, commits,
+and moves on. You find out at 2 AM.
 
-This keeps happening because agents don't have what you have — the
-full picture. They see files. You see architecture.
+Now scale that to five agents working at once.
 
-**dotscope gives agents the architecture.**
+**dotscope is the operating system for your codebase.** It sits between
+your agents and your code. It remembers the architecture so they don't
+have to.
 
-It does three things:
+It does four things:
 
-1. **Remembers which files are connected.** Change `billing.py` without
-   updating the webhook handler? Blocked. Modify a Django model without
-   touching the Angular component that consumes it? Blocked. dotscope
-   learns these contracts from your git history and enforces them on
-   every commit.
+1. **Enforces contracts across languages.** Your Python backend and
+   TypeScript frontend share an invisible API contract. dotscope sees
+   both sides. Change a Django ViewSet without updating the Angular
+   component that calls it? Blocked. It extracts routes from FastAPI,
+   Flask, and DRF. It extracts fetch calls from React and Angular.
+   It links them automatically.
 
-2. **Knows where things go.** Before an agent writes a file, it asks
-   dotscope: *"Where should this live?"* dotscope looks at the dependency
-   graph, finds the right folder, and routes the file there. No more
-   `src/utils/` graveyards.
+2. **Routes files to the right place.** Before an agent creates a file,
+   it asks dotscope where it should go. dotscope reads the dependency
+   graph and routes the file to the directory where it belongs. If an
+   agent ignores the routing, the commit gets a fix with `git mv` and
+   AST-safe import rewrites already generated.
 
-3. **Teaches the style.** Your codebase has conventions — decorators,
-   base classes, naming patterns, import rules. dotscope discovers them
-   automatically and holds agents to the same standard your team follows.
+3. **Coordinates multiple agents.** When Agent A starts working on
+   billing, dotscope locks the blast radius — the files billing depends
+   on, the tests that cover it, the frontend components that consume it.
+   Agent B can work on auth at the same time without collision. If they
+   touch the same file, the AST merge driver resolves it semantically
+   instead of with line-level conflict markers.
+
+4. **Teaches the style.** Your codebase has conventions. dotscope
+   discovers them from your code and your git history, then holds every
+   agent to the same standard.
 
 Here's what it looks like on a real codebase:
 
