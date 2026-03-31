@@ -71,6 +71,10 @@ related:
   - dotscope/models/.scope
   - dotscope/passes/.scope
   - dotscope/storage/.scope
+  - dotscope/search/.scope
+  - dotscope/generate/.scope
+  - dotscope/merge/.scope
+  - dotscope/eval/.scope
 tags:
   - cli
   - mcp
