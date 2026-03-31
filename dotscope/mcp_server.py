@@ -1143,6 +1143,48 @@ def main():
         }, indent=2)
 
     # -------------------------------------------------------------------
+    # Generated Artifacts
+    # -------------------------------------------------------------------
+
+    @mcp.tool()
+    def generate_artifacts(
+        artifact: Optional[str] = None,
+    ) -> str:
+        """Generate human-readable architecture documents from dotscope's analysis.
+
+        Writes markdown files to the configured output directory.
+        Returns a summary of what was generated and where.
+
+        Useful when the developer asks: "What does dotscope know about
+        this codebase?" or "Generate documentation for the architecture."
+
+        Args:
+            artifact: "contracts", "network", "atlas", or None for all
+        """
+        from .discovery import find_repo_root
+        from .generate.engine import generate
+
+        root = find_repo_root()
+        if root is None:
+            return json.dumps({"error": "Could not find repository root"})
+
+        try:
+            results = generate(root, artifact_filter=artifact)
+            summary = []
+            for art in results:
+                summary.append({
+                    "name": art.name,
+                    "file": art.file_name,
+                    "stats": art.stats,
+                })
+            return json.dumps({
+                "generated": len(results),
+                "artifacts": summary,
+            }, indent=2)
+        except SystemExit as e:
+            return json.dumps({"error": str(e)})
+
+    # -------------------------------------------------------------------
     # Compiled Retrieval
     # -------------------------------------------------------------------
 
