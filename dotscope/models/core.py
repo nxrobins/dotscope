@@ -91,6 +91,9 @@ class ResolvedScope:
     truncated: bool = False
     excluded_files: List[str] = field(default_factory=list)
     file_scores: Dict[str, float] = field(default_factory=dict)
+    # Compiled Retrieval extensions (populated by codebase_search only)
+    flattened_abstractions: Dict[str, dict] = field(default_factory=dict)
+    retrieval_metadata: Optional[dict] = None
 
     def merge(self, other: "ResolvedScope") -> "ResolvedScope":
         """Merge two resolved scopes (union)."""
