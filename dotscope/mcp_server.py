@@ -1143,6 +1143,90 @@ def main():
         }, indent=2)
 
     # -------------------------------------------------------------------
+    # Generated Artifacts
+    # -------------------------------------------------------------------
+
+    @mcp.tool()
+    def generate_artifacts(
+        artifact: Optional[str] = None,
+    ) -> str:
+        """Generate human-readable architecture documents from dotscope's analysis.
+
+        Writes markdown files to the configured output directory.
+        Returns a summary of what was generated and where.
+
+        Useful when the developer asks: "What does dotscope know about
+        this codebase?" or "Generate documentation for the architecture."
+
+        Args:
+            artifact: "contracts", "network", "atlas", or None for all
+        """
+        from .discovery import find_repo_root
+        from .generate.engine import generate
+
+        root = find_repo_root()
+        if root is None:
+            return json.dumps({"error": "Could not find repository root"})
+
+        try:
+            results = generate(root, artifact_filter=artifact)
+            summary = []
+            for art in results:
+                summary.append({
+                    "name": art.name,
+                    "file": art.file_name,
+                    "stats": art.stats,
+                })
+            return json.dumps({
+                "generated": len(results),
+                "artifacts": summary,
+            }, indent=2)
+        except SystemExit as e:
+            return json.dumps({"error": str(e)})
+
+    # -------------------------------------------------------------------
+    # Compiled Retrieval
+    # -------------------------------------------------------------------
+
+    @mcp.tool()
+    def codebase_search(
+        query: str,
+        budget: Optional[int] = 8000,
+        limit: Optional[int] = 10,
+        artifact_only: Optional[bool] = False,
+    ) -> str:
+        """Search the codebase with architectural context.
+
+        Unlike resolve_scope (which starts from a scope name), this starts
+        from a natural-language query. The result is identical in shape:
+        a ResolvedScope with files, context, constraints, and routing.
+
+        The agent receives everything it needs to understand AND safely
+        modify the matching code in a single response.
+
+        Args:
+            query: Natural language description of what to find
+            budget: Token budget for the entire response (default 8000)
+            limit: Maximum primary results before expansion (default 10)
+            artifact_only: Filter to artifact chunks only (schemas, specs)
+        """
+        from .discovery import find_repo_root
+        from .search.synthesizer import synthesize_search
+        from .formatter import format_resolved
+
+        root = find_repo_root()
+        if root is None:
+            return json.dumps({"error": "Could not find repository root"})
+
+        resolved = synthesize_search(
+            query, root,
+            budget=budget or 8000,
+            limit=limit or 10,
+            artifact_only=artifact_only or False,
+        )
+        return format_resolved(resolved, fmt="json", root=root)
+
+    # -------------------------------------------------------------------
     # Swarm Lock MCP tools
     # -------------------------------------------------------------------
 

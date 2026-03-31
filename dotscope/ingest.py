@@ -142,6 +142,63 @@ def ingest(
             save_voice_config(root, discovered_voice)
         progress.finish(f"{maturity} mode")
 
+    # Step 3d: Build search index (vector + BM25)
+    if graph.apis and not dry_run:
+        progress.start("building search index")
+        try:
+            from .search.chunker import chunk_file, chunk_artifact, reset_chunk_counter
+            from .search.retriever import build_vector_index
+            from .search.models import RetrievalChunk
+
+            reset_chunk_counter()
+            all_chunks = []
+
+            # Chunk source files
+            for rel_path, analysis in graph.apis.items():
+                try:
+                    full_path = os.path.join(root, rel_path)
+                    if os.path.isfile(full_path):
+                        source = open(full_path, "r", encoding="utf-8", errors="replace").read()
+                        chunks = chunk_file(rel_path, analysis, source)
+                        all_chunks.extend(chunks)
+                except Exception:
+                    continue
+
+            # Chunk context artifacts if .dotscope_artifacts.yaml exists
+            artifacts_path = os.path.join(root, ".dotscope_artifacts.yaml")
+            if os.path.isfile(artifacts_path):
+                try:
+                    from .parser import _parse_yaml_simple
+                    artifacts_data = _parse_yaml_simple(
+                        open(artifacts_path, "r", encoding="utf-8").read()
+                    )
+                    for artifact in artifacts_data.get("artifacts", []):
+                        art_path = artifact.get("path", "")
+                        art_name = artifact.get("name", art_path)
+                        full_art = os.path.join(root, art_path)
+                        if os.path.isfile(full_art):
+                            content = open(full_art, "r", encoding="utf-8", errors="replace").read()
+                            art_chunks = chunk_artifact(art_name, art_path, content)
+                            all_chunks.extend(art_chunks)
+                        elif os.path.isdir(full_art):
+                            for dirpath, _, filenames in os.walk(full_art):
+                                for fname in filenames:
+                                    fpath = os.path.join(dirpath, fname)
+                                    rel = os.path.relpath(fpath, root)
+                                    content = open(fpath, "r", encoding="utf-8", errors="replace").read()
+                                    art_chunks = chunk_artifact(art_name, rel, content)
+                                    all_chunks.extend(art_chunks)
+                except Exception:
+                    pass
+
+            if all_chunks:
+                index = build_vector_index(root, all_chunks)
+                progress.finish(f"{index.chunk_count} chunks, {index.model_name}")
+            else:
+                progress.finish("0 chunks")
+        except Exception as e:
+            progress.finish(f"skipped ({e})")
+
     # Step 4: Synthesize scope files
     progress.start("generating scopes")
     for module in graph.modules:

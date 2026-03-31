@@ -25,8 +25,9 @@ dependencies = [
 mcp = ["mcp>=1.2.0"]
 tokens = ["tiktoken"]
 embeddings = ["sentence-transformers"]
+search = ["sentence-transformers", "numpy"]
 dev = ["pytest", "ruff"]
-all = ["dotscope[mcp,tokens]"]
+all = ["dotscope[mcp,tokens,search]"]
 
 [project.scripts]
 dotscope = "dotscope.cli:main"

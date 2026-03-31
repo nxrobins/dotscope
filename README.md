@@ -75,4 +75,4 @@ One command. Point it at anything.
 pip install dotscope && dotscope init
 ```
 
-[How It Works](docs/how-it-works.md) · [Scope Files](docs/scope-file.md) · [MIT](LICENSE)
+[How It Works](docs/how-it-works.md) · [Scope Files](docs/scope-file.md) · [Agent Instructions](AGENT_INSTRUCTIONS.md) · [MIT](LICENSE)
