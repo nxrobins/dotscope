@@ -361,7 +361,14 @@ class JavaScriptAnalyzer(BaseAnalyzer):
                 continue
 
             # Extract the first string or template_string argument
+            # TypeScript generics (e.g., get<Type>(...)) may place arguments
+            # after type_arguments — fall back to scanning children directly
             args = find_child(call_node, "arguments")
+            if not args:
+                for child in call_node.children:
+                    if child.type == "arguments":
+                        args = child
+                        break
             if not args:
                 continue
 

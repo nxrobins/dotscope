@@ -167,6 +167,7 @@ def _analyze_python(filepath: str, source: str) -> Optional[FileAnalysis]:
 
     api.decorators_used = sorted(all_decorators)
     api.network_endpoints = _extract_endpoints(tree, filepath)
+    api.network_endpoints.extend(_extract_viewset_endpoints(tree, filepath))
 
     # Detect re-exports: names in __all__ that are also imported
     if api.all_list:
@@ -517,7 +518,7 @@ def resolve_js_import(imp: ResolvedImport, source_file: str, root: str) -> Optio
 
 # HTTP methods recognised in route decorators
 _HTTP_METHODS = {"get", "post", "put", "delete", "patch", "head", "options"}
-_ROUTE_DECORATORS = _HTTP_METHODS | {"route", "api_route", "websocket"}
+_ROUTE_DECORATORS = _HTTP_METHODS | {"route", "api_route", "websocket", "action", "api_view"}
 
 
 def _extract_endpoints(tree: ast.AST, filepath: str) -> list:
@@ -566,6 +567,13 @@ def _parse_route_decorator(
     else:
         return None
 
+    # DRF @action: extract methods and url_path from kwargs
+    dec_name = func.id.lower() if isinstance(func, ast.Name) else ""
+    if dec_name == "action":
+        return _parse_drf_action(dec, func_name, filepath)
+    if dec_name == "api_view":
+        return _parse_drf_api_view(dec, func_name, filepath)
+
     # Extract path from first positional argument
     if not dec.args:
         return None
@@ -602,6 +610,128 @@ def _parse_route_decorator(
         handler_name=func_name,
         file=filepath,
     )
+
+
+def _parse_drf_action(
+    dec: ast.Call, func_name: str, filepath: str
+) -> "NetworkEndpoint | None":
+    """Parse a DRF ``@action(detail=True, methods=['post'], url_path='...')``."""
+    method = "ALL"
+    raw_path = None
+
+    for kw in dec.keywords:
+        if kw.arg == "methods" and isinstance(kw.value, (ast.List, ast.Tuple)):
+            methods = [
+                elt.value.upper()
+                for elt in kw.value.elts
+                if isinstance(elt, ast.Constant) and isinstance(elt.value, str)
+            ]
+            if methods:
+                method = methods[0]
+        elif kw.arg == "url_path" and isinstance(kw.value, ast.Constant):
+            raw_path = kw.value.value
+
+    # DRF defaults url_path to the function name
+    if not raw_path:
+        raw_path = func_name
+
+    regex_path = _route_path_to_regex(f"/{raw_path}")
+    return NetworkEndpoint(
+        method=method,
+        raw_path=f"/{raw_path}",
+        regex_path=regex_path,
+        handler_name=func_name,
+        file=filepath,
+    )
+
+
+def _parse_drf_api_view(
+    dec: ast.Call, func_name: str, filepath: str
+) -> "NetworkEndpoint | None":
+    """Parse a DRF ``@api_view(['GET', 'POST'])``."""
+    method = "ALL"
+
+    # First positional arg is the methods list
+    if dec.args and isinstance(dec.args[0], (ast.List, ast.Tuple)):
+        methods = [
+            elt.value.upper()
+            for elt in dec.args[0].elts
+            if isinstance(elt, ast.Constant) and isinstance(elt.value, str)
+        ]
+        if methods:
+            method = methods[0]
+
+    # api_view doesn't carry a path — the path is in urls.py
+    # Use the function name as a semantic key (similar to ViewSet)
+    return NetworkEndpoint(
+        method=method,
+        raw_path=f"/{func_name}",
+        regex_path="",
+        handler_name=func_name,
+        file=filepath,
+    )
+
+
+_VIEWSET_CRUD = {
+    "list": "GET", "create": "POST", "retrieve": "GET",
+    "update": "PUT", "partial_update": "PATCH", "destroy": "DELETE",
+}
+_READONLY_ACTIONS = {"list", "retrieve"}
+
+
+def _extract_viewset_endpoints(tree: ast.AST, filepath: str) -> list:
+    """Detect DRF ViewSet classes that implicitly define CRUD endpoints.
+
+    ``ModelViewSet`` exposes list/create/retrieve/update/partial_update/destroy.
+    ``ReadOnlyModelViewSet`` exposes list/retrieve only.
+    Any class whose base contains ``ViewSet`` is tagged as a network provider.
+    """
+    endpoints: list = []
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+
+        # Check base classes — handle both ast.Name and ast.Attribute
+        # e.g., class DocViewSet(viewsets.ModelViewSet):
+        base_names = []
+        for base in node.bases:
+            try:
+                base_names.append(ast.unparse(base))
+            except Exception:
+                if isinstance(base, ast.Name):
+                    base_names.append(base.id)
+                elif isinstance(base, ast.Attribute):
+                    base_names.append(base.attr)
+
+        is_viewset = any("ViewSet" in bn for bn in base_names)
+        if not is_viewset:
+            continue
+
+        is_model = any("ModelViewSet" in bn for bn in base_names)
+        is_readonly = any("ReadOnly" in bn for bn in base_names)
+
+        if is_model:
+            actions = _VIEWSET_CRUD if not is_readonly else {
+                k: v for k, v in _VIEWSET_CRUD.items() if k in _READONLY_ACTIONS
+            }
+        else:
+            # Generic ViewSet — no implicit CRUD, only @action decorators
+            # (those are already caught by _extract_endpoints via _parse_drf_action)
+            actions = {}
+
+        class_name = node.name
+
+        for action_name, method in actions.items():
+            endpoints.append(NetworkEndpoint(
+                method=method,
+                raw_path="",  # Unknown — resolved via semantic matching
+                regex_path="",
+                handler_name=class_name,
+                file=filepath,
+            ))
+
+    return endpoints
 
 
 def _route_path_to_regex(raw_path: str) -> str:
