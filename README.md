@@ -2,43 +2,55 @@
   <img src="logo.png" alt="dotscope" width="400">
 </p>
 
-Every agent that touches your code starts from zero. It doesn't know
-which files depend on each other. It doesn't know your naming conventions.
-It doesn't know that changing a Django model will break an Angular
-component on the other side of the repo. It just writes code, commits,
-and moves on. You find out at 2 AM.
+You give an agent a task. It searches your codebase, finds the files,
+writes the code, runs the tests, and ships. Sounds fine until you
+realize it changed a backend endpoint without touching the frontend
+that calls it. It put a utility function in `src/helpers/` instead of
+next to the module that uses it. It ignored the naming convention every
+other file follows. And when two agents worked at the same time, they
+silently overwrote each other's changes.
 
-Now scale that to five agents working at once.
+The code compiled. The tests passed. Production broke.
 
-**dotscope is the operating system for your codebase.** It sits between
-your agents and your code. It remembers the architecture so they don't
-have to.
+This happens because agents don't have what you have — the full
+picture. They see files. You see architecture.
 
-It does four things:
+**dotscope is the operating system for agent-driven codebases.**
 
-1. **Enforces contracts across languages.** Your Python backend and
-   TypeScript frontend share an invisible API contract. dotscope sees
-   both sides. Change a Django ViewSet without updating the Angular
-   component that calls it? Blocked. It extracts routes from FastAPI,
-   Flask, and DRF. It extracts fetch calls from React and Angular.
-   It links them automatically.
+One command scans your project and learns the architecture: which files
+depend on which, what patterns your code follows, how your backend
+talks to your frontend, and what breaks when something changes. From
+that point on, every agent gets the full picture before it writes a
+line.
 
-2. **Routes files to the right place.** Before an agent creates a file,
-   it asks dotscope where it should go. dotscope reads the dependency
-   graph and routes the file to the directory where it belongs. If an
-   agent ignores the routing, the commit gets a fix with `git mv` and
-   AST-safe import rewrites already generated.
+It does five things:
 
-3. **Coordinates multiple agents.** When Agent A starts working on
-   billing, dotscope locks the blast radius — the files billing depends
-   on, the tests that cover it, the frontend components that consume it.
-   Agent B can work on auth at the same time without collision. If they
-   touch the same file, the AST merge driver resolves it semantically
-   instead of with line-level conflict markers.
+1. **One search, everything you need.** An agent describes what it
+   wants to do. dotscope returns the relevant files, the functions
+   they call, the contracts they must honor, the conventions they must
+   follow, and which files are locked by other agents. One call. Not
+   five.
 
-4. **Teaches the style.** Your codebase has conventions. dotscope
-   discovers them from your code and your git history, then holds every
-   agent to the same standard.
+2. **Enforces contracts across languages.** Your Python backend and
+   TypeScript frontend share an invisible API contract. dotscope
+   extracts routes from FastAPI, Flask, and DRF. It extracts fetch
+   calls from React and Angular. It links them automatically. Change
+   a Django ViewSet without updating the Angular component? Blocked.
+
+3. **Routes files to the right place.** Before an agent creates a
+   file, it asks dotscope where it should go. dotscope reads the
+   dependency graph and routes the file there. No more `src/utils/`
+   graveyards.
+
+4. **Coordinates multiple agents.** When Agent A starts working on
+   billing, dotscope locks the blast radius. Agent B works on auth
+   without collision. If they touch the same function, the AST merge
+   driver resolves it semantically — not with conflict markers.
+
+5. **Gets smarter with every commit.** Which search results did agents
+   actually use? Which did they ignore? dotscope tracks this and
+   adjusts. Conventions that hold up get enforced harder. Rules that
+   get overridden get quieter.
 
 Here's what it looks like on a real codebase:
 
