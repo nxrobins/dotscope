@@ -218,6 +218,22 @@ conventions:
 - `prohibited_imports` — imports that violate the convention
 - `required_methods` — methods all matching classes must implement
 - `must_have_matching` — pattern for a companion file (e.g., a test file)
+- `allowed_paths` — regex patterns for where matching files should live (spatial routing)
+
+```yaml
+conventions:
+  - name: "REST Controller"
+    source: discovered
+    match:
+      any_of:
+        - has_decorator: "router"
+    rules:
+      prohibited_imports: [sqlalchemy]
+      allowed_paths: ["domains/[^/]+/api/.*\\.py"]
+    compliance: 0.92
+```
+
+The `allowed_paths` rule is discovered automatically during ingest — if 80%+ of files matching a convention share a directory structure, that structure becomes the allowed path. Agents that create files in the wrong directory get a note with a `git mv` fix.
 
 **Compliance** tracks what percentage of matching files follow the rules. Conventions with >=80% compliance are enforced as HOLDs, 50-79% as NOTEs, and below 50% are retired.
 
@@ -249,9 +265,21 @@ voice:
 
 See [How It Works](how-it-works.md) for voice discovery and enforcement.
 
+## Multi-Agent State
+
+When multiple agents work concurrently, dotscope maintains additional state in `.dotscope/cache/`:
+
+- **`swarm_state.json`** — active locks, blast radii, and conflict descriptors
+- **`network_edges.json`** — cross-language API contract links (provider → consumer)
+- **`network_confidence.json`** — match confidence scores per link (1.0/0.8/0.5)
+- **`graph_hubs.json`** — dependency graph hub data for fast lookups
+
+This state is ephemeral (gitignored) and rebuilds from `dotscope ingest`. The `.gitattributes` file (which registers the AST merge driver for scoped files) should be committed.
+
 ## What to Commit
 
 - **`.scope` files** — commit them. They're institutional memory.
 - **`.scopes` index** — commit it. Project metadata.
 - **`intent.yaml`** — commit it. Team's architectural direction.
+- **`.gitattributes`** — commit it. Merge driver registration for scoped files.
 - **`.dotscope/`** — gitignored. Machine state. Rebuilds automatically.
