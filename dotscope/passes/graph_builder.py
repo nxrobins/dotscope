@@ -383,7 +383,20 @@ def _routes_match(ep, cons) -> bool:
         pass
 
     # Fallback: suffix alignment for base URL differences
-    return _paths_fuzzy_match(ep.raw_path, cons.raw_path)
+    if _paths_fuzzy_match(ep.raw_path, cons.raw_path):
+        return True
+
+    # ViewSet semantic matching: "DocumentTypeViewSet" → "documenttype"
+    # matches consumer "/api/document-types/" or "/api/document_types/"
+    if getattr(ep, "handler_name", "") and "ViewSet" in ep.handler_name:
+        semantic_root = ep.handler_name.replace("ViewSet", "").lower()
+        if semantic_root:
+            # Normalize: strip hyphens and underscores from consumer path
+            normalized = re.sub(r"[-_]", "", cons.raw_path.lower())
+            if semantic_root in normalized:
+                return True
+
+    return False
 
 
 def _paths_fuzzy_match(provider_path: str, consumer_path: str) -> bool:
