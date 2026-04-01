@@ -2,20 +2,44 @@
 
 # Directories to always skip when walking a codebase
 SKIP_DIRS = frozenset({
+    # Version control
     ".git",
+    # Package managers
     "node_modules",
+    "vendor",
+    # Python
     "__pycache__",
     "venv",
     ".venv",
     "env",
     ".env",
-    "dist",
-    "build",
     ".tox",
     ".mypy_cache",
     ".ruff_cache",
     ".eggs",
     ".pytest_cache",
+    # Build output
+    "dist",
+    "build",
+    "out",
+    "target",
+    "bin",
+    "obj",
+    # JS/TS frameworks
+    ".next",
+    ".nuxt",
+    ".output",
+    ".parcel-cache",
+    # Caches
+    ".cache",
+    ".gradle",
+    ".terraform",
+    # Test/coverage output
+    "coverage",
+    "test-results",
+    # dotscope / Claude
+    ".dotscope",
+    ".claude",
 })
 
 # Source file extensions

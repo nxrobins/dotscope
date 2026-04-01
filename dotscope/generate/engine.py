@@ -118,8 +118,8 @@ def _load_config(root: str) -> GenerateConfig:
         return GenerateConfig()
 
     try:
-        from ..parser import _parse_yaml_simple
-        data = _parse_yaml_simple(config_path.read_text(encoding="utf-8"))
+        from ..parser import _parse_yaml
+        data = _parse_yaml(config_path.read_text(encoding="utf-8"))
         gen = data.get("generate", {})
         return GenerateConfig(
             output_dir=gen.get("output_dir", "docs/dotscope"),
