@@ -1,7 +1,11 @@
 [project]
 name = "dotscope"
 version = "1.2.0"
+<<<<<<< HEAD
 description = "Agents see files. You see architecture. dotscope gives agents the architecture."
+=======
+description = "Directory-scoped context boundaries for AI coding agents"
+>>>>>>> 78be6d1 (Bump version to 1.2.0)
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
