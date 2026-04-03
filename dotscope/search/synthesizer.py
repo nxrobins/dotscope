@@ -131,23 +131,31 @@ def synthesize_search(
                 "scope_crossing": ab.scope_crossing,
             }
 
-    # Build constraints
-    constraints_text = ""
+    # Build constraints (keep structured for JSON response)
+    structured_constraints = []
     try:
         from ..passes.sentinel.constraints import build_constraints
-        constraints = build_constraints(root, unique_files, query)
-        if constraints:
+        raw_constraints = build_constraints(root, unique_files, query)
+        if raw_constraints:
+            structured_constraints = raw_constraints
             constraint_lines = []
-            for c in constraints:
+            for c in raw_constraints:
                 msg = c.get("message", "")
                 if msg:
                     constraint_lines.append(f"- {msg}")
             constraints_text = "\n".join(constraint_lines)
+            if constraints_text:
+                context_parts.append(f"\n## Constraints\n{constraints_text}")
     except Exception:
         pass
 
-    if constraints_text:
-        context_parts.append(f"\n## Constraints\n{constraints_text}")
+    # Build routing guidance
+    structured_routing = []
+    try:
+        from ..passes.sentinel.constraints import build_routing_guidance
+        structured_routing = build_routing_guidance(root, unique_files, query) or []
+    except Exception:
+        pass
 
     # Budget allocation: inside-out truncation
     from ..tokens import estimate_tokens
@@ -166,6 +174,8 @@ def synthesize_search(
         context="\n\n".join(context_parts) if context_parts else "",
         token_estimate=used,
         truncated=len(budget_files) < len(unique_files),
+        constraints=structured_constraints,
+        routing=structured_routing,
         flattened_abstractions=flat_abstractions,
         retrieval_metadata={
             "query": query,

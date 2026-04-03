@@ -1256,7 +1256,20 @@ def main():
             task_type=task_type,
             no_observe=no_observe or False,
         )
-        return format_resolved(resolved, fmt="json", root=root)
+        result = json.loads(format_resolved(resolved, fmt="json", root=root))
+
+        # Add next_steps based on what was found
+        next_steps = []
+        if resolved.constraints:
+            next_steps.append("Run dotscope_check before committing.")
+            if any(c.get("severity") == "GUARD" for c in resolved.constraints):
+                next_steps.append("GUARD-level constraints found. These will block your commit.")
+        if result.get("retrieval_metadata", {}).get("index_freshness") == "stale":
+            next_steps.append("Index is stale. Run dotscope ingest to refresh.")
+        if next_steps:
+            result["next_steps"] = next_steps
+
+        return json.dumps(result, indent=2)
 
     # -------------------------------------------------------------------
     # Swarm Lock MCP tools

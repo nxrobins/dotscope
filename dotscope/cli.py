@@ -354,12 +354,18 @@ def _cmd_init(args):
     except Exception as e:
         print(f"dotscope: MCP config failed: {e}", file=sys.stderr)
 
-    # 4. Write AGENT_INSTRUCTIONS.md
+    # 4. Write AGENT_INSTRUCTIONS.md + CLAUDE.md
     try:
         _write_agent_instructions(root, quiet)
     except Exception as e:
         if not quiet:
             print(f"dotscope: agent instructions failed: {e}", file=sys.stderr)
+    try:
+        from .storage.claude_hooks import write_claude_md
+        write_claude_md(root)
+    except Exception as e:
+        if not quiet:
+            print(f"dotscope: CLAUDE.md failed: {e}", file=sys.stderr)
 
     # 5. Backtest as counterfactual demo
     if not quiet:
