@@ -83,7 +83,7 @@ def ingest(
     from .progress import ProgressEmitter
     progress = ProgressEmitter(quiet=quiet)
 
-    # Step 1: Dependency graph
+    # Step 0: Dependency graph (Moved up for Topological Physics)
     progress.start("building dependency graph")
     graph = build_graph(root)
     plan.graph = graph
@@ -96,6 +96,61 @@ def ingest(
     plan.graph_summary = format_graph_summary(graph)
     edge_count = sum(len(n.imports) for n in graph.files.values())
     progress.finish(f"{len(graph.files)} files, {edge_count} edges, {len(graph.modules)} modules")
+
+    # Step 1: Federated Templates & Topological Directives
+    progress.start("querying federated network for directives")
+    try:
+        from .telemetry import fingerprint_repo, get_templates, anonymize_graph
+        from .context import parse_context
+        fingerprint = fingerprint_repo(root)
+        topology_metrics = anonymize_graph(graph)
+        network_templates = get_templates(fingerprint, topology_metrics)
+        
+        if network_templates:
+            for t in network_templates:
+                if "directive" in t:
+                    # Parse topological directive
+                    d_type = t["directive"]
+                    if d_type == "enforce_boundary" and "min_in_degree" in t.get("target_topology", {}):
+                        min_degree = t["target_topology"]["min_in_degree"]
+                        # Local isolation logic: Find all files matching the target topology
+                        isolated_hubs = []
+                        for f_path, node in graph.files.items():
+                            if len(node.imported_by) >= min_degree:
+                                isolated_hubs.append(f_path)
+                                
+                        if isolated_hubs:
+                            v_scope_name = t.get("virtual_scope_name", "isolated-hubs").lower().replace(" ", "-")
+                            if not quiet:
+                                _safe_print(f"\ndotscope Pro: {t.get('reasoning', 'Isolating God objects')}", file=sys.stderr)
+                                _safe_print(f" -> Found {len(isolated_hubs)} matching files (e.g. {isolated_hubs[0]})", file=sys.stderr)
+                            
+                            conf = ScopeConfig(
+                                path=os.path.join(root, ".virtual", f"{v_scope_name}.scope"),
+                                description=t.get("reasoning", "Virtual scope for isolated hubs"),
+                                includes=isolated_hubs,
+                                context=parse_context(f"## Cloud Directive\nThis virtual scope isolates objects that cross the semantic failure threshold for AI context.\n\n### Constraints\n- prohibited_imports: *"),
+                                tags=["virtual", "federated-directive"]
+                            )
+                            plan.scopes.append(PlannedScope(directory=".virtual", config=conf, confidence=1.0, signals=["cloud: isolated high-degree hub via directive"]))
+                else:
+                    # Legacy template
+                    if not quiet:
+                        _safe_print(f"\ndotscope Pro: Securing cold-start boost via {t['name']} template ({t['description']})", file=sys.stderr)
+                    for ts in t['scopes']:
+                        conf = ScopeConfig(
+                            path=os.path.join(root, ts['name'], ".scope"),
+                            description=f"Auto-applied from {t['name']} template",
+                            includes=ts['includes'],
+                            context=parse_context(f"## Telemetry Boost\nThis scope was seeded from the {t['name']} federated template."),
+                            tags=["federated", t['name']]
+                        )
+                        plan.scopes.append(PlannedScope(directory=ts['name'], config=conf, confidence=1.0, signals=["telemetry: cold-start boost"]))
+            progress.finish(f"{len(network_templates)} directives/templates applied")
+        else:
+            progress.skip("querying federated network", "no templates/directives matched")
+    except ImportError:
+        progress.skip("querying federated network", "telemetry offline")
 
     # Step 2: Git history
     history = HistoryAnalysis()

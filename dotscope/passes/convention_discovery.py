@@ -93,6 +93,46 @@ def discover_conventions(
     return conventions
 
 
+def extract_genomes(conventions: List[ConventionRule]) -> List[Dict[str, object]]:
+    """Anonymize ConventionRules into structural genomes for federated learning.
+    
+    Removes proprietary names and literal paths, keeping only the architectural shape.
+    """
+    genomes = []
+    for conv in conventions:
+        genome: Dict[str, object] = {
+            "name_shape": "abstract_" + conv.name.lower().replace(" ", "_"),
+            "match_criteria_keys": [],
+            "rules_shape": {}
+        }
+        
+        # Extract shapes from match criteria
+        keys = set()
+        for k, v in conv.match_criteria.items():
+            if isinstance(v, list):
+                for item in v:
+                    if isinstance(item, dict):
+                        keys.update(item.keys())
+        genome["match_criteria_keys"] = sorted(list(keys))
+                                
+        # Extract shapes from rules without leaking proprietary identifiers
+        rules_shape: Dict[str, object] = {}
+        for rule_type, rule_val in conv.rules.items():
+            if rule_type == "required_methods" and isinstance(rule_val, list):
+                rules_shape["requires_methods"] = True
+                rules_shape["method_count"] = len(rule_val)
+            elif rule_type == "prohibited_imports":
+                rules_shape["has_prohibited_imports"] = True
+            elif rule_type == "allowed_paths" and isinstance(rule_val, list) and rule_val:
+                rules_shape["has_spatial_centroid"] = True
+                rules_shape["spatial_depth"] = len(str(rule_val[0]).split("/"))
+                
+        genome["rules_shape"] = rules_shape
+        genomes.append(genome)
+        
+    return genomes
+
+
 def _normalize_decorator(dec: str) -> str:
     """Normalize a decorator string for grouping.
 

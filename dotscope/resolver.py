@@ -49,7 +49,7 @@ def _resolve_inner(
 
     scope_dir = config.directory
     if root is None:
-        from .discovery import find_repo_root
+        from .paths.repo import find_repo_root
         root = find_repo_root(scope_dir) or scope_dir
 
     files = _collect_includes(config.includes, root)

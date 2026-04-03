@@ -231,8 +231,7 @@ def _get_mtime(path: str) -> Optional[float]:
 
 def _infer_scope_root(config: ScopeConfig) -> Optional[str]:
     """Infer the repository root for a scope when one is not passed in."""
-    from .discovery import find_repo_root
-
+    from .paths.repo import find_repo_root
     return find_repo_root(config.directory) or os.path.dirname(config.directory)
 
 
