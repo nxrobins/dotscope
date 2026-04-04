@@ -1,0 +1,30 @@
+description: Virtual scope: ast_analyzer_lifecycle (spans 2 modules, hub: dotscope/passes/ast_analyzer.py)
+includes:
+  - dotscope/ast_analyzer.py
+  - dotscope/cache.py
+  - dotscope/intent.py
+  - dotscope/models/core.py
+  - dotscope/passes/ast_analyzer.py
+  - dotscope/passes/lang/__init__.py
+  - dotscope/passes/lang/_treesitter.py
+  - dotscope/passes/lang/go.py
+  - dotscope/passes/lang/javascript.py
+  - dotscope/passes/semantic_diff.py
+  - dotscope/passes/sentinel/acknowledge.py
+  - dotscope/passes/sentinel/checker.py
+  - dotscope/textio.py
+  - tests/test_treesitter.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/passes/ast_analyzer.py (imported by 13 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 55%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - ast_analyzer
+tokens_estimate: 28940

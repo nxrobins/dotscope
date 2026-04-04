@@ -1,0 +1,23 @@
+description: Virtual scope: go_lifecycle (spans 2 modules, hub: dotscope/passes/lang/go.py)
+includes:
+  - dotscope/models/core.py
+  - dotscope/passes/ast_analyzer.py
+  - dotscope/passes/graph_builder.py
+  - dotscope/passes/lang/__init__.py
+  - dotscope/passes/lang/go.py
+  - dotscope/passes/lang/javascript.py
+  - tests/test_treesitter.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/passes/lang/go.py (imported by 6 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 54%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - go
+tokens_estimate: 20084

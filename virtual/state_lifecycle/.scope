@@ -1,0 +1,50 @@
+description: Virtual scope: state_lifecycle (spans 2 modules, hub: dotscope/models/state.py)
+includes:
+  - dotscope/bench.py
+  - dotscope/composer.py
+  - dotscope/context.py
+  - dotscope/counterfactual.py
+  - dotscope/debug.py
+  - dotscope/discovery.py
+  - dotscope/eval/bootstrap.py
+  - dotscope/eval/harness.py
+  - dotscope/eval/replay.py
+  - dotscope/graph.py
+  - dotscope/history.py
+  - dotscope/ingest.py
+  - dotscope/intent.py
+  - dotscope/lessons.py
+  - dotscope/models.py
+  - dotscope/models/__init__.py
+  - dotscope/models/core.py
+  - dotscope/models/eval.py
+  - dotscope/models/history.py
+  - dotscope/models/intent.py
+  - dotscope/models/passes.py
+  - dotscope/models/state.py
+  - dotscope/onboarding.py
+  - dotscope/parser.py
+  - dotscope/passes/voice_defaults.py
+  - dotscope/paths.py
+  - dotscope/regression.py
+  - dotscope/resolver.py
+  - dotscope/sessions.py
+  - dotscope/storage/incremental_state.py
+  - dotscope/telemetry.py
+  - dotscope/utility.py
+  - dotscope/visibility.py
+  - tests/test_eval_harness.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/models/state.py (imported by 33 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 70%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - state
+tokens_estimate: 56525

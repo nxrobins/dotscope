@@ -1,0 +1,64 @@
+description: Virtual scope: models_lifecycle (spans 2 modules, hub: dotscope/models.py)
+includes:
+  - dotscope/budget.py
+  - dotscope/composer.py
+  - dotscope/constants.py
+  - dotscope/context.py
+  - dotscope/discovery.py
+  - dotscope/eval/bootstrap.py
+  - dotscope/eval/replay.py
+  - dotscope/formatter.py
+  - dotscope/health.py
+  - dotscope/history.py
+  - dotscope/lessons.py
+  - dotscope/matcher.py
+  - dotscope/models.py
+  - dotscope/models/state.py
+  - dotscope/parser.py
+  - dotscope/passes/ast_analyzer.py
+  - dotscope/passes/backtest.py
+  - dotscope/passes/budget_allocator.py
+  - dotscope/passes/convention_compliance.py
+  - dotscope/passes/convention_discovery.py
+  - dotscope/passes/convention_parser.py
+  - dotscope/passes/hint_generator.py
+  - dotscope/passes/semantic_diff.py
+  - dotscope/passes/sentinel/constraints.py
+  - dotscope/passes/spatial_autofix.py
+  - dotscope/paths.py
+  - dotscope/resolver.py
+  - dotscope/runtime_overlay.py
+  - dotscope/scanner.py
+  - dotscope/search/chunker.py
+  - dotscope/search/flattener.py
+  - dotscope/search/models.py
+  - dotscope/search/synthesizer.py
+  - dotscope/sessions.py
+  - dotscope/storage/cache.py
+  - dotscope/storage/incremental_state.py
+  - dotscope/storage/session_manager.py
+  - dotscope/storage/swarm_state.py
+  - dotscope/textio.py
+  - dotscope/tokens.py
+  - dotscope/utility.py
+  - tests/test_ast_analyzer.py
+  - tests/test_backtest.py
+  - tests/test_budget.py
+  - tests/test_lessons.py
+  - tests/test_loop.py
+  - tests/test_utility.py
+  - tests/test_visibility.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/models.py (imported by 47 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 88%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - models
+tokens_estimate: 72926

@@ -1,0 +1,53 @@
+description: Virtual scope: textio_lifecycle (spans 2 modules, hub: dotscope/textio.py)
+includes:
+  - dotscope/assertions.py
+  - dotscope/cache.py
+  - dotscope/cli.py
+  - dotscope/context.py
+  - dotscope/discovery.py
+  - dotscope/formatter.py
+  - dotscope/health.py
+  - dotscope/help.py
+  - dotscope/ingest.py
+  - dotscope/intent.py
+  - dotscope/lessons.py
+  - dotscope/models.py
+  - dotscope/models/intent.py
+  - dotscope/parser.py
+  - dotscope/passes/ast_analyzer.py
+  - dotscope/passes/backtest.py
+  - dotscope/passes/convention_parser.py
+  - dotscope/passes/graph_builder.py
+  - dotscope/passes/history_miner.py
+  - dotscope/passes/semantic_diff.py
+  - dotscope/passes/sentinel/acknowledge.py
+  - dotscope/passes/sentinel/checker.py
+  - dotscope/passes/sentinel/checks/voice.py
+  - dotscope/passes/sentinel/models.py
+  - dotscope/passes/voice.py
+  - dotscope/passes/voice_discovery.py
+  - dotscope/paths.py
+  - dotscope/refresh.py
+  - dotscope/storage/claude_hooks.py
+  - dotscope/storage/git_hooks.py
+  - dotscope/storage/incremental_state.py
+  - dotscope/storage/onboarding.py
+  - dotscope/storage/session_manager.py
+  - dotscope/textio.py
+  - dotscope/tokens.py
+  - dotscope/utility.py
+  - tests/test_textio.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/textio.py (imported by 36 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 70%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - textio
+tokens_estimate: 81633

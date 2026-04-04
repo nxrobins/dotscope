@@ -1,0 +1,40 @@
+description: Virtual scope: merge_lifecycle (spans 2 modules, hub: dotscope/swarm/merge.py)
+includes:
+  - dotscope/assertions.py
+  - dotscope/composer.py
+  - dotscope/discovery.py
+  - dotscope/formatter.py
+  - dotscope/ingest.py
+  - dotscope/intent.py
+  - dotscope/lessons.py
+  - dotscope/mcp_server.py
+  - dotscope/merge/swarm.py
+  - dotscope/parser.py
+  - dotscope/passes/graph_builder.py
+  - dotscope/passes/sentinel/checker.py
+  - dotscope/passes/sentinel/constraints.py
+  - dotscope/refresh.py
+  - dotscope/storage/cache.py
+  - dotscope/storage/near_miss.py
+  - dotscope/storage/session_manager.py
+  - dotscope/swarm/__init__.py
+  - dotscope/swarm/merge.py
+  - dotscope/swarm/partition.py
+  - dotscope/swarm/trace.py
+  - dotscope/utility.py
+  - dotscope/visibility.py
+  - tests/test_swarm.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/swarm/merge.py (imported by 23 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 47%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - merge
+tokens_estimate: 69853

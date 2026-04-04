@@ -1,0 +1,73 @@
+description: Virtual scope: refresh_lifecycle (spans 2 modules, hub: dotscope/refresh.py)
+includes:
+  - dotscope/__init__.py
+  - dotscope/assertions.py
+  - dotscope/bench.py
+  - dotscope/cli.py
+  - dotscope/composer.py
+  - dotscope/context.py
+  - dotscope/debug.py
+  - dotscope/discovery.py
+  - dotscope/formatter.py
+  - dotscope/generate/engine.py
+  - dotscope/health.py
+  - dotscope/help.py
+  - dotscope/ingest.py
+  - dotscope/intent.py
+  - dotscope/lessons.py
+  - dotscope/matcher.py
+  - dotscope/mcp_server.py
+  - dotscope/merge/swarm.py
+  - dotscope/models/intent.py
+  - dotscope/parser.py
+  - dotscope/passes/backtest.py
+  - dotscope/passes/budget_allocator.py
+  - dotscope/passes/convention_compliance.py
+  - dotscope/passes/convention_discovery.py
+  - dotscope/passes/convention_parser.py
+  - dotscope/passes/graph_builder.py
+  - dotscope/passes/history_miner.py
+  - dotscope/passes/incremental.py
+  - dotscope/passes/semantic_diff.py
+  - dotscope/passes/sentinel/acknowledge.py
+  - dotscope/passes/sentinel/checker.py
+  - dotscope/passes/sentinel/constraints.py
+  - dotscope/passes/virtual.py
+  - dotscope/passes/voice.py
+  - dotscope/paths.py
+  - dotscope/refresh.py
+  - dotscope/regression.py
+  - dotscope/resolver.py
+  - dotscope/scanner.py
+  - dotscope/search/synthesizer.py
+  - dotscope/storage/cache.py
+  - dotscope/storage/claude_hooks.py
+  - dotscope/storage/git_hooks.py
+  - dotscope/storage/mcp_config.py
+  - dotscope/storage/near_miss.py
+  - dotscope/storage/onboarding.py
+  - dotscope/storage/session_manager.py
+  - dotscope/storage/timing.py
+  - dotscope/swarm/merge.py
+  - dotscope/swarm/partition.py
+  - dotscope/swarm/trace.py
+  - dotscope/telemetry.py
+  - dotscope/textio.py
+  - dotscope/tokens.py
+  - dotscope/utility.py
+  - dotscope/visibility.py
+  - tests/test_refresh.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/refresh.py (imported by 56 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 70%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - refresh
+tokens_estimate: 130619

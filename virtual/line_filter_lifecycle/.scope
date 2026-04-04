@@ -1,0 +1,22 @@
+description: Virtual scope: line_filter_lifecycle (spans 2 modules, hub: dotscope/passes/sentinel/line_filter.py)
+includes:
+  - dotscope/passes/sentinel/checks/antipattern.py
+  - dotscope/passes/sentinel/checks/intent.py
+  - dotscope/passes/sentinel/checks/voice.py
+  - dotscope/passes/sentinel/line_filter.py
+  - dotscope/passes/sentinel/models.py
+  - tests/test_line_filter.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/passes/sentinel/line_filter.py (imported by 5 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 80%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - line_filter
+tokens_estimate: 3992

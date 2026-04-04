@@ -1,0 +1,27 @@
+description: Virtual scope: counterfactual_lifecycle (spans 2 modules, hub: dotscope/counterfactual.py)
+includes:
+  - dotscope/counterfactual.py
+  - dotscope/discovery.py
+  - dotscope/intent.py
+  - dotscope/models/state.py
+  - dotscope/near_miss.py
+  - dotscope/onboarding.py
+  - dotscope/paths.py
+  - dotscope/sessions.py
+  - dotscope/storage/incremental_state.py
+  - dotscope/visibility.py
+  - tests/test_experience.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/counterfactual.py (imported by 10 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 52%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - counterfactual
+tokens_estimate: 17548

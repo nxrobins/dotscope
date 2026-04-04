@@ -1,0 +1,42 @@
+conventions:
+  - name: "Dataclass"
+    source: discovered
+    match:
+      any_of:
+        - has_decorator: "dataclass"
+    rules:
+      prohibited_imports: [ast_analyzer, git_hooks, hooks, line_filter, sessions]
+      allowed_paths: [dotscope/[^/]+/.*\.py]
+    description: "Discovered from 18 files sharing decorator: dataclass"
+    compliance: 0.8333333333333334
+  - name: "Fixture"
+    source: discovered
+    match:
+      any_of:
+        - has_decorator: "pytest\.fixture"
+        - file_path: "tests/.*\.py"
+    rules:
+      prohibited_imports: [antipattern, history, hooks, retriever, session_manager]
+      allowed_paths: [tests/.*\.py]
+    description: "Discovered from 3 files sharing decorator: pytest.fixture"
+    compliance: 1.0
+
+voice:
+  mode: prescriptive
+  typing: |
+    Type hints on all function signatures. Return types always specified.
+  docstrings: |
+    Google style. Imperative mood. One-line if the name explains it.
+  error_handling: |
+    Domain exceptions. No bare excepts. Let unexpected errors propagate.
+  structure: |
+    Early returns over nested conditionals. Guard clauses at the top.
+  density: |
+    Concise. Comprehensions where readable. No filler variables.
+  comments: |
+    Comments explain why, not what.
+  imports: |
+    stdlib first, third-party second, local third. One import per line.
+  enforce:
+    bare_excepts: "hold"
+    missing_type_hints: "note"

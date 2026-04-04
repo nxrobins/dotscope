@@ -1,0 +1,55 @@
+description: Virtual scope: core_lifecycle (spans 2 modules, hub: dotscope/models/core.py)
+includes:
+  - dotscope/absorber.py
+  - dotscope/context.py
+  - dotscope/discovery.py
+  - dotscope/graph.py
+  - dotscope/history.py
+  - dotscope/ingest.py
+  - dotscope/intent.py
+  - dotscope/models.py
+  - dotscope/models/__init__.py
+  - dotscope/models/core.py
+  - dotscope/models/history.py
+  - dotscope/models/intent.py
+  - dotscope/models/passes.py
+  - dotscope/models/state.py
+  - dotscope/parser.py
+  - dotscope/passes/ast_analyzer.py
+  - dotscope/passes/convention_compliance.py
+  - dotscope/passes/convention_parser.py
+  - dotscope/passes/graph_builder.py
+  - dotscope/passes/incremental.py
+  - dotscope/passes/lang/__init__.py
+  - dotscope/passes/lang/_base.py
+  - dotscope/passes/lang/_treesitter.py
+  - dotscope/passes/lang/go.py
+  - dotscope/passes/lang/javascript.py
+  - dotscope/passes/lazy.py
+  - dotscope/passes/sentinel/checks/convention.py
+  - dotscope/passes/virtual.py
+  - dotscope/passes/voice_defaults.py
+  - dotscope/paths.py
+  - dotscope/progress.py
+  - dotscope/runtime_overlay.py
+  - dotscope/search/retriever.py
+  - dotscope/storage/incremental_state.py
+  - dotscope/swarm/partition.py
+  - dotscope/swarm/trace.py
+  - dotscope/telemetry.py
+  - dotscope/tokens.py
+  - tests/test_treesitter.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/models/core.py (imported by 38 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 87%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - core
+tokens_estimate: 67753

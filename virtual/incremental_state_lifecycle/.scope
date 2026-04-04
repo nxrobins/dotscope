@@ -1,0 +1,47 @@
+description: Virtual scope: incremental_state_lifecycle (spans 2 modules, hub: dotscope/storage/incremental_state.py)
+includes:
+  - dotscope/absorber.py
+  - dotscope/cache.py
+  - dotscope/constants.py
+  - dotscope/context.py
+  - dotscope/counterfactual.py
+  - dotscope/discovery.py
+  - dotscope/graph.py
+  - dotscope/health.py
+  - dotscope/history.py
+  - dotscope/ingest.py
+  - dotscope/intent.py
+  - dotscope/models.py
+  - dotscope/models/core.py
+  - dotscope/models/passes.py
+  - dotscope/models/state.py
+  - dotscope/onboarding.py
+  - dotscope/parser.py
+  - dotscope/passes/incremental.py
+  - dotscope/passes/lazy.py
+  - dotscope/passes/voice_defaults.py
+  - dotscope/paths.py
+  - dotscope/progress.py
+  - dotscope/refresh.py
+  - dotscope/runtime_overlay.py
+  - dotscope/storage/incremental_state.py
+  - dotscope/textio.py
+  - dotscope/tokens.py
+  - dotscope/visibility.py
+  - tests/test_health.py
+  - tests/test_ingest.py
+  - tests/test_visibility.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/storage/incremental_state.py (imported by 30 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 84%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - incremental_state
+tokens_estimate: 56035

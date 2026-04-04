@@ -1,0 +1,32 @@
+description: Virtual scope: constants_lifecycle (spans 2 modules, hub: dotscope/constants.py)
+includes:
+  - dotscope/absorber.py
+  - dotscope/constants.py
+  - dotscope/discovery.py
+  - dotscope/health.py
+  - dotscope/ignore.py
+  - dotscope/models.py
+  - dotscope/parser.py
+  - dotscope/passes/graph_builder.py
+  - dotscope/paths.py
+  - dotscope/resolver.py
+  - dotscope/runtime_overlay.py
+  - dotscope/scanner.py
+  - dotscope/storage/incremental_state.py
+  - dotscope/textio.py
+  - dotscope/tokens.py
+  - tests/test_ignore.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/constants.py (imported by 15 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 86%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - constants
+tokens_estimate: 22773

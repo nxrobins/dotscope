@@ -1,0 +1,53 @@
+description: Virtual scope: matcher_lifecycle (spans 2 modules, hub: dotscope/matcher.py)
+includes:
+  - dotscope/assertions.py
+  - dotscope/cli.py
+  - dotscope/composer.py
+  - dotscope/context.py
+  - dotscope/debug.py
+  - dotscope/discovery.py
+  - dotscope/eval/replay.py
+  - dotscope/formatter.py
+  - dotscope/health.py
+  - dotscope/help.py
+  - dotscope/ingest.py
+  - dotscope/intent.py
+  - dotscope/lessons.py
+  - dotscope/matcher.py
+  - dotscope/mcp_server.py
+  - dotscope/merge/swarm.py
+  - dotscope/models.py
+  - dotscope/parser.py
+  - dotscope/passes/backtest.py
+  - dotscope/passes/budget_allocator.py
+  - dotscope/passes/graph_builder.py
+  - dotscope/passes/history_miner.py
+  - dotscope/passes/sentinel/checker.py
+  - dotscope/passes/sentinel/constraints.py
+  - dotscope/refresh.py
+  - dotscope/resolver.py
+  - dotscope/storage/cache.py
+  - dotscope/storage/claude_hooks.py
+  - dotscope/storage/git_hooks.py
+  - dotscope/storage/near_miss.py
+  - dotscope/storage/onboarding.py
+  - dotscope/storage/session_manager.py
+  - dotscope/tokens.py
+  - dotscope/utility.py
+  - dotscope/visibility.py
+  - tests/test_composer.py
+  - tests/test_matcher.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/matcher.py (imported by 36 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 65%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - matcher
+tokens_estimate: 101476

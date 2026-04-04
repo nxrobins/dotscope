@@ -1,0 +1,14 @@
+description: Detected dense God-Objects. Emitting directive to isolate hubs.
+includes:
+  - dotscope/discovery.py
+  - dotscope/models.py
+  - dotscope/parser.py
+context: |
+  ## Cloud Directive
+  This virtual scope isolates objects that cross the semantic failure threshold for AI context.
+  
+  ### Constraints
+  - prohibited_imports: *
+tags:
+  - virtual
+  - federated-directive

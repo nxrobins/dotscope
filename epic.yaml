@@ -1,0 +1,75 @@
+name: "dotscope-dogfood-refactor"
+description: "Epic to decompose dotscope God Objects (cli.py, mcp_server.py, models.py, discovery.py) using topological boundaries."
+version: 1.0
+
+globals:
+  target_repo: "."
+  context_framework: "dotscope"
+
+agents:
+  - id: "architect"
+    role: "Senior Software Architect"
+    model: "claude-3.5-sonnet"
+    system_prompt: "You are the lead architect. Ensure strict separation of concerns, routing logic over monoliths, and no circular dependencies."
+    
+  - id: "developer"
+    role: "Python Developer"
+    model: "claude-3.5-sonnet"
+    system_prompt: "You write flawless, well-typed Python code. Respect all dotscope .virtual scopes and topological rules."
+
+tasks:
+  - id: "phase_1_paths"
+    name: "Decouple discovery.py and find_repo_root"
+    agent: "developer"
+    context:
+      scopes: [".virtual/isolated-hubs.scope"]
+    prompt: |
+      Extract `find_repo_root` from `dotscope/discovery.py` entirely.
+      Move it into a new lightweight utility module: `dotscope/paths/repo.py`.
+      Execute a repository-wide find-and-replace to update all import statements:
+      From: `from .discovery import find_repo_root`
+      To: `from .paths.repo import find_repo_root`
+    
+  - id: "phase_2_models"
+    name: "Deprecate Monolithic models.py"
+    agent: "developer"
+    depends_on: ["phase_1_paths"]
+    context:
+      scopes: [".virtual/isolated-hubs.scope"]
+    prompt: |
+      dotscope has both a `models.py` file and a `models/` directory. 
+      Move all definitions out of `dotscope/models.py` into their respective specific modules in `dotscope/models/`.
+      Update all downstream imports safely across the codebase to `from .models.<submodule> import ...`.
+      Delete the `dotscope/models.py` file.
+
+  - id: "phase_3_cli_split"
+    name: "Deconstruct cli.py via Domain Driven Design"
+    agent: "architect"
+    depends_on: ["phase_1_paths", "phase_2_models"]
+    context:
+      files: ["dotscope/cli.py", "pyproject.toml"]
+    prompt: |
+      1. Create a Python package `dotscope/cli/` with `__init__.py`.
+      2. Group the 24 CLI handlers currently in `dotscope/cli.py` by domain: `core.py`, `observability.py`, `ingest.py`, and `hooks.py` inside the `dotscope/cli/` folder.
+      3. Use `__init__.py` to piece together the argparser that routes down into these specific modules.
+      4. Update `pyproject.toml` [project.scripts] to point `dotscope = "dotscope.cli:main"`.
+      5. Delete the obsolete `dotscope/cli.py` root file.
+      
+  - id: "phase_4_mcp_split"
+    name: "Modularize mcp_server.py via Blueprints"
+    agent: "architect"
+    depends_on: ["phase_3_cli_split"]
+    context:
+      files: ["dotscope/mcp_server.py"]
+    prompt: |
+      Apply the exact same domain-driven logic to `dotscope/mcp_server.py`. 
+      Break out the `@mcp.tool()` registrations into distinct functions (e.g. `register_core_tools(mcp)`, `register_observability_tools(mcp)`).
+      You may split them into an `mcp/` package if desired, leaving `mcp_server.py` as a lightweight registration hub.
+
+  - id: "phase_5_validation"
+    name: "Execute Verification and Backtesting"
+    agent: "developer"
+    depends_on: ["phase_3_cli_split", "phase_4_mcp_split"]
+    prompt: |
+      Run `python -m dotscope check --backtest` locally within the environment.
+      Verify that no syntax or import errors emerge while running the entire suite.

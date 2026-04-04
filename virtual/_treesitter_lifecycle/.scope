@@ -1,0 +1,23 @@
+description: Virtual scope: _treesitter_lifecycle (spans 2 modules, hub: dotscope/passes/lang/_treesitter.py)
+includes:
+  - dotscope/models/core.py
+  - dotscope/passes/ast_analyzer.py
+  - dotscope/passes/lang/_base.py
+  - dotscope/passes/lang/_treesitter.py
+  - dotscope/passes/lang/go.py
+  - dotscope/passes/lang/javascript.py
+  - tests/test_treesitter.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/passes/lang/_treesitter.py (imported by 6 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 72%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - _treesitter
+tokens_estimate: 17412

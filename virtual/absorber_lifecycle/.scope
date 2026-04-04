@@ -1,0 +1,33 @@
+description: Virtual scope: absorber_lifecycle (spans 2 modules, hub: dotscope/absorber.py)
+includes:
+  - dotscope/absorber.py
+  - dotscope/context.py
+  - dotscope/graph.py
+  - dotscope/history.py
+  - dotscope/ingest.py
+  - dotscope/intent.py
+  - dotscope/models/core.py
+  - dotscope/models/passes.py
+  - dotscope/parser.py
+  - dotscope/passes/lazy.py
+  - dotscope/passes/voice_defaults.py
+  - dotscope/paths.py
+  - dotscope/progress.py
+  - dotscope/runtime_overlay.py
+  - dotscope/storage/incremental_state.py
+  - dotscope/tokens.py
+  - tests/test_absorber.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/absorber.py (imported by 16 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 59%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - absorber
+tokens_estimate: 30974

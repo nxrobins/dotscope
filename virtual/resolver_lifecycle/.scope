@@ -1,0 +1,44 @@
+description: Virtual scope: resolver_lifecycle (spans 2 modules, hub: dotscope/resolver.py)
+includes:
+  - dotscope/cli.py
+  - dotscope/composer.py
+  - dotscope/discovery.py
+  - dotscope/eval/bootstrap.py
+  - dotscope/eval/replay.py
+  - dotscope/formatter.py
+  - dotscope/help.py
+  - dotscope/ingest.py
+  - dotscope/intent.py
+  - dotscope/lessons.py
+  - dotscope/matcher.py
+  - dotscope/models.py
+  - dotscope/models/state.py
+  - dotscope/parser.py
+  - dotscope/passes/backtest.py
+  - dotscope/passes/budget_allocator.py
+  - dotscope/passes/graph_builder.py
+  - dotscope/passes/history_miner.py
+  - dotscope/passes/sentinel/checker.py
+  - dotscope/refresh.py
+  - dotscope/resolver.py
+  - dotscope/storage/claude_hooks.py
+  - dotscope/storage/git_hooks.py
+  - dotscope/storage/onboarding.py
+  - dotscope/storage/session_manager.py
+  - dotscope/tokens.py
+  - dotscope/utility.py
+  - tests/test_resolver.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/resolver.py (imported by 27 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 59%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - resolver
+tokens_estimate: 73023
