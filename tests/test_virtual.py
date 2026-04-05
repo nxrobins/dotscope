@@ -87,7 +87,7 @@ class TestVirtualScopes:
         scopes = detect_virtual_scopes(graph, min_importers=3, min_directories=2)
 
         user_scope = next(scope for scope in scopes if "user_lifecycle" in scope.description)
-        assert user_scope.path.endswith("virtual/user_lifecycle/.scope")
+        assert user_scope.path.endswith(os.path.join("virtual", "user_lifecycle", ".scope"))
         assert all("\\" not in include for include in user_scope.includes)
         assert all("\\" not in related for related in user_scope.related)
 

@@ -146,7 +146,7 @@ def _apply_excludes(files: List[str], excludes: List[str], scope_dir: str) -> Li
 
     result = []
     for f in files:
-        rel_path = os.path.relpath(f, scope_dir)
+        rel_path = os.path.relpath(f, scope_dir).replace(os.sep, "/")
         excluded = False
 
         for pattern in excludes:
