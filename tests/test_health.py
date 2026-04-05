@@ -135,7 +135,7 @@ class TestHealth:
         encoding_issues = [i for i in report.issues if i.category == "encoding"]
         assert len(encoding_issues) == 1
         assert encoding_issues[0].severity == "warning"
-        assert encoding_issues[0].scope_path.endswith("docs/README.md")
+        assert encoding_issues[0].scope_path.endswith(os.path.join("docs", "README.md"))
 
     def test_scoped_dirs_counted(self, tmp_project):
         report = full_health_report(str(tmp_project))

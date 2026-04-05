@@ -78,7 +78,7 @@ def _cmd_init(args):
     quiet = getattr(args, "quiet", False)
 
     # 1. Ingest
-    from .ingest import ingest
+    from ..ingest import ingest
     result = ingest(root, quiet=quiet)
 
     # 2. Install hooks

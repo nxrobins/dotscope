@@ -219,7 +219,7 @@ def _cluster_to_scope(cluster: VirtualScope, root: str) -> Optional[ScopeConfig]
     scope_dir = virtual_scope_directory(cluster.name)
 
     return ScopeConfig(
-        path=os.path.join(root, scope_dir, ".scope"),
+        path=os.path.join(root, scope_dir.replace("/", os.sep), ".scope"),
         description=description,
         includes=cluster.files,
         excludes=[],

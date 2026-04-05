@@ -70,9 +70,9 @@ def check_contracts(
                 proposed_fix=fix,
                 can_acknowledge=True,
                 acknowledge_id=ack_id,
-            ))
                 source_file="invariants.json",
                 source_rule=f"contract:{coupled}\u2194{trigger}",
+            ))
 
     return results
 

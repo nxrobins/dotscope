@@ -172,7 +172,7 @@ class TestSerialize:
 
         # Write and re-parse
         scope_file2 = tmp_path / ".scope2"
-        scope_file2.write_text(serialized)
+        scope_file2.write_text(serialized, encoding="utf-8")
         config2 = parse_scope_file(str(scope_file2))
 
         assert config2.description == config.description
