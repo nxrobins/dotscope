@@ -23,6 +23,12 @@ try:
             elif name == "go":
                 import tree_sitter_go as mod
                 _languages[name] = Language(mod.language())
+            elif name == "rust":
+                import tree_sitter_rust as mod
+                _languages[name] = Language(mod.language())
+            elif name == "java":
+                import tree_sitter_java as mod
+                _languages[name] = Language(mod.language())
             else:
                 raise ValueError(f"Unknown tree-sitter language: {name}")
         return _languages[name]

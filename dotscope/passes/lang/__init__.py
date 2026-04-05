@@ -20,13 +20,19 @@ def _register_analyzers():
     try:
         from .javascript import JavaScriptAnalyzer
         from .go import GoAnalyzer
+        from .rust import RustAnalyzer
+        from .java import JavaAnalyzer
 
         _js = JavaScriptAnalyzer()
         _go = GoAnalyzer()
+        _rust = RustAnalyzer()
+        _java = JavaAnalyzer()
 
         _analyzers["javascript"] = _js.analyze
         _analyzers["typescript"] = _js.analyze
         _analyzers["go"] = _go.analyze
+        _analyzers["rust"] = _rust.analyze
+        _analyzers["java"] = _java.analyze
     except ImportError:
         # tree-sitter not installed — analyzers stay empty, regex fallback
         pass
