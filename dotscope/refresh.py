@@ -212,11 +212,14 @@ def classify_refresh_job(
     return _make_job("repo", [], reason="unclassified change")
 
 
-def _get_commit_change_set(root: str, commit_hash: str) -> Tuple[List[str], List[str], List[str], bool]:
+def _get_commit_change_set(
+    root: str, commit_hash: str,
+) -> Tuple[List[str], List[str], List[str], bool, List[Tuple[str, str]]]:
     changed: List[str] = []
     added: List[str] = []
     deleted: List[str] = []
     renamed = False
+    renames: List[Tuple[str, str]] = []
 
     result = subprocess.run(
         ["git", "diff-tree", "--no-commit-id", "--name-status", "-r", commit_hash],
@@ -227,7 +230,7 @@ def _get_commit_change_set(root: str, commit_hash: str) -> Tuple[List[str], List
         check=False,
     )
     if result.returncode != 0:
-        return changed, added, deleted, renamed
+        return changed, added, deleted, renamed, renames
 
     for line in result.stdout.strip().splitlines():
         parts = line.split("\t")
@@ -237,6 +240,7 @@ def _get_commit_change_set(root: str, commit_hash: str) -> Tuple[List[str], List
         if status.startswith("R") and len(parts) >= 3:
             renamed = True
             old_path, new_path = parts[1].strip(), parts[2].strip()
+            renames.append((old_path, new_path))
             changed.extend([old_path, new_path])
             continue
 
@@ -247,14 +251,88 @@ def _get_commit_change_set(root: str, commit_hash: str) -> Tuple[List[str], List
         elif status == "D":
             deleted.append(path)
 
-    return changed, added, deleted, renamed
+    return changed, added, deleted, renamed, renames
+
+
+def patch_scope_paths_for_renames(
+    root: str,
+    renames: List[Tuple[str, str]],
+) -> int:
+    """Rewrite old paths to new paths in .scope files using text replacement.
+
+    Only targets list item lines (``  - old/path``) under ``includes:`` and
+    ``related:`` blocks.  Preserves inline comments and formatting.
+
+    Also migrates keys in incremental_state.scope_refresh_timestamps.
+
+    Returns the number of .scope files modified.
+    """
+    import re as _re
+    from .discovery import find_all_scopes
+
+    if not renames:
+        return 0
+
+    scope_files = find_all_scopes(root)
+    patched_count = 0
+
+    for scope_path in scope_files:
+        try:
+            with open(scope_path, "r", encoding="utf-8") as f:
+                original = f.read()
+        except (IOError, OSError):
+            continue
+
+        text = original
+        for old_path, new_path in renames:
+            escaped_old = _re.escape(old_path)
+            pattern = r"(^\s*-\s+)" + escaped_old + r"(\s*(?:#.*)?)$"
+            replacement = r"\g<1>" + new_path + r"\g<2>"
+            text = _re.sub(pattern, replacement, text, flags=_re.MULTILINE)
+
+        if text != original:
+            try:
+                with open(scope_path, "w", encoding="utf-8") as f:
+                    f.write(text)
+                patched_count += 1
+            except (IOError, OSError):
+                continue
+
+    _migrate_incremental_keys(root, renames)
+    return patched_count
+
+
+def _migrate_incremental_keys(
+    root: str,
+    renames: List[Tuple[str, str]],
+) -> None:
+    """Migrate scope_refresh_timestamps keys for renamed paths."""
+    state = load_incremental_state(root)
+    timestamps = state.scope_refresh_timestamps
+    if not timestamps:
+        return
+
+    changed = False
+    for old_path, new_path in renames:
+        old_key = scope_storage_key(old_path, root=root)
+        if old_key in timestamps:
+            new_key = scope_storage_key(new_path, root=root)
+            timestamps[new_key] = timestamps.pop(old_key)
+            changed = True
+
+    if changed:
+        save_incremental_state(root, state)
 
 
 def enqueue_commit_refresh(root: str, commit_hash: str) -> Optional[Dict[str, object]]:
     """Classify a commit and enqueue the appropriate refresh work."""
-    changed, added, deleted, renamed = _get_commit_change_set(root, commit_hash)
+    changed, added, deleted, renamed, renames = _get_commit_change_set(root, commit_hash)
     if not changed:
         return None
+
+    # Proactively patch scope files before enqueuing rebuild
+    if renames:
+        patch_scope_paths_for_renames(root, renames)
 
     job = classify_refresh_job(root, changed, added, deleted, renamed=renamed)
     if job["kind"] == "repo":
@@ -424,6 +502,59 @@ def refresh_status_summary(root: str) -> Dict[str, object]:
     summary["queued_job_count"] = len(queue)
     summary["queued_jobs"] = queue
     return summary
+
+
+def run_refresh_inline(
+    root: str,
+    targets: Optional[List[str]] = None,
+    repo: bool = False,
+    quiet: bool = False,
+) -> Dict[str, object]:
+    """Run a refresh synchronously: enqueue, drain, return results.
+
+    This is the simple "just do it" entry point.  Enqueues the appropriate job
+    and drains the queue inline (no subprocess worker).
+
+    Returns dict with {success, kind, targets_refreshed, duration_ms, error}.
+    """
+    t0 = time.time()
+
+    if repo:
+        enqueue_repo_refresh(root, reason="inline")
+    elif targets:
+        job = enqueue_scope_refresh(root, targets, reason="inline")
+        if job is None:
+            return {
+                "success": False,
+                "kind": "scope",
+                "targets_refreshed": [],
+                "duration_ms": 0,
+                "error": "Could not enqueue (repo refresh already pending or running)",
+            }
+    else:
+        enqueue_repo_refresh(root, reason="inline-default")
+
+    try:
+        ran = run_refresh_queue(root, drain=True)
+    except Exception as exc:
+        elapsed = int((time.time() - t0) * 1000)
+        return {
+            "success": False,
+            "kind": "repo" if repo or not targets else "scope",
+            "targets_refreshed": targets or [],
+            "duration_ms": elapsed,
+            "error": str(exc),
+        }
+
+    elapsed = int((time.time() - t0) * 1000)
+    status = load_refresh_status(root)
+    return {
+        "success": ran and not status.get("last_error"),
+        "kind": status.get("last_job_kind", "repo" if repo or not targets else "scope"),
+        "targets_refreshed": status.get("last_targets", targets or []),
+        "duration_ms": elapsed,
+        "error": status.get("last_error", ""),
+    }
 
 
 def _repo_job_pending_or_running(root: str) -> bool:

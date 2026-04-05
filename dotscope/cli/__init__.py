@@ -126,7 +126,10 @@ def main(argv=None):
     hook_sub.add_parser("claude", help="Install Claude Code pre-commit enforcement")
 
     # --- refresh ---
-    p_refresh = sub.add_parser("refresh", help="Manage runtime refresh queue and worker")
+    p_refresh = sub.add_parser("refresh", help="Refresh scopes (synchronous by default)")
+    p_refresh.add_argument("scopes", nargs="*", help="Scope names to refresh (omit for full repo)")
+    p_refresh.add_argument("--repo", action="store_true", help="Force full repo refresh")
+    p_refresh.add_argument("--async", dest="run_async", action="store_true", help="Queue and return (legacy async mode)")
     refresh_sub = p_refresh.add_subparsers(dest="refresh_action")
     p_refresh_enqueue = refresh_sub.add_parser("enqueue", help="Queue runtime refresh work")
     p_refresh_enqueue.add_argument("scopes", nargs="*", help="Scope names to refresh")
@@ -163,6 +166,7 @@ def main(argv=None):
     p_check.add_argument("--backtest", action="store_true", help="Replay recent commits against checks")
     p_check.add_argument("--commits", type=int, default=10, help="Commits to replay in backtest mode")
     p_check.add_argument("--json", dest="json_output", action="store_true", help="Output as JSON")
+    p_check.add_argument("--explain", action="store_true", help="Show full provenance for each finding")
 
     # --- intent ---
     p_intent = sub.add_parser("intent", help="Manage architectural intents")

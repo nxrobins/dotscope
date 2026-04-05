@@ -86,6 +86,8 @@ def check_network_contracts(
             suggestion=f"Update the consumer(s) above, or: dotscope check --acknowledge <id> \"Payload unchanged\"",
             can_acknowledge=True,
             acknowledge_id=f"network_{filepath.replace('/', '_').replace('.', '_')}",
+            source_file="network_edges",
+            source_rule=f"network_contract:{filepath}",
         ))
 
     return results

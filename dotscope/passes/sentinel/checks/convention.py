@@ -49,6 +49,10 @@ def check_conventions(
                         ),
                         file=filepath,
                         suggestion=rule.description,
+                        suggestion=rule.description,
+                        source_file="conventions.yaml",
+                        source_rule=f"convention:{rule.name}",
+                        ))
                     ))
 
     return results

@@ -45,6 +45,11 @@ def check_stability(
                 f"this diff changes {additions} lines"
             ),
             detail="Large changes to stable files deserve extra review",
+            detail="Large changes to stable files deserve extra review",
+            file=filepath,
+            source_file="invariants.json",
+            source_rule=f"stability:{filepath}",
+            ))
             file=filepath,
         ))
 

@@ -73,6 +73,8 @@ def check_colocation(
             suggestion=f"Consider: git mv {filepath} {suggested}",
             can_acknowledge=True,
             acknowledge_id=f"spatial_{filepath.replace('/', '_').replace('.', '_')}",
+            source_file="heuristic",
+            source_rule=f"spatial_colocation:{rule.lower().replace(' ', '_')}",
         ))
 
     return results

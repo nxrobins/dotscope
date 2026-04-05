@@ -78,6 +78,8 @@ def check_antipatterns(
                             proposed_fix=fix,
                             can_acknowledge=True,
                             acknowledge_id=f"antipattern_{pattern_str[:20].replace('.', '_')}",
+                            source_file=f"{scope_dir}/.scope",
+                            source_rule=f"antipattern:{pattern_str}",
                         ))
                         break  # One match per file per pattern is enough
 
