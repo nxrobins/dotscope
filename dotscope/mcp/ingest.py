@@ -1,3 +1,6 @@
+import json
+import os
+
 def register_ingest_tools(mcp, **kwargs):
     tracker = kwargs.get('tracker')
     client_id = kwargs.get('client_id')
@@ -27,7 +30,7 @@ def register_ingest_tools(mcp, **kwargs):
             absorb_docs: Whether to scan for README, docstrings, signal comments
             dry_run: If True, return the plan without writing files
         """
-        from .ingest import ingest
+        from ..ingest import ingest
 
         root = os.path.abspath(directory)
         plan = ingest(
@@ -39,7 +42,7 @@ def register_ingest_tools(mcp, **kwargs):
         )
 
         # Discovery data for programmatic consumers
-        from .ingest import (
+        from ..ingest import (
             _is_cross_module, _find_hub_discoveries, _find_volatility_surprises,
         )
         cross_module_contracts = []
@@ -110,7 +113,7 @@ def register_ingest_tools(mcp, **kwargs):
           notes: str (natural language findings)
           confidence: float (0-1, scout's self-assessed confidence)
         """
-        from .swarm.merge import merge_scout_findings as _merge
+        from ..swarm.merge import merge_scout_findings as _merge
         root = _root or _find_root()
         graph = _get_graph(root)
         invariants = _load_invariants(root)

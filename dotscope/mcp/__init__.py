@@ -22,6 +22,35 @@ import os
 import sys
 from typing import Optional
 
+from .. import __version__
+
+
+def _detect_client() -> str:
+    """Best-effort client detection from environment variables.
+
+    # TODO: validate env vars for Windsurf, Zed, Codex CLI, JetBrains
+    # against real installations. Long-term: read clientInfo from MCP
+    # initialize handshake when FastMCP exposes it.
+    """
+    env = os.environ
+    if "CLAUDE_VERSION" in env or "CLAUDE_DESKTOP" in env:
+        return "claude-desktop"
+    if env.get("CLAUDE_CODE"):
+        return "claude-code"
+    if env.get("TERM_PROGRAM") == "Cursor":
+        return "cursor"
+    if "WINDSURF" in env or "CODEIUM" in env:
+        return "windsurf"
+    if env.get("TERM_PROGRAM") == "vscode":
+        return "vscode"
+    if "ZED_TERM" in env or env.get("TERM_PROGRAM") == "zed":
+        return "zed"
+    if "JETBRAINS" in env or "IDEA" in env.get("TERMINAL_EMULATOR", ""):
+        return "jetbrains"
+    if env.get("CODEX_CLI"):
+        return "codex-cli"
+    return "unknown"
+
 
 def main():
     """MCP server entry point."""
@@ -42,20 +71,13 @@ def main():
     known, _remaining = parser.parse_known_args()
     _cli_root = known.root
 
-    mcp = FastMCP("dotscope")
+    mcp = FastMCP("dotscope", version=__version__)
 
     # Session-level tracker (lives across tool calls in a single MCP session)
-    from .visibility import SessionTracker
+    from ..visibility import SessionTracker
     tracker = SessionTracker()
     
-    # Check for underlying client identifiers
-    client_id = "unknown"
-    if "CLAUDE_VERSION" in os.environ or "CLAUDE_DESKTOP" in os.environ:
-        client_id = "claude-desktop"
-    elif os.environ.get("TERM_PROGRAM") == "Cursor":
-        client_id = "cursor"
-    elif os.environ.get("TERM_PROGRAM") == "vscode":
-        client_id = "vscode"
+    client_id = _detect_client()
     
     if hasattr(tracker, "_stats"):
         tracker._stats.client_identifier = client_id
@@ -66,9 +88,9 @@ def main():
     _cached_history = None
     _cached_graph_hubs = {}
     try:
-        from .paths.repo import find_repo_root
-        from .parser import parse_scopes_index
-        from .storage.cache import load_cached_history, load_cached_graph_hubs
+        from ..paths.repo import find_repo_root
+        from ..parser import parse_scopes_index
+        from ..storage.cache import load_cached_history, load_cached_graph_hubs
         _root = find_repo_root(_cli_root)
         if _root:
             _idx_path = os.path.join(_root, ".scopes")
@@ -78,6 +100,7 @@ def main():
             _cached_history = load_cached_history(_root)
             _cached_graph_hubs = load_cached_graph_hubs(_root)
             tracker.set_repo_root(_root)
+            os.chdir(_root)
     except Exception:
         pass
 
@@ -91,7 +114,7 @@ def main():
 
     def _save_session_scopes():
         try:
-            from .storage.near_miss import save_session_scopes
+            from ..storage.near_miss import save_session_scopes
             scopes = list(tracker._stats.unique_scopes)
             if scopes and _root:
                 save_session_scopes(_root, scopes)
@@ -105,7 +128,7 @@ def main():
                 if os.path.exists(cfg_path):
                     with open(cfg_path, "r") as f:
                         if f.read().strip() == "1":
-                            from .telemetry import record_session, sync
+                            from ..telemetry import record_session, sync
                             record_session(tracker._stats, _root)
                             sync(_root)
             except Exception:
@@ -126,6 +149,8 @@ def main():
     register_ingest_tools(mcp, tracker=tracker, client_id=client_id, _root=_root, _repo_tokens=_repo_tokens, _cached_history=_cached_history, _cached_graph_hubs=_cached_graph_hubs, _cli_root=_cli_root)
     register_hooks_tools(mcp, tracker=tracker, client_id=client_id, _root=_root, _repo_tokens=_repo_tokens, _cached_history=_cached_history, _cached_graph_hubs=_cached_graph_hubs, _cli_root=_cli_root)
     register_intents_tools(mcp, tracker=tracker, client_id=client_id, _root=_root, _repo_tokens=_repo_tokens, _cached_history=_cached_history, _cached_graph_hubs=_cached_graph_hubs, _cli_root=_cli_root)
+
+    mcp.run(transport="stdio")
 
 if __name__ == "__main__":
     main()

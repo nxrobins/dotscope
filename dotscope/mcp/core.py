@@ -1,3 +1,7 @@
+import json
+import os
+from typing import Optional
+
 def register_core_tools(mcp, **kwargs):
     tracker = kwargs.get('tracker')
     client_id = kwargs.get('client_id')
@@ -42,11 +46,11 @@ def register_core_tools(mcp, **kwargs):
         _resolve_start = _time.perf_counter()
 
         from pathlib import Path
-        from .composer import compose
-        from .passes.budget_allocator import apply_budget
-        from .paths.repo import find_repo_root
-        from .formatter import format_resolved
-        from .refresh import ensure_resolution_freshness, refresh_status_summary
+        from ..composer import compose
+        from ..passes.budget_allocator import apply_budget
+        from ..paths.repo import find_repo_root
+        from ..formatter import format_resolved
+        from ..refresh import ensure_resolution_freshness, refresh_status_summary
 
         root = find_repo_root()
         dot_dir = Path(root) / ".dotscope" if root else None
@@ -60,7 +64,7 @@ def register_core_tools(mcp, **kwargs):
         # Auto-compose from task when scope is a simple name and task is provided
         _is_simple_name = not any(c in scope for c in "+-&@")
         if task and _is_simple_name:
-            from .composer import compose_for_task
+            from ..composer import compose_for_task
             resolved = compose_for_task(task, root=root, max_scopes=3)
             if not resolved.files:
                 resolved = compose(scope, root=root, follow_related=follow_related)
@@ -70,7 +74,7 @@ def register_core_tools(mcp, **kwargs):
         # Wire 1: inject lessons and invariants into context
         if dot_dir and dot_dir.exists():
             try:
-                from .lessons import load_lessons, load_invariants, format_lessons_for_context
+                from ..lessons import load_lessons, load_invariants, format_lessons_for_context
                 module = scope.split("+")[0].split("-")[0].split("&")[0].split("@")[0]
                 lessons = load_lessons(dot_dir, module)
                 invariants = load_invariants(dot_dir, module)
@@ -84,7 +88,7 @@ def register_core_tools(mcp, **kwargs):
         utility_scores = None
         if dot_dir and dot_dir.exists():
             try:
-                from .utility import load_utility_scores
+                from ..utility import load_utility_scores
                 utility_scores = load_utility_scores(dot_dir)
             except Exception:
                 pass
@@ -93,7 +97,7 @@ def register_core_tools(mcp, **kwargs):
         required_files = None
         assertions = []
         try:
-            from .assertions import load_assertions, get_required_files
+            from ..assertions import load_assertions, get_required_files
             module = scope.split("+")[0].split("-")[0].split("&")[0].split("@")[0]
             assertions = load_assertions(root, module)
             required_files = get_required_files(assertions, module) or None
@@ -113,14 +117,14 @@ def register_core_tools(mcp, **kwargs):
         # Track session (MCP calls only — compose stays pure)
         session_id = None
         try:
-            from .storage.session_manager import SessionManager
+            from ..storage.session_manager import SessionManager
             mgr = SessionManager(root)
             mgr.ensure_initialized()
             task_str = f"resolve {scope}" + (f" (budget={budget})" if budget else "")
             session_id = mgr.create_session(scope, task_str, resolved.files, resolved.context)
             resolved.context = f"# dotscope-session: {session_id}\n{resolved.context}"
             # Onboarding
-            from .storage.onboarding import mark_milestone, increment_counter
+            from ..storage.onboarding import mark_milestone, increment_counter
             mark_milestone(root, "first_session")
             increment_counter(root, "sessions_completed")
         except Exception:
@@ -141,7 +145,7 @@ def register_core_tools(mcp, **kwargs):
                 data = json.loads(output)
 
                 # Feature 2: Attribution hints (with provenance)
-                from .visibility import (
+                from ..visibility import (
                     extract_attribution_hints, build_accuracy,
                     check_health_nudges,
                 )
@@ -160,15 +164,15 @@ def register_core_tools(mcp, **kwargs):
 
                 # Constraints (prophylactic enforcement)
                 try:
-                    from .passes.sentinel.constraints import build_constraints
-                    from .intent import load_conventions, load_intents
+                    from ..passes.sentinel.constraints import build_constraints
+                    from ..intent import load_conventions, load_intents
                     invariants = {}
                     inv_path = os.path.join(root, ".dotscope", "invariants.json")
                     if os.path.exists(inv_path):
                         with open(inv_path, "r", encoding="utf-8") as _f:
                             invariants = json.loads(_f.read())
                     scopes_data = {}
-                    from .passes.sentinel.checker import _load_scopes_with_antipatterns
+                    from ..passes.sentinel.checker import _load_scopes_with_antipatterns
                     scopes_data = _load_scopes_with_antipatterns(root)
                     intents = load_intents(root)
                     conventions = load_conventions(root)
@@ -189,10 +193,10 @@ def register_core_tools(mcp, **kwargs):
                         ]
 
                     # Routing guidance: positive-frame "what to do"
-                    from .passes.sentinel.constraints import build_routing_guidance
+                    from ..passes.sentinel.constraints import build_routing_guidance
                     vc = None
                     try:
-                        from .intent import load_voice_config
+                        from ..intent import load_voice_config
                         vc = load_voice_config(root)
                     except Exception:
                         pass
@@ -211,10 +215,10 @@ def register_core_tools(mcp, **kwargs):
                         ]
 
                     # Gap 2: Adjacent scope routing
-                    from .passes.sentinel.constraints import build_adjacent_routing
+                    from ..passes.sentinel.constraints import build_adjacent_routing
                     scopes_index = {}
                     try:
-                        from .scanner import load_scopes_index
+                        from ..scanner import load_scopes_index
                         scopes_index = load_scopes_index(root)
                     except Exception:
                         pass
@@ -247,10 +251,10 @@ def register_core_tools(mcp, **kwargs):
 
                 # Voice injection
                 try:
-                    from .intent import load_voice_config
+                    from ..intent import load_voice_config
                     vc = load_voice_config(root)
                     if vc:
-                        from .passes.voice import build_voice_response
+                        from ..passes.voice import build_voice_response
                         data["voice"] = build_voice_response(
                             vc, root, resolved.files, conventions,
                         )
@@ -264,7 +268,7 @@ def register_core_tools(mcp, **kwargs):
 
                 # Features requiring observation data
                 if dot_dir and dot_dir.exists():
-                    from .storage.session_manager import SessionManager
+                    from ..storage.session_manager import SessionManager
                     mgr = SessionManager(root)
                     sessions = mgr.get_sessions(limit=200)
                     scope_session_ids = {
@@ -307,7 +311,7 @@ def register_core_tools(mcp, **kwargs):
 
                     # Feature 5: Near-misses (from persistent storage)
                     try:
-                        from .storage.near_miss import load_recent_near_misses
+                        from ..storage.near_miss import load_recent_near_misses
                         nms = load_recent_near_misses(root, module)
                         if nms:
                             data["near_misses"] = nms
@@ -317,7 +321,7 @@ def register_core_tools(mcp, **kwargs):
                 # Output assertions (ensure_context_contains, ensure_constraints)
                 if assertions:
                     try:
-                        from .assertions import check_output_assertions
+                        from ..assertions import check_output_assertions
                         module = scope.split("+")[0].split("-")[0].split("&")[0].split("@")[0]
                         err = check_output_assertions(
                             resolved.context,
@@ -336,7 +340,7 @@ def register_core_tools(mcp, **kwargs):
         # Record timing
         try:
             elapsed_ms = (_time.perf_counter() - _resolve_start) * 1000
-            from .storage.timing import record_timing
+            from ..storage.timing import record_timing
             if root:
                 record_timing(root, "resolve", elapsed_ms)
         except Exception:
@@ -354,10 +358,10 @@ def register_core_tools(mcp, **kwargs):
         Args:
             task: Natural language description of what you're working on
         """
-        from .paths.repo import find_repo_root
-        from .discovery import load_index, find_all_scopes
-        from .discovery import load_resolution_index, load_resolution_scopes
-        from .matcher import match_task
+        from ..paths.repo import find_repo_root
+        from ..discovery import load_index, find_all_scopes
+        from ..discovery import load_resolution_index, load_resolution_scopes
+        from ..matcher import match_task
 
         root = find_repo_root()
         if root is None:
@@ -394,10 +398,10 @@ def register_core_tools(mcp, **kwargs):
             scope: Scope name or path
             section: Optional section name to filter (e.g., "invariants", "gotchas")
         """
-        from .paths.repo import find_repo_root
-        from .discovery import find_resolution_scope
-        from .context import query_context
-        from .refresh import ensure_resolution_freshness
+        from ..paths.repo import find_repo_root
+        from ..discovery import find_resolution_scope
+        from ..context import query_context
+        from ..refresh import ensure_resolution_freshness
 
         root = find_repo_root()
         if root is not None:
@@ -420,8 +424,9 @@ def register_core_tools(mcp, **kwargs):
 
         Searches the .scopes index and/or walks the directory tree for .scope files.
         """
-        from .discovery import (
-                        load_resolution_index,
+        from ..paths.repo import find_repo_root
+        from ..discovery import (
+            load_resolution_index,
             load_resolution_scopes,
         )
 

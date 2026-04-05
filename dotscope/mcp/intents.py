@@ -26,7 +26,7 @@ def register_intents_tools(mcp, **kwargs):
         May return fewer partitions than requested if search results
         are highly localized. Check len(partitions), not n_partitions.
         """
-        from .swarm.partition import partition_search_space as _partition
+        from ..swarm.partition import partition_search_space as _partition
         root = _root or _find_root()
         graph = _get_graph(root)
         index = _load_index(root)
@@ -51,7 +51,7 @@ def register_intents_tools(mcp, **kwargs):
             focus: Optional keyword to filter context relevance
                    (e.g., "memory" to prioritize memory-related context)
         """
-        from .swarm.trace import resolve_trace as _trace
+        from ..swarm.trace import resolve_trace as _trace
         root = _root or _find_root()
         graph = _get_graph(root)
         index = _load_index(root)

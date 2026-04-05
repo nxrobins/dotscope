@@ -1,3 +1,6 @@
+import json
+import os
+
 def register_observability_tools(mcp, **kwargs):
     tracker = kwargs.get('tracker')
     client_id = kwargs.get('client_id')
@@ -17,9 +20,9 @@ def register_observability_tools(mcp, **kwargs):
         - Description is not empty
         - Context field is present (the most valuable part)
         """
-        from .paths.repo import find_repo_root
-        from .discovery import find_all_scopes
-        from .parser import parse_scope_file
+        from ..paths.repo import find_repo_root
+        from ..discovery import find_all_scopes
+        from ..parser import parse_scope_file
 
         root = find_repo_root()
         if root is None:
@@ -58,8 +61,8 @@ def register_observability_tools(mcp, **kwargs):
         Coverage: directories with no .scope file
         Drift: imports in scoped files that aren't in the includes list
         """
-        from .health import full_health_report
-        from .paths.repo import find_repo_root
+        from ..health import full_health_report
+        from ..paths.repo import find_repo_root
         root = find_repo_root()
         if root is None:
             return json.dumps({"error": "Could not find repository root"})

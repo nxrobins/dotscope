@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-mcp = ["mcp>=1.2.0"]
+mcp = ["mcp>=1.2.0,<3"]
 tokens = ["tiktoken"]
 embeddings = ["sentence-transformers"]
 search = ["sentence-transformers", "numpy"]
