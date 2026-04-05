@@ -10,6 +10,7 @@ import subprocess
 from collections import defaultdict
 from typing import Dict, List, Set
 
+from .history_miner import _canonicalize_history_path, _collect_current_paths
 from ..models import (
     BacktestReport,
     BacktestResult,
@@ -167,6 +168,7 @@ def _get_recent_commits(root: str, n: int) -> List[List[str]]:
 
     commits = []
     current_files = []
+    current_paths = _collect_current_paths(root)
 
     for line in result.stdout.splitlines():
         if len(line) == 40 and " " not in line:  # Commit hash
@@ -174,7 +176,9 @@ def _get_recent_commits(root: str, n: int) -> List[List[str]]:
                 commits.append(current_files)
                 current_files = []
         elif line.strip():
-            current_files.append(line.strip())
+            current_files.append(
+                _canonicalize_history_path(root, line.strip(), current_paths)
+            )
 
     if current_files:
         commits.append(current_files)

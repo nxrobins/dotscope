@@ -9,10 +9,12 @@ Reads git log to extract:
 
 
 import os
+import re
 import subprocess
 from collections import Counter, defaultdict
 from typing import Dict, List, Optional, Set, Tuple
 
+from ..paths import normalize_relative_path
 from ..models.history import (
     FileChange,
     CommitInfo,
@@ -41,7 +43,8 @@ def analyze_history(
     if not os.path.isdir(os.path.join(root, ".git")):
         return HistoryAnalysis()
 
-    commits = _parse_git_log(root, max_commits, paths=paths)
+    current_paths = _collect_current_paths(root)
+    commits = _parse_git_log(root, max_commits, paths=paths, current_paths=current_paths)
     if not commits:
         return HistoryAnalysis()
 
@@ -111,7 +114,10 @@ def analyze_history(
 
 
 def _parse_git_log(
-    root: str, max_commits: int, paths: Optional[List[str]] = None,
+    root: str,
+    max_commits: int,
+    paths: Optional[List[str]] = None,
+    current_paths: Optional[Set[str]] = None,
 ) -> List[CommitInfo]:
     """Parse git log with --numstat for line-change data."""
     try:
@@ -160,7 +166,11 @@ def _parse_git_log(
             # numstat format: "insertions\tdeletions\tfilepath"
             numstat_parts = line.split("\t")
             if len(numstat_parts) == 3:
-                filepath = numstat_parts[2]
+                filepath = _canonicalize_history_path(
+                    root,
+                    numstat_parts[2],
+                    current_paths,
+                )
                 current_files.append(filepath)
                 try:
                     ins = int(numstat_parts[0]) if numstat_parts[0] != "-" else 0
@@ -180,6 +190,96 @@ def _parse_git_log(
         commits.append(current_commit)
 
     return commits
+
+
+def _collect_current_paths(root: str) -> Set[str]:
+    """Collect normalized current file paths for canonicalizing git history."""
+    current_paths: Set[str] = set()
+    skip_dirs = {".git", ".dotscope", "target", "__pycache__"}
+
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in skip_dirs]
+        for filename in filenames:
+            rel = os.path.relpath(os.path.join(dirpath, filename), root)
+            current_paths.add(normalize_relative_path(rel))
+
+    return current_paths
+
+
+def _canonicalize_history_path(
+    root: str,
+    path: str,
+    current_paths: Optional[Set[str]] = None,
+) -> str:
+    """Map historical git paths onto the current repository layout when possible."""
+    normalized = normalize_relative_path(path)
+    expanded = re.sub(
+        r"\{[^{}]*=>\s*([^{}]+)\}",
+        lambda match: match.group(1).strip(),
+        normalized,
+    )
+
+    for candidate in (expanded, normalized):
+        if os.path.isfile(os.path.join(root, candidate)):
+            return candidate
+
+    if current_paths:
+        segments = expanded.split("/")
+        if len(segments) >= 2:
+            parent = segments[0]
+            missing_child = segments[1]
+            remainder = segments[2:]
+            parent_abs = os.path.join(root, parent)
+            if os.path.isdir(parent_abs):
+                sibling_matches = []
+                for sibling in os.listdir(parent_abs):
+                    candidate_parts = [parent, sibling, *remainder]
+                    candidate = normalize_relative_path("/".join(candidate_parts))
+                    if not os.path.isfile(os.path.join(root, candidate)):
+                        continue
+                    score = _shared_suffix_token_count(missing_child, sibling)
+                    if score > 0:
+                        sibling_matches.append((score, candidate))
+                if sibling_matches:
+                    sibling_matches.sort(key=lambda item: (-item[0], item[1]))
+                    best_score = sibling_matches[0][0]
+                    best = [
+                        candidate
+                        for score, candidate in sibling_matches
+                        if score == best_score
+                    ]
+                    if len(best) == 1:
+                        return best[0]
+
+        tail_two = "/".join(segments[-2:]) if len(segments) >= 2 else expanded
+        tail_matches = [candidate for candidate in current_paths if candidate.endswith(tail_two)]
+        if len(tail_matches) == 1:
+            return tail_matches[0]
+
+        basename = segments[-1]
+        basename_matches = [
+            candidate
+            for candidate in current_paths
+            if candidate == basename or candidate.endswith(f"/{basename}")
+        ]
+        if len(basename_matches) == 1:
+            return basename_matches[0]
+
+    return expanded
+
+
+def _shared_suffix_token_count(lhs: str, rhs: str) -> int:
+    """Return how many trailing name tokens two paths share."""
+    lhs_tokens = [token for token in re.split(r"[-_]", lhs) if token]
+    rhs_tokens = [token for token in re.split(r"[-_]", rhs) if token]
+    score = 0
+
+    while score < min(len(lhs_tokens), len(rhs_tokens)):
+        if lhs_tokens[-(score + 1)] != rhs_tokens[-(score + 1)]:
+            break
+        score += 1
+
+    return score
 
 
 def _compute_change_coupling(
