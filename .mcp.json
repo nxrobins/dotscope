@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "dotscope": {
+      "type": "stdio",
+      "command": "dotscope-mcp"
+    }
+  }
+}

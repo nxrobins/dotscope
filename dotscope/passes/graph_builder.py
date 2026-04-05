@@ -14,6 +14,7 @@ from ..ast_analyzer import (
     resolve_python_import,
 )
 from ..constants import LANG_MAP, SKIP_DIRS
+from ..ignore import load_ignore_patterns, should_skip
 from ..models.core import (
     DependencyGraph,
     FileNode,
@@ -201,15 +202,25 @@ def transitive_dependents(graph: DependencyGraph, file: str) -> Set[str]:
 def _collect_source_files(root: str) -> List[Tuple[str, str]]:
     """Walk the tree and collect (relative_path, language)."""
     lang_map = {k: v.lower() for k, v in LANG_MAP.items()}
+    ignore_patterns = load_ignore_patterns(root)
     results = []
 
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        dirnames[:] = [
+            d for d in dirnames
+            if d not in SKIP_DIRS
+            and not should_skip(
+                os.path.relpath(os.path.join(dirpath, d), root),
+                SKIP_DIRS,
+                ignore_patterns,
+            )
+        ]
         for fn in filenames:
             ext = os.path.splitext(fn)[1].lower()
             if ext in lang_map:
                 rel = normalize_relative_path(os.path.relpath(os.path.join(dirpath, fn), root))
-                results.append((rel, lang_map[ext]))
+                if not should_skip(rel, frozenset(), ignore_patterns):
+                    results.append((rel, lang_map[ext]))
 
     return sorted(results)
 

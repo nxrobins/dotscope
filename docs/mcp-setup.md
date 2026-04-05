@@ -2,11 +2,17 @@
 
 dotscope's primary interface for agents is an MCP server. The agent calls `resolve_scope` to get files, context, and constraints. dotscope tracks every call for the feedback loop.
 
+**Supported clients:** Claude Desktop, Claude Code, Cursor, Windsurf, VS Code Copilot, OpenAI Codex CLI, JetBrains AI, Zed
+
 ## Install
 
 ```bash
 pip install dotscope[mcp]
 ```
+
+## Quick Setup
+
+Run `dotscope init` in your project root. It auto-detects installed editors and writes config for each one.
 
 ## Claude Desktop
 
@@ -14,6 +20,7 @@ Edit your config file:
 
 **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+**Linux:** `~/.config/Claude/claude_desktop_config.json`
 
 ```json
 {
@@ -30,12 +37,13 @@ Omit `--root` to use the current working directory. Restart Claude Desktop after
 
 ## Claude Code
 
-Add to your project's `.claude/settings.json` or the global settings:
+Add a `.mcp.json` file to your project root (preferred):
 
 ```json
 {
   "mcpServers": {
     "dotscope": {
+      "type": "stdio",
       "command": "dotscope-mcp"
     }
   }
@@ -46,7 +54,7 @@ No `--root` needed. Claude Code launches from the project directory.
 
 ## Cursor
 
-Settings > MCP Servers:
+Add to `.cursor/mcp.json` in your project root:
 
 ```json
 {
@@ -56,6 +64,76 @@ Settings > MCP Servers:
   }
 }
 ```
+
+Note: Cursor uses a flat structure (no `mcpServers` wrapper).
+
+## Windsurf
+
+Edit `~/.codeium/windsurf/mcp_config.json` (global config):
+
+```json
+{
+  "mcpServers": {
+    "dotscope": {
+      "command": "dotscope-mcp",
+      "args": ["--root", "/path/to/your/project"]
+    }
+  }
+}
+```
+
+## VS Code Copilot
+
+Add to `.vscode/mcp.json` in your project root:
+
+```json
+{
+  "servers": {
+    "dotscope": {
+      "command": "dotscope-mcp"
+    }
+  }
+}
+```
+
+Note: VS Code uses `servers` as the top-level key (not `mcpServers`).
+
+## OpenAI Codex CLI
+
+Add to `.codex/config.toml` in your project root (or `~/.codex/config.toml` for global):
+
+```toml
+[mcp_servers.dotscope]
+command = "dotscope-mcp"
+```
+
+## JetBrains AI
+
+Configure manually via the IDE:
+
+1. Open **Settings > Tools > AI Assistant > Model Context Protocol (MCP)**
+2. Add a new local server:
+   - **Command:** `dotscope-mcp`
+   - **Arguments:** `--root /path/to/your/project`
+3. Click OK and restart the AI Assistant
+
+## Zed
+
+Add to `~/.config/zed/settings.json`:
+
+```json
+{
+  "context_servers": {
+    "dotscope": {
+      "source": "custom",
+      "command": "dotscope-mcp",
+      "args": ["--root", "/path/to/your/project"]
+    }
+  }
+}
+```
+
+Or use Agent Panel (Cmd+Shift+A) > Settings > "Add Custom Server".
 
 ## Verifying
 

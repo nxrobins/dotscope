@@ -117,3 +117,50 @@ def install_claude_hook(repo_root: str) -> str:
         f.write("\n")
 
     return f"Claude Code hook installed: {script_path}"
+
+
+_CLAUDE_MD_CONTENT = """\
+# CLAUDE.md
+
+This repo uses dotscope. Before touching code:
+
+1. `codebase_search("your task description")` — not manual file reads
+2. `dotscope_check` before every commit
+3. If check returns HOLDs, fix them before committing
+
+dotscope provides: dependency graph, implicit contracts, conventions,
+and file locks. Use its tools instead of guessing.
+"""
+
+_CLAUDE_MD_SECTION = """
+## dotscope
+
+This repo uses dotscope. Before touching code:
+
+1. `codebase_search("your task description")` — not manual file reads
+2. `dotscope_check` before every commit
+3. If check returns HOLDs, fix them before committing
+"""
+
+
+def write_claude_md(repo_root: str) -> str:
+    """Write CLAUDE.md for automatic agent briefing.
+
+    If CLAUDE.md doesn't exist, creates it with dotscope instructions.
+    If it exists but has no dotscope section, appends one.
+    If it already has a dotscope section, does nothing.
+    """
+    claude_md_path = os.path.join(repo_root, "CLAUDE.md")
+
+    if not os.path.exists(claude_md_path):
+        with open(claude_md_path, "w", encoding="utf-8") as f:
+            f.write(_CLAUDE_MD_CONTENT)
+        return f"Created {claude_md_path}"
+
+    existing = open(claude_md_path, "r", encoding="utf-8").read()
+    if "dotscope" in existing.lower() and "codebase_search" in existing:
+        return "CLAUDE.md already has dotscope instructions"
+
+    with open(claude_md_path, "a", encoding="utf-8") as f:
+        f.write(_CLAUDE_MD_SECTION)
+    return f"Appended dotscope section to {claude_md_path}"

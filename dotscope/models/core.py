@@ -94,6 +94,10 @@ class ResolvedScope:
     # Compiled Retrieval extensions (populated by codebase_search only)
     flattened_abstractions: Dict[str, dict] = field(default_factory=dict)
     retrieval_metadata: Optional[dict] = None
+    # Structured constraints (contracts, anti-patterns, conventions, intents)
+    constraints: List[dict] = field(default_factory=list)
+    # Routing guidance (convention blueprints, voice rules)
+    routing: List[dict] = field(default_factory=list)
     # Action hints: imperative directives derived from constraints and locks
     action_hints: List[str] = field(default_factory=list)
 

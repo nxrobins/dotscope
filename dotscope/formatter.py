@@ -57,7 +57,7 @@ def _format_plain(resolved: ResolvedScope, root: Optional[str], show_tokens: boo
 
 
 def _format_json(resolved: ResolvedScope, root: Optional[str]) -> str:
-    """JSON format: full object."""
+    """JSON format: full object with all compiled retrieval fields."""
     data = {
         "files": [make_relative(f, root) for f in resolved.files],
         "context": resolved.context,
@@ -68,6 +68,18 @@ def _format_json(resolved: ResolvedScope, root: Optional[str]) -> str:
     }
     if resolved.excluded_files:
         data["excluded_count"] = len(resolved.excluded_files)
+
+    # Compiled retrieval fields (populated by codebase_search)
+    if resolved.flattened_abstractions:
+        data["flattened_abstractions"] = resolved.flattened_abstractions
+    if resolved.constraints:
+        data["constraints"] = resolved.constraints
+    if resolved.routing:
+        data["routing"] = resolved.routing
+    if resolved.action_hints:
+        data["action_hints"] = resolved.action_hints
+    if resolved.retrieval_metadata:
+        data["retrieval_metadata"] = resolved.retrieval_metadata
 
     return json.dumps(data, indent=2)
 

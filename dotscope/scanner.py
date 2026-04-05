@@ -12,6 +12,7 @@ from typing import List, Optional, Set, Tuple
 
 from .constants import LANG_MAP, SKIP_DIRS
 from .context import parse_context
+from .ignore import load_ignore_patterns, should_skip
 from .models import ScopeConfig
 from .tokens import estimate_file_tokens
 
@@ -100,11 +101,27 @@ def _scan_files(path: str) -> Tuple[List[str], Counter, int]:
     lang_counts: Counter = Counter()
     total_tokens = 0
 
+    # Load .dotscopeignore patterns from the repo root (or nearest parent)
+    ignore_patterns = load_ignore_patterns(path)
+
     for dirpath, dirnames, filenames in os.walk(path):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        dirnames[:] = [
+            d for d in dirnames
+            if d not in SKIP_DIRS
+            and not should_skip(
+                os.path.relpath(os.path.join(dirpath, d), path),
+                SKIP_DIRS,
+                ignore_patterns,
+            )
+        ]
 
         for filename in filenames:
             full = os.path.join(dirpath, filename)
+            rel = os.path.relpath(full, path)
+
+            if should_skip(rel, frozenset(), ignore_patterns):
+                continue
+
             files.append(full)
 
             ext = os.path.splitext(filename)[1].lower()

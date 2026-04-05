@@ -283,12 +283,30 @@ def _dense_search(query: str, embeddings, limit: int = 50) -> List[Tuple[int, fl
         return []
 
 
-def _embed_texts(texts: List[str]):
-    """Embed texts using sentence-transformers. Returns numpy array or None."""
+def _embed_texts(texts: List[str], batch_size: int = 512):
+    """Embed texts in batches using sentence-transformers. Returns numpy array or None."""
     try:
         from sentence_transformers import SentenceTransformer
+        import numpy as np
+
         model = SentenceTransformer("all-MiniLM-L6-v2")
-        return model.encode(texts, show_progress_bar=False, convert_to_numpy=True)
+
+        if len(texts) <= batch_size:
+            return model.encode(texts, show_progress_bar=False, convert_to_numpy=True)
+
+        # Batch to avoid OOM on large repos
+        all_embeddings = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            try:
+                embeddings = model.encode(batch, show_progress_bar=False, convert_to_numpy=True)
+                all_embeddings.append(embeddings)
+            except Exception:
+                continue  # Skip failed batch, keep going
+
+        if not all_embeddings:
+            return None
+        return np.vstack(all_embeddings)
     except ImportError:
         return None
 

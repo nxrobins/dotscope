@@ -29,6 +29,26 @@ from .paths import (
 from .tokens import estimate_scope_tokens
 
 
+def _safe_print(text, **kwargs):
+    """Print with ASCII fallback for Windows cp1252 terminals."""
+    try:
+        print(text, **kwargs)
+    except UnicodeEncodeError:
+        print(text.encode("ascii", errors="replace").decode("ascii"), **kwargs)
+
+
+def _log_ingest_error(root: str, message: str) -> None:
+    """Append error to .dotscope/error.log for debugging."""
+    try:
+        log_dir = os.path.join(root, ".dotscope")
+        os.makedirs(log_dir, exist_ok=True)
+        import time
+        with open(os.path.join(log_dir, "error.log"), "a", encoding="utf-8") as f:
+            f.write(f"[{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}] {message}\n")
+    except Exception:
+        pass  # Logging failure should never block ingest
+
+
 def ingest(
     root: str,
     mine_history: bool = True,
@@ -63,7 +83,7 @@ def ingest(
     from .progress import ProgressEmitter
     progress = ProgressEmitter(quiet=quiet)
 
-    # Step 1: Dependency graph
+    # Step 0: Dependency graph (Moved up for Topological Physics)
     progress.start("building dependency graph")
     graph = build_graph(root)
     plan.graph = graph
@@ -76,6 +96,8 @@ def ingest(
     plan.graph_summary = format_graph_summary(graph)
     edge_count = sum(len(n.imports) for n in graph.files.values())
     progress.finish(f"{len(graph.files)} files, {edge_count} edges, {len(graph.modules)} modules")
+
+    # Step 1: Federated Templates & Topological Directives (Removed to Pro Backend)
 
     # Step 2: Git history
     history = HistoryAnalysis()
@@ -168,8 +190,8 @@ def ingest(
             artifacts_path = os.path.join(root, ".dotscope_artifacts.yaml")
             if os.path.isfile(artifacts_path):
                 try:
-                    from .parser import _parse_yaml_simple
-                    artifacts_data = _parse_yaml_simple(
+                    from .parser import _parse_yaml
+                    artifacts_data = _parse_yaml(
                         open(artifacts_path, "r", encoding="utf-8").read()
                     )
                     for artifact in artifacts_data.get("artifacts", []):
@@ -191,13 +213,41 @@ def ingest(
                 except Exception:
                     pass
 
+            # Cap chunk count to prevent OOM on large repos
+            max_chunks = getattr(args, "max_chunks", 50_000) if args else 50_000
+            if len(all_chunks) > max_chunks:
+                # Prefer source files over tests/configs
+                def _chunk_priority(c):
+                    p = c.file_path.lower()
+                    if "/test" in p or p.startswith("test"):
+                        return 2
+                    if any(p.endswith(e) for e in (".json", ".yaml", ".yml", ".toml")):
+                        return 1
+                    return 0
+                all_chunks.sort(key=lambda c: (_chunk_priority(c), c.file_path))
+                _safe_print(
+                    f"dotscope: {len(all_chunks)} chunks exceeds limit,"
+                    f" keeping top {max_chunks}",
+                    file=sys.stderr,
+                )
+                all_chunks = all_chunks[:max_chunks]
+
             if all_chunks:
                 index = build_vector_index(root, all_chunks)
                 progress.finish(f"{index.chunk_count} chunks, {index.model_name}")
             else:
                 progress.finish("0 chunks")
         except Exception as e:
-            progress.finish(f"skipped ({e})")
+            import traceback
+            _safe_print(
+                f"dotscope: search index failed: {e}\n"
+                f"  Scopes still work. Search will be unavailable.\n"
+                f"  Try: dotscope ingest . --max-chunks 25000",
+                file=sys.stderr,
+            )
+            # Log full traceback for debugging
+            _log_ingest_error(root, traceback.format_exc())
+            progress.finish("failed")
 
     # Step 4: Synthesize scope files
     progress.start("generating scopes")
