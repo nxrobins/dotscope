@@ -89,6 +89,8 @@ def _check_deprecate(
                         proposed_fix=fix,
                         can_acknowledge=True,
                         acknowledge_id=f"intent_deprecate_{intent.id}",
+                        source_file="intent.yaml",
+                        source_rule=f"deprecate:{intent.id}",
                     ))
                     break
 
@@ -116,6 +118,8 @@ def _check_freeze(
                     suggestion="Requires explicit acknowledgment to proceed",
                     can_acknowledge=True,
                     acknowledge_id=f"intent_freeze_{intent.id}",
+                    source_file="intent.yaml",
+                    source_rule=f"freeze:{intent.id}",
                 ))
                 break
 
@@ -163,6 +167,8 @@ def _check_decouple(
                     ),
                     detail=intent.reason,
                     file=filepath,
+                    source_file="intent.yaml",
+                    source_rule=f"decouple:{intent.id}",
                 ))
                 break  # One per file
 
@@ -195,6 +201,8 @@ def _check_consolidate(
                     ),
                     detail=intent.reason,
                     file=filepath,
+                    source_file="intent.yaml",
+                    source_rule=f"consolidate:{intent.id}",
                 ))
                 break
 

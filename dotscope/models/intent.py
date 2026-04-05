@@ -75,6 +75,8 @@ class CheckResult:
     proposed_fix: Optional[ProposedFix] = None
     can_acknowledge: bool = False
     acknowledge_id: Optional[str] = None
+    source_file: Optional[str] = None   # Config/data file that generated this check
+    source_rule: Optional[str] = None    # Specific rule key within the source
 
 
 @dataclass

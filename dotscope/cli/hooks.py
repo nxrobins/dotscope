@@ -185,6 +185,7 @@ def _cmd_refresh(args):
         enqueue_scope_refresh,
         kick_refresh_worker,
         refresh_status_summary,
+        run_refresh_inline,
         run_refresh_queue,
     )
 
@@ -228,7 +229,33 @@ def _cmd_refresh(args):
             print(f"last_error: {status['last_error']}")
         return
 
-    print("Usage: dotscope refresh {enqueue|run|status}")
+    # Default: synchronous refresh (no sub-action)
+    scopes = getattr(args, "scopes", []) or []
+    is_repo = getattr(args, "repo", False)
+    run_async = getattr(args, "run_async", False)
+
+    if run_async:
+        if is_repo or not scopes:
+            enqueue_repo_refresh(root, reason="cli-async")
+        else:
+            enqueue_scope_refresh(root, scopes, reason="cli-async")
+        kick_refresh_worker(root)
+        targets_label = ", ".join(scopes) if scopes else "repo"
+        print(f"Queued refresh for {targets_label} (async).")
+        return
+
+    result = run_refresh_inline(
+        root,
+        targets=scopes if scopes else None,
+        repo=is_repo,
+    )
+
+    targets_label = ", ".join(result.get("targets_refreshed", [])) or "repo"
+    if result.get("success"):
+        print(f"Refreshed {targets_label} in {result['duration_ms']}ms.")
+    else:
+        error = result.get("error", "unknown error")
+        print(f"Refresh failed for {targets_label}: {error}")
 
 def _cmd_check(args):
     import json as json_mod
@@ -254,27 +281,42 @@ def _cmd_check(args):
     else:
         report = check_staged(root, session_id=args.session)
 
+    explain = getattr(args, "explain", False)
+
     if args.json_output:
+        def _result_dict(r):
+            d = {
+                "category": r.category.value,
+                "severity": r.severity.value,
+                "message": r.message,
+                "file": r.file,
+                "suggestion": r.suggestion,
+                "acknowledge_id": r.acknowledge_id,
+                "proposed_fix": {
+                    "file": r.proposed_fix.file,
+                    "reason": r.proposed_fix.reason,
+                    "predicted_sections": r.proposed_fix.predicted_sections,
+                    "confidence": r.proposed_fix.confidence,
+                } if r.proposed_fix else None,
+            }
+            if explain:
+                from ..explain import explain_warning
+                d["explain"] = explain_warning(root, r)
+            return d
+
         data = {
             "passed": report.passed,
-            "holds": [
+            "holds": [_result_dict(r) for r in report.holds],
+            "notes": [
                 {
                     "category": r.category.value,
                     "severity": r.severity.value,
                     "message": r.message,
                     "file": r.file,
-                    "suggestion": r.suggestion,
-                    "acknowledge_id": r.acknowledge_id,
-                    "proposed_fix": {
-                        "file": r.proposed_fix.file,
-                        "reason": r.proposed_fix.reason,
-                        "predicted_sections": r.proposed_fix.predicted_sections,
-                        "confidence": r.proposed_fix.confidence,
-                    } if r.proposed_fix else None,
+                    **({"explain": explain_warning(root, r)} if explain else {}),
                 }
-                for r in report.holds
-            ],
-            "notes": [
+                for r in report.notes
+            ] if explain else [
                 {
                     "category": r.category.value,
                     "severity": r.severity.value,
@@ -285,6 +327,8 @@ def _cmd_check(args):
             ],
             "files_checked": report.files_checked,
         }
+        if explain:
+            from ..explain import explain_warning
         print(json_mod.dumps(data, indent=2))
     else:
         output = format_terminal(report)
@@ -292,6 +336,16 @@ def _cmd_check(args):
             print(output)
         except UnicodeEncodeError:
             print(output.encode("ascii", errors="replace").decode("ascii"))
+
+        if explain:
+            from ..explain import explain_warning, format_explanation
+            all_results = list(report.holds) + list(report.notes)
+            if all_results:
+                print("\n--- Explanations ---")
+                for r in all_results:
+                    print(f"\n[{r.severity.value.upper()}] {r.message}")
+                    exp = explain_warning(root, r)
+                    print(format_explanation(exp))
 
     if not report.passed:
         sys.exit(1)

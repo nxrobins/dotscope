@@ -52,6 +52,8 @@ def check_voice(
                         detail="Catch a specific exception type.",
                         file=filepath,
                         suggestion="Replace `except:` with `except SpecificError:`",
+                        source_file="voice_config",
+                        source_rule="enforce:bare_excepts",
                     ))
 
         # Missing type hints (only on new/modified functions)
@@ -103,6 +105,8 @@ def check_voice(
                         detail="Add type hints to function signature.",
                         file=filepath,
                         suggestion=f"Add type hints to {node.name}()",
+                        source_file="voice_config",
+                        source_rule="enforce:missing_type_hints",
                     ))
 
     return results
