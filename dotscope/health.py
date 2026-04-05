@@ -1,8 +1,10 @@
 """Scope health monitoring: staleness, coverage gaps, import drift."""
 
 
+import json
 import os
 import re
+import time
 from typing import Iterable, List, Optional, Set
 
 from .constants import SKIP_DIRS, SOURCE_EXTS
@@ -12,6 +14,7 @@ from .textio import iter_repo_text_files, read_repo_text
 
 
 STALE_TOLERANCE_SECONDS = 2.0
+REFRESH_GRACE_SECONDS = 5.0
 
 
 def full_health_report(root: str, use_runtime: bool = True) -> HealthReport:
@@ -62,6 +65,53 @@ def full_health_report(root: str, use_runtime: bool = True) -> HealthReport:
     )
 
 
+def recently_refreshed_scopes(
+    root: str,
+    grace_seconds: float = REFRESH_GRACE_SECONDS,
+) -> Optional[Set[str]]:
+    """Return scope names refreshed within the grace window, or None if no recent refresh.
+
+    Returns a set of scope directory names (e.g. {"auth", "payments"}) if a
+    scope-targeted refresh completed recently.  Returns {"*"} if a full repo
+    refresh completed recently.  Returns None if no refresh is within the grace
+    window.
+    """
+    status_file = os.path.join(root, ".dotscope", "refresh_status.json")
+    try:
+        with open(status_file, "r") as f:
+            status = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+
+    last_success = status.get("last_success_at", "")
+    if not last_success:
+        return None
+
+    try:
+        from datetime import datetime, timezone
+        ts = datetime.fromisoformat(last_success.replace("Z", "+00:00"))
+        elapsed = time.time() - ts.timestamp()
+    except (ValueError, TypeError):
+        return None
+
+    if elapsed > grace_seconds:
+        return None
+
+    job_kind = status.get("last_job_kind")
+    if job_kind == "repo":
+        return {"*"}
+
+    targets = status.get("last_targets", [])
+    return set(targets) if targets else None
+
+
+def _scope_name_from_config(config: ScopeConfig, root: str) -> str:
+    """Derive the scope directory name from a ScopeConfig for matching against refresh targets."""
+    rel = make_relative(config.directory, root)
+    normalized = normalize_relative_path(rel)
+    return normalized.split("/")[0] if "/" in normalized else normalized
+
+
 def check_staleness(
     config: ScopeConfig,
     root: str,
@@ -81,16 +131,31 @@ def check_staleness(
         if fmtime and fmtime > refreshed_at + tolerance_seconds:
             stale_files.append(make_relative(filepath, root))
 
-    if stale_files:
-        count = len(stale_files)
-        sample = stale_files[:3]
-        msg = f"{count} file(s) modified since scope was last refreshed: {', '.join(sample)}"
-        if count > 3:
-            msg += f" (+{count - 3} more)"
-        issues.append(HealthIssue(
-            scope_path=config.path, severity="warning",
-            category="staleness", message=msg,
-        ))
+    if not stale_files:
+        return issues
+
+    # Suppress staleness for scopes that were just refreshed
+    recent = recently_refreshed_scopes(root)
+    if recent is not None:
+        scope_name = _scope_name_from_config(config, root)
+        if "*" in recent or scope_name in recent:
+            return issues
+
+    count = len(stale_files)
+    sample = stale_files[:3]
+    msg = f"{count} file(s) modified since scope was last refreshed: {', '.join(sample)}"
+    if count > 3:
+        msg += f" (+{count - 3} more)"
+
+    # Add actionable hint if a refresh ran but didn't cover this scope
+    if recent is not None:
+        scope_name = _scope_name_from_config(config, root)
+        msg += f" (refresh did not cover this scope — run: dotscope refresh {scope_name})"
+
+    issues.append(HealthIssue(
+        scope_path=config.path, severity="warning",
+        category="staleness", message=msg,
+    ))
 
     return issues
 
@@ -231,8 +296,7 @@ def _get_mtime(path: str) -> Optional[float]:
 
 def _infer_scope_root(config: ScopeConfig) -> Optional[str]:
     """Infer the repository root for a scope when one is not passed in."""
-    from .discovery import find_repo_root
-
+    from .paths.repo import find_repo_root
     return find_repo_root(config.directory) or os.path.dirname(config.directory)
 
 

@@ -46,6 +46,8 @@ def check_stability(
             ),
             detail="Large changes to stable files deserve extra review",
             file=filepath,
+            source_file="invariants.json",
+            source_rule=f"stability:{filepath}",
         ))
 
     return results

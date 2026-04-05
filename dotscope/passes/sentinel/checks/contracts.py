@@ -49,6 +49,8 @@ def check_contracts(
                 proposed_fix=fix,
                 can_acknowledge=True,
                 acknowledge_id=ack_id,
+                source_file="invariants.json",
+                source_rule=f"contract:{trigger}\u2194{coupled}",
             ))
 
         elif coupled in modified_set and trigger not in modified_set:
@@ -68,6 +70,8 @@ def check_contracts(
                 proposed_fix=fix,
                 can_acknowledge=True,
                 acknowledge_id=ack_id,
+                source_file="invariants.json",
+                source_rule=f"contract:{coupled}\u2194{trigger}",
             ))
 
     return results

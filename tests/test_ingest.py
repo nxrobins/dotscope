@@ -161,7 +161,7 @@ class TestIngest:
             scope for scope in plan.scopes
             if scope.directory == "virtual/user_lifecycle"
         )
-        assert virtual_scope.config.path.endswith("virtual/user_lifecycle/.scope")
+        assert virtual_scope.config.path.endswith(os.path.join("virtual", "user_lifecycle", ".scope"))
         assert plan.index.scopes["virtual/user_lifecycle"].path == "virtual/user_lifecycle/.scope"
 
     def test_full_ingest_marks_existing_scope_refreshed(self, tmp_path):

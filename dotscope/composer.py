@@ -15,7 +15,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional
 
-from .discovery import find_repo_root, find_resolution_scope
+from .paths.repo import find_repo_root
+
+from .discovery import find_resolution_scope
 from .models import ResolvedScope
 from .resolver import resolve
 from .tokens import estimate_scope_tokens, estimate_context_tokens

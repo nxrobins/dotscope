@@ -83,7 +83,7 @@ def ingest(
     from .progress import ProgressEmitter
     progress = ProgressEmitter(quiet=quiet)
 
-    # Step 1: Dependency graph
+    # Step 0: Dependency graph (Moved up for Topological Physics)
     progress.start("building dependency graph")
     graph = build_graph(root)
     plan.graph = graph
@@ -96,6 +96,8 @@ def ingest(
     plan.graph_summary = format_graph_summary(graph)
     edge_count = sum(len(n.imports) for n in graph.files.values())
     progress.finish(f"{len(graph.files)} files, {edge_count} edges, {len(graph.modules)} modules")
+
+    # Step 1: Federated Templates & Topological Directives (Removed to Pro Backend)
 
     # Step 2: Git history
     history = HistoryAnalysis()

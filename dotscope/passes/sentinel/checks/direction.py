@@ -66,6 +66,8 @@ def check_dependency_direction(
                     ),
                     detail=f"{file_module}/ normally does not import from {imported_module}/",
                     file=filepath,
+                    source_file="heuristic",
+                    source_rule="dependency_direction",
                 ))
 
     return results

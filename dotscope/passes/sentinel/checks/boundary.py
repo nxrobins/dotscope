@@ -41,6 +41,8 @@ def check_boundaries(
                 suggestion=suggestion,
                 can_acknowledge=True,
                 acknowledge_id=f"boundary_{f.replace('/', '_').replace('.', '_')}",
+                source_file="session",
+                source_rule="boundary_check",
             ))
 
     return results
