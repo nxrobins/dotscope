@@ -194,6 +194,7 @@ class SessionStats:
     constraints_served: List[dict] = field(default_factory=list)
     started_at: Optional[str] = None
     last_activity: Optional[str] = None
+    client_identifier: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

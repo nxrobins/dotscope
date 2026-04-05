@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-mcp = ["mcp>=1.2.0"]
+mcp = ["mcp>=1.2.0,<3"]
 tokens = ["tiktoken"]
 embeddings = ["sentence-transformers"]
 search = ["sentence-transformers", "numpy"]
@@ -31,7 +31,7 @@ all = ["dotscope[mcp,tokens,search]"]
 
 [project.scripts]
 dotscope = "dotscope.cli:main"
-dotscope-mcp = "dotscope.mcp_server:main"
+dotscope-mcp = "dotscope.mcp:main"
 
 [build-system]
 requires = ["hatchling"]

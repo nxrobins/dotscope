@@ -197,7 +197,7 @@ def find_effective_scope_with_source(
     root: Optional[str] = None,
 ) -> Tuple[Optional[ScopeConfig], Optional[str]]:
     """Resolve a scope using runtime overlay first, with tracked fallback."""
-    from .discovery import find_repo_root
+    from .paths.repo import find_repo_root
     from .parser import parse_scope_file
 
     raw = name_or_path.strip()

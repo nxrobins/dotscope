@@ -16,7 +16,7 @@ try:
 
     def estimate_tokens(text: str) -> int:
         """Estimate token count using tiktoken."""
-        return len(_encoder.encode(text))
+        return len(_encoder.encode(text, allowed_special="all"))
 
 except ImportError:
 
