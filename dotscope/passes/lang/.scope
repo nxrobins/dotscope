@@ -1,0 +1,31 @@
+description: Language-specific tree-sitter AST analyzers
+includes:
+  - dotscope/passes/lang/__init__.py
+  - dotscope/passes/lang/_base.py
+  - dotscope/passes/lang/_treesitter.py
+  - dotscope/passes/lang/javascript.py
+  - dotscope/passes/lang/go.py
+  - dotscope/passes/lang/solidity.py
+excludes:
+  - dotscope/passes/lang/__pycache__/
+context: |
+  Pluggable AST analyzers producing FileAnalysis for each supported language.
+  Python uses stdlib ast (in ast_analyzer.py), everything else uses tree-sitter here.
+
+  ## _base.py — Abstract Interface
+  BaseAnalyzer with analyze(filepath, source) -> Optional[FileAnalysis].
+
+  ## _treesitter.py — Grammar Loading + Utilities
+  get_language(), get_parser(), parse(), node_text(), walk_type().
+  Caches Language and Parser objects. AVAILABLE flag for graceful degradation.
+
+  ## Adapters
+  javascript.py: JS/TS/TSX. ES imports, require(), dynamic import().
+  go.py: Go. go.mod-aware import resolution. Struct methods via receiver linking.
+  solidity.py: Solidity. Contract inheritance, visibility, remappings.txt.
+related:
+  - dotscope/passes/.scope
+tags:
+  - ast
+  - tree-sitter
+  - polyglot

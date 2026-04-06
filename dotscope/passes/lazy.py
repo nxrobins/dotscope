@@ -12,7 +12,8 @@ from typing import Optional
 
 from ..absorber import absorb_docs
 from ..context import parse_context
-from ..history import HistoryAnalysis, analyze_history
+from ..models.history import HistoryAnalysis
+from .history_miner import analyze_history
 from ..models.core import ScopeConfig
 from ..models.passes import PlannedScope
 from ..parser import serialize_scope

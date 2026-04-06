@@ -8,7 +8,7 @@ import os
 from typing import Dict, List, Optional
 
 from .models.state import BenchReport  # noqa: F401
-from .timing import load_timings, median, percentile
+from .storage.timing import load_timings, median, percentile
 
 
 def run_bench(repo_root: str) -> BenchReport:
@@ -16,7 +16,7 @@ def run_bench(repo_root: str) -> BenchReport:
     report = BenchReport()
 
     # Load data
-    from .sessions import SessionManager
+    from .storage.session_manager import SessionManager
     mgr = SessionManager(repo_root)
     sessions = mgr.get_sessions(limit=500)
     observations = mgr.get_observations(limit=500)
@@ -42,7 +42,7 @@ def run_bench(repo_root: str) -> BenchReport:
     # Hold rate (from acknowledgments)
     report.total_commits = len(observations)
     try:
-        from .check.acknowledge import load_acknowledgments
+        from .passes.sentinel.acknowledge import load_acknowledgments
         acks = load_acknowledgments(repo_root)
         report.holds_acknowledged = len(acks)
     except Exception:

@@ -87,7 +87,7 @@ def replay_regression(
 ) -> ReplayResult:
     """Replay a frozen session against current codebase state."""
     from .composer import compose
-    from .budget import apply_budget
+    from .passes.budget_allocator import apply_budget
 
     resolved = compose(case.scope_expr, root=repo_root, follow_related=True)
     if case.budget:

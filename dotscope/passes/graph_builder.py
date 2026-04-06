@@ -8,7 +8,7 @@ from collections import defaultdict, deque
 from pathlib import Path
 from typing import Dict, List, Set, Tuple
 
-from ..ast_analyzer import (
+from .ast_analyzer import (
     analyze_file,
     resolve_js_import,
     resolve_python_import,

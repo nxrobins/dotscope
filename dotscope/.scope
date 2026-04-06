@@ -10,19 +10,13 @@ includes:
   - dotscope/discovery.py
   - dotscope/parser.py
   - dotscope/visibility.py
-  - dotscope/hooks.py
-  - dotscope/budget.py
   - dotscope/assertions.py
   - dotscope/health.py
   - dotscope/utility.py
-  - dotscope/sessions.py
-  - dotscope/virtual.py
   - dotscope/lessons.py
-  - dotscope/graph.py
   - dotscope/textio.py
   - dotscope/tokens.py
   - dotscope/matcher.py
-  - dotscope/ast_analyzer.py
   - dotscope/explain.py
   - dotscope/refresh.py
   - dotscope/paths/
@@ -66,10 +60,9 @@ context: |
   SessionTracker, attribution hints, health nudges, counterfactual
   integration. The glue between observation data and agent-facing output.
 
-  ## Gotchas
-  Many root files are backward-compat stubs (graph.py, history.py, etc.)
-  that re-export from passes/ or storage/. New code should import from
-  the canonical location (passes.graph_builder, not graph).
+  ## Import convention
+  All imports use canonical locations: passes.graph_builder (not graph),
+  storage.session_manager (not sessions), models.intent (not check.models).
 related:
   - dotscope/models/.scope
   - dotscope/passes/.scope

@@ -10,8 +10,8 @@ from dotscope.assertions import (
     Assertion, ContextExhaustionError, check_output_assertions,
     get_required_files,
 )
-from dotscope.budget import _boost_required
-from dotscope.timing import record_timing, load_timings, median, percentile
+from dotscope.passes.budget_allocator import _boost_required
+from dotscope.storage.timing import record_timing, load_timings, median, percentile
 from dotscope.regression import (
     RegressionCase, ReplayResult, maybe_freeze_session,
     load_regressions, format_replay_report,

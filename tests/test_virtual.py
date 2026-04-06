@@ -2,8 +2,8 @@
 
 import os
 import pytest
-from dotscope.graph import build_graph
-from dotscope.virtual import detect_virtual_scopes, format_virtual_scopes
+from dotscope.passes.graph_builder import build_graph
+from dotscope.passes.virtual import detect_virtual_scopes, format_virtual_scopes
 
 
 class TestVirtualScopes:

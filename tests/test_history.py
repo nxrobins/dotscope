@@ -3,7 +3,7 @@
 import os
 import subprocess
 import pytest
-from dotscope.history import analyze_history, format_history_summary
+from dotscope.passes.history_miner import analyze_history, format_history_summary
 
 
 def _git_init(path):

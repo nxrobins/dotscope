@@ -109,6 +109,7 @@ try:
         # dotscope refresh
         subprocess.run([sys.executable, "-m", "dotscope.cli", "refresh", "enqueue", "--commit", commit],
                        timeout=30, capture_output=True)
+        # NOTE: Intentionally fire-and-forget — worker self-terminates via queue drain.
         subprocess.Popen([sys.executable, "-m", "dotscope.cli", "refresh", "run", "--drain"],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 except Exception:
@@ -132,6 +133,7 @@ try:
     if len(sys.argv) >= 4 and sys.argv[3] == "1":
         subprocess.run([sys.executable, "-m", "dotscope.cli", "refresh", "enqueue", "--repo", "--reason", "branch switch"],
                        timeout=30, capture_output=True)
+        # NOTE: Intentionally fire-and-forget — worker self-terminates via queue drain.
         subprocess.Popen([sys.executable, "-m", "dotscope.cli", "refresh", "run", "--drain"],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 except Exception:
@@ -152,6 +154,7 @@ import subprocess, sys
 try:
     subprocess.run([sys.executable, "-m", "dotscope.cli", "refresh", "enqueue", "--repo", "--reason", "post-merge"],
                    timeout=30, capture_output=True)
+    # NOTE: Intentionally fire-and-forget — worker self-terminates via queue drain.
     subprocess.Popen([sys.executable, "-m", "dotscope.cli", "refresh", "run", "--drain"],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 except Exception:

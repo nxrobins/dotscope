@@ -146,7 +146,7 @@ class TestAttributionHints:
 
     def test_implicit_contracts_from_history(self):
         """Hints extracted directly from cached history objects."""
-        from dotscope.history import ImplicitContract
+        from dotscope.models.history import ImplicitContract
         contracts = [
             ImplicitContract(
                 trigger_file="auth/handler.py",
@@ -180,7 +180,7 @@ class TestAttributionHints:
 
     def test_priority_ordering(self):
         """git_history hints come before hand_authored."""
-        from dotscope.history import ImplicitContract
+        from dotscope.models.history import ImplicitContract
         contracts = [
             ImplicitContract("auth/a.py", "auth/b.py", 0.7, 10,
                            "a.py and b.py change together"),

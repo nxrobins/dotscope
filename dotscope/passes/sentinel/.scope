@@ -1,0 +1,34 @@
+description: Sentinel enforcement engine — pre-commit checks and constraints
+includes:
+  - dotscope/passes/sentinel/__init__.py
+  - dotscope/passes/sentinel/checker.py
+  - dotscope/passes/sentinel/acknowledge.py
+  - dotscope/passes/sentinel/constraints.py
+  - dotscope/passes/sentinel/line_filter.py
+excludes:
+  - dotscope/passes/sentinel/__pycache__/
+  - dotscope/passes/sentinel/checks/
+context: |
+  The enforcement engine that gates commits and injects constraints.
+
+  ## checker.py — Orchestrator
+  check_diff() and check_staged() run all 9 checks, aggregate into CheckReport.
+  Explicit import list (no auto-discovery). Loads invariants, scopes, intents,
+  conventions, voice, network edges, and swarm locks before running checks.
+  Escalation: NUDGE -> GUARD after 3+ occurrences.
+
+  ## acknowledge.py — Override System
+  Records and queries acknowledgments with confidence decay (min floor 0.3).
+
+  ## constraints.py — Prophylactic Injection
+  Builds constraint objects injected into resolve_scope responses.
+
+  ## line_filter.py — Diff Pre-processing
+  Strips comments and string literals before pattern matching.
+related:
+  - dotscope/passes/sentinel/checks/.scope
+  - dotscope/passes/.scope
+tags:
+  - enforcement
+  - pre-commit
+  - constraints

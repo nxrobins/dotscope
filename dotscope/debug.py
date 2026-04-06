@@ -76,7 +76,7 @@ def debug_session(
 
 def list_bad_sessions(repo_root: str, limit: int = 10) -> List[dict]:
     """List sessions with low recall for debugging."""
-    from .sessions import SessionManager
+    from .storage.session_manager import SessionManager
     mgr = SessionManager(repo_root)
     observations = mgr.get_observations(limit=200)
     sessions = mgr.get_sessions(limit=200)
@@ -145,7 +145,7 @@ def _load_session(repo_root: str, session_id: str) -> Optional[dict]:
 
 def _load_observation(repo_root: str, session_id: str) -> Optional[dict]:
     """Find observation matching a session."""
-    from .sessions import SessionManager
+    from .storage.session_manager import SessionManager
     mgr = SessionManager(repo_root)
     for obs in mgr.get_observations(limit=200):
         if obs.session_id == session_id:

@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 from ..context import parse_context
-from ..graph import DependencyGraph
+from ..models.core import DependencyGraph
 from ..models.core import ScopeConfig
 from ..models.passes import VirtualScope  # noqa: F401
 from ..paths import make_relative, normalize_relative_path, normalize_scope_ref

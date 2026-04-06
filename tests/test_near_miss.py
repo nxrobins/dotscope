@@ -2,7 +2,7 @@
 
 import json
 import time
-from dotscope.near_miss import (
+from dotscope.storage.near_miss import (
     extract_warning_pairs,
     detect_near_misses,
     NearMiss,

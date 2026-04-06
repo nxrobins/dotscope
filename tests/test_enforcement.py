@@ -6,21 +6,21 @@ import tempfile
 
 import pytest
 
-from dotscope.check.models import (
+from dotscope.models.intent import (
     CheckCategory, CheckReport, CheckResult, Constraint,
     IntentDirective, ProposedFix, Severity,
 )
-from dotscope.check.checks.boundary import check_boundaries
-from dotscope.check.checks.contracts import check_contracts, _ack_id
-from dotscope.check.checks.antipattern import check_antipatterns
-from dotscope.check.checks.stability import check_stability
-from dotscope.check.checks.direction import check_dependency_direction
-from dotscope.check.checks.intent import check_intent_holds, check_intent_notes
-from dotscope.check.acknowledge import (
+from dotscope.passes.sentinel.checks.boundary import check_boundaries
+from dotscope.passes.sentinel.checks.contracts import check_contracts, _ack_id
+from dotscope.passes.sentinel.checks.antipattern import check_antipatterns
+from dotscope.passes.sentinel.checks.stability import check_stability
+from dotscope.passes.sentinel.checks.direction import check_dependency_direction
+from dotscope.passes.sentinel.checks.intent import check_intent_holds, check_intent_notes
+from dotscope.passes.sentinel.acknowledge import (
     record_acknowledgment, load_acknowledgments, compute_decayed_confidence,
 )
-from dotscope.check.constraints import build_constraints
-from dotscope.check.checker import check_diff, format_terminal, _parse_diff
+from dotscope.passes.sentinel.constraints import build_constraints
+from dotscope.passes.sentinel.checker import check_diff, format_terminal, _parse_diff
 
 
 # ---------------------------------------------------------------------------

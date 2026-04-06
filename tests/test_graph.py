@@ -2,7 +2,7 @@
 
 import os
 import pytest
-from dotscope.graph import build_graph, format_graph_summary
+from dotscope.passes.graph_builder import build_graph, format_graph_summary
 
 
 class TestBuildGraph:

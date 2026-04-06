@@ -136,7 +136,7 @@ class SessionTracker:
         try:
             root = getattr(self, "_repo_root", None)
             if root:
-                from .onboarding import load_onboarding, milestone_message, next_step
+                from .storage.onboarding import load_onboarding, milestone_message, next_step
                 state = load_onboarding(root)
                 msg = milestone_message(state)
                 if msg:
@@ -157,13 +157,13 @@ class SessionTracker:
             if not root:
                 return []
 
-            from .onboarding import load_onboarding, should_show_counterfactuals
+            from .storage.onboarding import load_onboarding, should_show_counterfactuals
             state = load_onboarding(root)
             if not should_show_counterfactuals(state):
                 return []
 
             from .counterfactual import compute_counterfactuals
-            from .near_miss import load_recent_near_misses
+            from .storage.near_miss import load_recent_near_misses
             import json
 
             # Gather data
@@ -189,7 +189,7 @@ class SessionTracker:
             modified = set()
             diff_text = ""
             try:
-                from .sessions import SessionManager
+                from .storage.session_manager import SessionManager
                 mgr = SessionManager(root)
                 recent_obs = mgr.get_observations(limit=5)
                 for obs in recent_obs:
