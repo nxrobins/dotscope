@@ -146,7 +146,7 @@ def _parse_source(source: str, filepath: str) -> Optional[FileAnalysis]:
         import tempfile
         # Write to temp file for analyze_file (it reads from disk)
         ext = os.path.splitext(filepath)[1]
-        lang = {".py": "python", ".js": "javascript", ".ts": "typescript", ".go": "go"}.get(ext)
+        lang = {".py": "python", ".js": "javascript", ".ts": "typescript", ".go": "go", ".sol": "solidity"}.get(ext)
         if not lang:
             return None
         with tempfile.NamedTemporaryFile(mode="w", suffix=ext, delete=False, encoding="utf-8") as tf:
