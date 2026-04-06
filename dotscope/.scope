@@ -1,7 +1,7 @@
 description: Root interfaces and orchestrators
 includes:
-  - dotscope/cli.py
-  - dotscope/mcp_server.py
+  - dotscope/cli/
+  - dotscope/mcp/
   - dotscope/composer.py
   - dotscope/resolver.py
   - dotscope/intent.py
@@ -12,7 +12,6 @@ includes:
   - dotscope/visibility.py
   - dotscope/hooks.py
   - dotscope/budget.py
-  - dotscope/models.py
   - dotscope/assertions.py
   - dotscope/health.py
   - dotscope/utility.py
@@ -24,6 +23,10 @@ includes:
   - dotscope/tokens.py
   - dotscope/matcher.py
   - dotscope/ast_analyzer.py
+  - dotscope/explain.py
+  - dotscope/refresh.py
+  - dotscope/paths/
+  - dotscope/constants.py
   - .scopes
 excludes:
   - dotscope/__pycache__/
@@ -34,11 +37,11 @@ context: |
   The root dotscope/ directory holds interfaces and orchestrators.
   Heavy lifting is delegated to passes/. State to storage/. Types to models/.
 
-  ## cli.py — Human Interface
+  ## cli/ — Human Interface (package: core.py, hooks.py, ingest.py, observability.py)
   All CLI commands. Dispatches to functional modules. 20+ commands including
   resolve, check, intent, ingest, test-compiler, bench, debug, health.
 
-  ## mcp_server.py — Agent Interface
+  ## mcp/ — Agent Interface (package: core.py, hooks.py, ingest.py, observability.py)
   FastMCP server. 16 tools: resolve_scope, dotscope_check, dotscope_debug,
   dotscope_acknowledge, match_scope, session_summary, etc.
   Every resolve_scope call is tracked. Constraints injected prophylactically.

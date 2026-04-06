@@ -1,0 +1,35 @@
+description: MCP server — agent interface to dotscope
+includes:
+  - dotscope/mcp/__init__.py
+  - dotscope/mcp/core.py
+  - dotscope/mcp/hooks.py
+  - dotscope/mcp/ingest.py
+  - dotscope/mcp/observability.py
+excludes:
+  - dotscope/mcp/__pycache__/
+context: |
+  The MCP package exposes dotscope as MCP tools for AI agents.
+  Split from the monolithic mcp_server.py during the domain-driven refactor.
+
+  ## __init__.py — Server Bootstrap
+  FastMCP initialization, client detection, session tracking, atexit hooks.
+  Registers all tool modules.
+
+  ## core.py — Core Tools
+  resolve_scope, match_scope, get_context, list_scopes.
+
+  ## hooks.py — Swarm Hooks
+  Placeholder for swarm-specific MCP hooks.
+
+  ## ingest.py — Ingest Tools
+  dotscope_ingest for triggering ingestion from agents.
+
+  ## observability.py — Observability Tools
+  validate_scopes, scope_health, dotscope_refresh, dotscope_check,
+  dotscope_claim_scope, dotscope_renew_lock, dotscope_escalate.
+related:
+  - dotscope/.scope
+  - dotscope/cli/.scope
+tags:
+  - mcp
+  - agent-interface

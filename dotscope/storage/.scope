@@ -1,13 +1,15 @@
 description: Infrastructure — disk I/O, hooks, caching, state persistence
 includes:
-  - session_manager.py
-  - cache.py
-  - git_hooks.py
-  - claude_hooks.py
-  - onboarding.py
-  - timing.py
-  - near_miss.py
-  - incremental_state.py
+  - dotscope/storage/session_manager.py
+  - dotscope/storage/cache.py
+  - dotscope/storage/git_hooks.py
+  - dotscope/storage/claude_hooks.py
+  - dotscope/storage/onboarding.py
+  - dotscope/storage/timing.py
+  - dotscope/storage/near_miss.py
+  - dotscope/storage/incremental_state.py
+  - dotscope/storage/mcp_config.py
+  - dotscope/storage/swarm_state.py
 excludes:
   - __pycache__/
 context: |
