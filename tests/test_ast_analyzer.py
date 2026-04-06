@@ -2,7 +2,7 @@
 
 import os
 import pytest
-from dotscope.ast_analyzer import analyze_file, resolve_python_import
+from dotscope.passes.ast_analyzer import analyze_file, resolve_python_import
 from dotscope.models import ResolvedImport
 
 

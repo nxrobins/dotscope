@@ -293,12 +293,12 @@ class TestDiscoveryHelpers:
         assert not _is_cross_module("root.py", "other.py")  # no directories
 
     def test_find_hub_discoveries_empty_graph(self):
-        from dotscope.graph import DependencyGraph
+        from dotscope.models.core import DependencyGraph
         graph = DependencyGraph(root="/tmp")
         assert _find_hub_discoveries(graph) == []
 
     def test_find_volatility_surprises_empty_history(self):
-        from dotscope.history import HistoryAnalysis
+        from dotscope.models.history import HistoryAnalysis
         history = HistoryAnalysis()
         assert _find_volatility_surprises(history) == []
 

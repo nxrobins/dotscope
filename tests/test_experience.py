@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from dotscope.onboarding import (
+from dotscope.storage.onboarding import (
     load_onboarding, save_onboarding, mark_milestone, increment_counter,
     should_show_counterfactuals, should_show_health_nudges,
     next_step, milestone_message, version_control_tip, mark_vc_tip_shown,
@@ -195,7 +195,7 @@ class TestCounterfactuals:
         assert not any(cf.type == "contract_honored" for cf in cfs)
 
     def test_intent_respected(self):
-        from dotscope.check.models import IntentDirective
+        from dotscope.models.intent import IntentDirective
         constraints = [
             {"category": "intent", "message": "decouple auth/, payments/"}
         ]

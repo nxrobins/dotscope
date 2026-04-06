@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 
 from dotscope.composer import compose
-from dotscope.budget import apply_budget
-from dotscope.sessions import SessionManager
+from dotscope.passes.budget_allocator import apply_budget
+from dotscope.storage.session_manager import SessionManager
 from dotscope.lessons import (
     generate_lessons,
     save_lessons,

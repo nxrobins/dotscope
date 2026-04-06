@@ -5,6 +5,8 @@ locks, their blast radii, and conflict descriptors.
 """
 
 import json
+import os
+import sys
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -50,6 +52,60 @@ class SwarmState:
 
 def _state_path(repo_root: str) -> Path:
     return Path(repo_root) / ".dotscope" / "cache" / "swarm_state.json"
+
+
+def _lock_path(repo_root: str) -> str:
+    return os.path.join(repo_root, ".dotscope", "cache", "swarm_state.json.lock")
+
+
+def _acquire_swarm_lock(root: str, timeout: float = 5.0) -> int:
+    """Acquire a cross-platform file lock for swarm state access.
+
+    Returns the file descriptor on success.
+    Raises ``TimeoutError`` if the lock cannot be acquired within *timeout* seconds.
+    """
+    lock = _lock_path(root)
+    os.makedirs(os.path.dirname(lock), exist_ok=True)
+    fd = os.open(lock, os.O_CREAT | os.O_RDWR)
+
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            if sys.platform == "win32":
+                import msvcrt
+                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return fd
+        except (OSError, IOError):
+            if time.monotonic() >= deadline:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+                raise TimeoutError(
+                    f"Could not acquire swarm state lock at {lock} "
+                    f"within {timeout}s"
+                )
+            time.sleep(0.05)
+
+
+def _release_swarm_lock(root: str, fd: int) -> None:
+    """Release the cross-platform file lock."""
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+            msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    except (OSError, IOError):
+        pass
+    try:
+        os.close(fd)
+    except OSError:
+        pass
 
 
 def load_swarm_state(repo_root: str) -> SwarmState:
@@ -100,11 +156,22 @@ def _generate_lock_id(agent_id: str) -> str:
 
 
 def gc_expired_locks(state: SwarmState) -> int:
-    """Remove expired locks. Returns count of removed locks."""
+    """Remove expired locks and orphaned conflicts. Returns count of removed locks."""
     now = time.time()
     expired = [lid for lid, lock in state.locks.items() if lock.expires_at < now]
     for lid in expired:
         del state.locks[lid]
+
+    # Clean up orphaned ConflictDescriptors whose referenced agents
+    # no longer hold any active lock.
+    active_agents = {lock.agent_id for lock in state.locks.values()}
+    orphaned = [
+        cid for cid, conflict in state.conflicts.items()
+        if not any(agent in active_agents for agent in conflict.agents)
+    ]
+    for cid in orphaned:
+        del state.conflicts[cid]
+
     return len(expired)
 
 

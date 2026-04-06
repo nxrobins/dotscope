@@ -5,7 +5,7 @@ import os
 import subprocess
 import time
 import pytest
-from dotscope.sessions import SessionManager
+from dotscope.storage.session_manager import SessionManager
 
 
 def _git_init(path):
@@ -93,7 +93,7 @@ class TestSessionManager:
 class TestHooks:
     def test_install_hook(self, tmp_path):
         _git_init(tmp_path)
-        from dotscope.hooks import install_hook, is_hook_installed
+        from dotscope.storage.git_hooks import install_hook, is_hook_installed
         result = install_hook(str(tmp_path))
         assert "pre-commit:" in result
         assert "post-commit:" in result
@@ -101,7 +101,7 @@ class TestHooks:
 
     def test_uninstall_hook(self, tmp_path):
         _git_init(tmp_path)
-        from dotscope.hooks import install_hook, uninstall_hook, is_hook_installed
+        from dotscope.storage.git_hooks import install_hook, uninstall_hook, is_hook_installed
         install_hook(str(tmp_path))
         assert is_hook_installed(str(tmp_path))
         removed = uninstall_hook(str(tmp_path))
@@ -110,7 +110,7 @@ class TestHooks:
 
     def test_idempotent_install(self, tmp_path):
         _git_init(tmp_path)
-        from dotscope.hooks import install_hook
+        from dotscope.storage.git_hooks import install_hook
         install_hook(str(tmp_path))
         install_hook(str(tmp_path))  # Should not duplicate
         hook = (tmp_path / ".git" / "hooks" / "post-commit").read_text()
@@ -118,5 +118,5 @@ class TestHooks:
 
     def test_no_hook_uninstall(self, tmp_path):
         _git_init(tmp_path)
-        from dotscope.hooks import uninstall_hook
+        from dotscope.storage.git_hooks import uninstall_hook
         assert not uninstall_hook(str(tmp_path))

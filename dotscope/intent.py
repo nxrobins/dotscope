@@ -14,7 +14,7 @@ import hashlib
 import os
 from typing import List, Optional
 
-from .check.models import ConventionRule, IntentDirective
+from .models.intent import ConventionRule, IntentDirective
 from .textio import read_repo_text
 
 

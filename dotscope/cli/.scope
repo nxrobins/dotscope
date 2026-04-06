@@ -1,0 +1,35 @@
+description: CLI command handlers — human interface to dotscope
+includes:
+  - dotscope/cli/__init__.py
+  - dotscope/cli/core.py
+  - dotscope/cli/hooks.py
+  - dotscope/cli/ingest.py
+  - dotscope/cli/observability.py
+excludes:
+  - dotscope/cli/__pycache__/
+context: |
+  The CLI package dispatches user commands to functional modules.
+  Split from the monolithic cli.py during the domain-driven refactor.
+
+  ## __init__.py — Argument Parser + Dispatch
+  Argparse definitions for all 20+ commands. Maps subcommands to handlers.
+
+  ## core.py — Core Commands
+  resolve, context, match, init, list_scopes. The read-path commands.
+
+  ## hooks.py — Enforcement + Refresh Commands
+  observe, incremental, hook, refresh, check, check_backtest, voice.
+  The write-path and enforcement commands.
+
+  ## ingest.py — Ingestion Commands
+  ingest, impact, backtest, conventions, diff.
+
+  ## observability.py — Diagnostic Commands
+  health, validate, stats, tree, utility, virtual, lessons, invariants,
+  debug, rebuild, intent, acknowledge.
+related:
+  - dotscope/.scope
+  - dotscope/mcp/.scope
+tags:
+  - cli
+  - commands

@@ -19,7 +19,9 @@ from ..storage.swarm_state import (
     SwarmLock,
     SwarmState,
     DEFAULT_LOCK_TTL,
+    _acquire_swarm_lock,
     _generate_lock_id,
+    _release_swarm_lock,
     find_overlaps,
     gc_expired_locks,
     load_swarm_state,
@@ -117,65 +119,69 @@ def claim_scope(
          "shared_files": [...],
          "conflicts": [...]}
     """
-    state = load_swarm_state(repo_root)
-    gc_expired_locks(state)
-
     exclusive, shared = compute_blast_radius(
         primary_files, graph_hubs, network_edges,
         reverse_network_edges, co_change_index,
     )
 
-    overlaps = find_overlaps(state, exclusive, shared, agent_id)
+    fd = _acquire_swarm_lock(repo_root)
+    try:
+        state = load_swarm_state(repo_root)
+        gc_expired_locks(state)
 
-    if overlaps["exclusive"]:
-        # Hard block — another agent holds exclusive lock on these files
-        conflict_locks = [state.locks[lid] for lid in overlaps["exclusive"]]
-        conflict_files = set()
-        for lock in conflict_locks:
-            conflict_files.update(set(exclusive) & set(lock.exclusive_files))
+        overlaps = find_overlaps(state, exclusive, shared, agent_id)
 
-        conflict_id = f"conflict_{agent_id}_{int(time.time())}"
-        state.conflicts[conflict_id] = ConflictDescriptor(
-            conflict_id=conflict_id,
-            files=sorted(conflict_files),
-            agents=[agent_id] + [l.agent_id for l in conflict_locks],
-            conflict_type="exclusive_overlap",
-            created_at=time.time(),
-            detail=f"Agent {agent_id} tried to claim files locked by "
-                   f"{', '.join(l.agent_id for l in conflict_locks)}",
+        if overlaps["exclusive"]:
+            # Hard block — another agent holds exclusive lock on these files
+            conflict_locks = [state.locks[lid] for lid in overlaps["exclusive"]]
+            conflict_files = set()
+            for lock in conflict_locks:
+                conflict_files.update(set(exclusive) & set(lock.exclusive_files))
+
+            conflict_id = f"conflict_{agent_id}_{int(time.time())}"
+            state.conflicts[conflict_id] = ConflictDescriptor(
+                conflict_id=conflict_id,
+                files=sorted(conflict_files),
+                agents=[agent_id] + [l.agent_id for l in conflict_locks],
+                conflict_type="exclusive_overlap",
+                created_at=time.time(),
+                detail=f"Agent {agent_id} tried to claim files locked by "
+                       f"{', '.join(l.agent_id for l in conflict_locks)}",
+            )
+            save_swarm_state(repo_root, state)
+
+            return {
+                "status": "rejected",
+                "lock_id": "",
+                "exclusive_files": exclusive,
+                "shared_files": shared,
+                "conflicts": [
+                    {
+                        "lock_id": lid,
+                        "agent": state.locks[lid].agent_id,
+                        "files": sorted(set(exclusive) & set(state.locks[lid].exclusive_files)),
+                    }
+                    for lid in overlaps["exclusive"]
+                ],
+            }
+
+        # Grant the lock (with shared warnings if applicable)
+        now = time.time()
+        lock_id = _generate_lock_id(agent_id)
+        lock = SwarmLock(
+            agent_id=agent_id,
+            task_description=task_description,
+            primary_files=primary_files,
+            exclusive_files=exclusive,
+            shared_files=shared,
+            created_at=now,
+            expires_at=now + ttl,
+            lock_id=lock_id,
         )
+        state.locks[lock_id] = lock
         save_swarm_state(repo_root, state)
-
-        return {
-            "status": "rejected",
-            "lock_id": "",
-            "exclusive_files": exclusive,
-            "shared_files": shared,
-            "conflicts": [
-                {
-                    "lock_id": lid,
-                    "agent": state.locks[lid].agent_id,
-                    "files": sorted(set(exclusive) & set(state.locks[lid].exclusive_files)),
-                }
-                for lid in overlaps["exclusive"]
-            ],
-        }
-
-    # Grant the lock (with shared warnings if applicable)
-    now = time.time()
-    lock_id = _generate_lock_id(agent_id)
-    lock = SwarmLock(
-        agent_id=agent_id,
-        task_description=task_description,
-        primary_files=primary_files,
-        exclusive_files=exclusive,
-        shared_files=shared,
-        created_at=now,
-        expires_at=now + ttl,
-        lock_id=lock_id,
-    )
-    state.locks[lock_id] = lock
-    save_swarm_state(repo_root, state)
+    finally:
+        _release_swarm_lock(repo_root, fd)
 
     status = "warning" if overlaps["shared"] else "granted"
     result = {
@@ -211,12 +217,16 @@ def claim_scope(
 
 def release_lock(repo_root: str, lock_id: str) -> bool:
     """Release a lock. Returns True if found and removed."""
-    state = load_swarm_state(repo_root)
-    if lock_id in state.locks:
-        del state.locks[lock_id]
-        save_swarm_state(repo_root, state)
-        return True
-    return False
+    fd = _acquire_swarm_lock(repo_root)
+    try:
+        state = load_swarm_state(repo_root)
+        if lock_id in state.locks:
+            del state.locks[lock_id]
+            save_swarm_state(repo_root, state)
+            return True
+        return False
+    finally:
+        _release_swarm_lock(repo_root, fd)
 
 
 def renew_lock(repo_root: str, lock_id: str, ttl: float = DEFAULT_LOCK_TTL) -> bool:

@@ -2,7 +2,7 @@
 
 import os
 import pytest
-from dotscope.budget import apply_budget
+from dotscope.passes.budget_allocator import apply_budget
 from dotscope.passes.budget_allocator import _rank_files
 from dotscope.models import ResolvedScope
 

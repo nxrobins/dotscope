@@ -1,0 +1,19 @@
+description: Individual check modules — 10 independent enforcement rules
+includes:
+  - dotscope/passes/sentinel/checks/
+excludes:
+  - dotscope/passes/sentinel/checks/__pycache__/
+context: |
+  Each module exports a single check function returning List[CheckResult].
+  All checks import from models.intent only — never from each other.
+
+  GUARD-level (blocks commit): boundary, contracts, antipattern, intent,
+  convention, voice, network.
+  NOTE-level (informational): direction, stability, spatial.
+
+  Each CheckResult includes source_file and source_rule for explainability.
+related:
+  - dotscope/passes/sentinel/.scope
+tags:
+  - checks
+  - enforcement

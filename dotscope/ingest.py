@@ -15,8 +15,10 @@ from typing import List, Optional, Set, Tuple
 
 from .absorber import AbsorptionResult, absorb_docs
 from .context import parse_context
-from .graph import DependencyGraph, ModuleBoundary, build_graph, transitive_dependents
-from .history import HistoryAnalysis, analyze_history
+from .models.core import DependencyGraph, ModuleBoundary
+from .models.history import HistoryAnalysis
+from .passes.graph_builder import build_graph, transitive_dependents
+from .passes.history_miner import analyze_history
 from .models.core import ScopeConfig, ScopesIndex, ScopeEntry
 from .models.passes import IngestPlan, PlannedScope  # noqa: F401
 from .models.state import BacktestReport
@@ -92,7 +94,7 @@ def ingest(
         estimate_scope_tokens([os.path.join(root, p)])
         for p in graph.files
     )
-    from .graph import format_graph_summary
+    from .passes.graph_builder import format_graph_summary
     plan.graph_summary = format_graph_summary(graph)
     edge_count = sum(len(n.imports) for n in graph.files.values())
     progress.finish(f"{len(graph.files)} files, {edge_count} edges, {len(graph.modules)} modules")
@@ -104,7 +106,7 @@ def ingest(
     if mine_history:
         progress.start(f"mining git history ({max_commits} commits)")
         history = analyze_history(root, max_commits=max_commits)
-        from .history import format_history_summary
+        from .passes.history_miner import format_history_summary
         plan.history_summary = format_history_summary(history)
         contracts = len(history.implicit_contracts)
         progress.finish(f"{history.commits_analyzed} commits, {contracts} contracts")
@@ -265,7 +267,7 @@ def ingest(
             plan.scopes.append(planned)
 
     # Step 4b: Detect virtual (cross-cutting) scopes
-    from .virtual import detect_virtual_scopes
+    from .passes.virtual import detect_virtual_scopes
     virtual_scopes = detect_virtual_scopes(graph)
     plan.virtual_scopes = virtual_scopes
     for vs in virtual_scopes:
@@ -282,7 +284,7 @@ def ingest(
     # Step 5: Backtest against git history and auto-correct
     if mine_history and plan.scopes:
         progress.start(f"backtesting ({min(max_commits, 50)} commits)")
-        from .backtest import backtest_scopes, auto_correct_scope, format_backtest_report
+        from .passes.backtest import backtest_scopes, auto_correct_scope, format_backtest_report
 
         configs = [ps.config for ps in plan.scopes]
         report = backtest_scopes(root, configs, n_commits=min(max_commits, 50))
@@ -322,7 +324,7 @@ def ingest(
     if not dry_run:
         _write_scopes(plan)
         # Cache structured data for MCP server
-        from .cache import cache_ingest_data
+        from .storage.cache import cache_ingest_data
         cache_ingest_data(root, history=plan.history, graph=plan.graph)
         # Cache invariants for enforcement
         _cache_invariants(root, plan.history)
@@ -464,7 +466,7 @@ def synthesize_scope(
             context_parts.append(f"- {msg}")
 
     # 6. Transitive dependency chain (if deeper than 1 hop)
-    from .graph import transitive_deps as _transitive_deps
+    from .passes.graph_builder import transitive_deps as _transitive_deps
     deep_deps: Set[str] = set()
     for f in module.files:
         for dep in _transitive_deps(graph, f):
@@ -836,7 +838,7 @@ def _find_volatility_surprises(
     history: HistoryAnalysis,
 ) -> List[Tuple[str, "FileHistory"]]:
     """Files classified volatile that live in directories expected to be stable."""
-    from .history import FileHistory  # noqa: F811 — type hint only
+    from .models.history import FileHistory  # noqa: F811 — type hint only
 
     surprises: List[Tuple[str, FileHistory]] = []
     for path, fh in history.file_histories.items():

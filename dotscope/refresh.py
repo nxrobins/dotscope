@@ -370,7 +370,7 @@ def run_scope_refresh(root: str, targets: Iterable[str], quiet: bool = True) -> 
 
 def run_repo_refresh(root: str, quiet: bool = True) -> bool:
     """Rebuild the full runtime overlay without touching tracked scope files."""
-    from .cache import cache_ingest_data
+    from .storage.cache import cache_ingest_data
     from .ingest import _cache_invariants, ingest
 
     plan = ingest(
@@ -486,6 +486,8 @@ def kick_refresh_worker(root: str) -> None:
     if not load_refresh_queue(root):
         return
 
+    # NOTE: Intentionally fire-and-forget — worker self-terminates via queue drain.
+    # Popen does not support timeout=; the child process exits once the queue is empty.
     subprocess.Popen(
         [sys.executable, "-m", "dotscope.cli", "refresh", "run", "--drain"],
         cwd=root,

@@ -6,12 +6,24 @@ Walks includes, applies excludes, follows related scopes with cycle detection.
 
 import fnmatch
 import os
+import time
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 from .constants import SKIP_DIRS
 from .models import ResolvedScope, ScopeConfig
 from .tokens import estimate_file_tokens, estimate_context_tokens
+
+# Module-level cache: dir_path -> (mtime, file_list)
+_dir_cache: Dict[str, Tuple[float, List[str]]] = {}
+
+
+def clear_resolve_cache() -> None:
+    """Invalidate the directory walk cache.
+
+    Call from tests or when the filesystem is known to have changed.
+    """
+    _dir_cache.clear()
 
 
 def resolve(
@@ -119,13 +131,32 @@ def _walk_directory(dir_path: str, files: List[str], seen: Set[str]) -> None:
     if not os.path.isdir(dir_path):
         return
 
+    # Check cache: reuse previous walk if directory mtime is unchanged
+    try:
+        current_mtime = os.path.getmtime(dir_path)
+    except OSError:
+        current_mtime = 0.0
+
+    cached = _dir_cache.get(dir_path)
+    if cached is not None and cached[0] == current_mtime:
+        for full in cached[1]:
+            if full not in seen:
+                files.append(full)
+                seen.add(full)
+        return
+
+    # Walk and cache
+    walked: List[str] = []
     for dirpath, dirnames, filenames in os.walk(dir_path):
         dirnames[:] = [d for d in dirnames if d not in skip_dirs]
         for filename in sorted(filenames):
             full = os.path.join(dirpath, filename)
+            walked.append(full)
             if full not in seen:
                 files.append(full)
                 seen.add(full)
+
+    _dir_cache[dir_path] = (current_mtime, walked)
 
 
 def _glob_pattern(pattern: str, scope_dir: str, files: List[str], seen: Set[str]) -> None:

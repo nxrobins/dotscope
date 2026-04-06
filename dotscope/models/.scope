@@ -1,10 +1,11 @@
 description: Data models — the single source of truth for all types
 includes:
-  - core.py
-  - history.py
-  - intent.py
-  - state.py
-  - passes.py
+  - dotscope/models/core.py
+  - dotscope/models/history.py
+  - dotscope/models/intent.py
+  - dotscope/models/state.py
+  - dotscope/models/passes.py
+  - dotscope/models/eval.py
 context: |
   Five domain files. Each owns a distinct category of data.
   Models NEVER import from functional modules — they are the foundation.

@@ -186,3 +186,104 @@ def register_observability_tools(mcp, **kwargs):
             "holds": [_fmt_result(r) for r in report.guards],  # backwards compat
             "files_checked": report.files_checked,
         }, indent=2)
+
+    # -------------------------------------------------------------------
+    # Swarm Lock MCP tools
+    # -------------------------------------------------------------------
+
+    @mcp.tool()
+    def dotscope_claim_scope(
+        agent_id: str,
+        task_description: str,
+        primary_files: list,
+    ) -> str:
+        """Claim exclusive write access before modifying files.
+
+        Call AFTER codebase_search/resolve_scope, BEFORE writing code.
+        The claim computes a blast radius: direct dependents get exclusive
+        locks, two-hop dependents get shared locks.
+
+        Args:
+            agent_id: Your unique identifier.
+            task_description: What you plan to do.
+            primary_files: Files you intend to modify.
+
+        Returns JSON with:
+        - status: "granted", "warning" (shared overlap), or "rejected" (exclusive overlap).
+        - exclusive_files: files no other agent can modify while you hold this lock.
+        - shared_files: files with soft warnings for other agents.
+        - preflight: advisory warnings about what will likely break.
+        """
+        from ..paths.repo import find_repo_root
+        from ..merge.swarm import claim_scope
+
+        root = find_repo_root()
+        if root is None:
+            return json.dumps({"error": "Could not find repository root"})
+
+        try:
+            from ..storage.cache import load_cached_graph_hubs, load_cached_network_edges
+            graph_hubs = load_cached_graph_hubs(root)
+            network_edges = load_cached_network_edges(root)
+        except Exception:
+            graph_hubs, network_edges = {}, {}
+
+        result = claim_scope(
+            repo_root=root,
+            agent_id=agent_id,
+            task_description=task_description,
+            primary_files=primary_files,
+            graph_hubs=graph_hubs,
+            network_edges=network_edges,
+        )
+        return json.dumps(result, indent=2)
+
+    @mcp.tool()
+    def dotscope_renew_lock(
+        lock_id: str,
+    ) -> str:
+        """Extend an active lock's expiry by 30 minutes.
+
+        Args:
+            lock_id: The lock ID from dotscope_claim_scope.
+        """
+        from ..paths.repo import find_repo_root
+        from ..merge.swarm import renew_lock
+
+        root = find_repo_root()
+        if root is None:
+            return json.dumps({"error": "Could not find repository root"})
+
+        renewed = renew_lock(root, lock_id)
+        return json.dumps({
+            "renewed": renewed,
+            "lock_id": lock_id,
+            "message": "Lock extended by 30 minutes" if renewed else "Lock not found or expired",
+        })
+
+    @mcp.tool()
+    def dotscope_escalate(
+        conflict_id: str,
+    ) -> str:
+        """Escalate an unresolvable conflict to a human operator.
+
+        Use when interlocking locks prevent progress or contract violations
+        require cross-scope changes beyond your claim.
+
+        Args:
+            conflict_id: The conflict ID from a rejected claim.
+        """
+        from ..paths.repo import find_repo_root
+        from ..merge.swarm import check_escalation
+
+        root = find_repo_root()
+        if root is None:
+            return json.dumps({"error": "Could not find repository root"})
+
+        result = check_escalation(root, conflict_id)
+        if result:
+            return json.dumps(result, indent=2)
+        return json.dumps({
+            "escalation": False,
+            "message": "Not yet at escalation threshold. Continue resolution attempts.",
+        })

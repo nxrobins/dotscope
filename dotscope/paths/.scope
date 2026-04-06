@@ -1,0 +1,22 @@
+description: Path utilities — normalization, repo root detection
+includes:
+  - dotscope/paths/__init__.py
+  - dotscope/paths/repo.py
+excludes:
+  - dotscope/paths/__pycache__/
+context: |
+  Path utilities split from the monolithic paths.py during the refactor.
+
+  ## __init__.py — Core Path Functions
+  normalize, make_relative, normalize_relative_path, path_exists,
+  strip_inline_comment, scope_storage_key. Re-exports everything
+  that was in the old flat paths.py.
+
+  ## repo.py — Repository Root Detection
+  find_repo_root() walks up from a directory looking for .git.
+  Extracted to avoid circular imports in the CLI and MCP packages.
+related:
+  - dotscope/.scope
+tags:
+  - paths
+  - utilities

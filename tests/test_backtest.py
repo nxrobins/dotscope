@@ -3,7 +3,7 @@
 import os
 import subprocess
 import pytest
-from dotscope.backtest import backtest_scopes, auto_correct_scope, format_backtest_report
+from dotscope.passes.backtest import backtest_scopes, auto_correct_scope, format_backtest_report
 from dotscope.models import ScopeConfig, BacktestResult, MissingSuggestion
 from dotscope.context import parse_context
 

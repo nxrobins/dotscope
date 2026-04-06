@@ -1,22 +1,25 @@
 description: Analysis engine — the active verbs of the compiler
 includes:
-  - ast_analyzer.py
-  - graph_builder.py
-  - history_miner.py
-  - budget_allocator.py
-  - backtest.py
-  - virtual.py
-  - convention_discovery.py
-  - convention_parser.py
-  - convention_compliance.py
-  - semantic_diff.py
-  - voice_discovery.py
-  - voice_defaults.py
-  - voice.py
-  - lang/
-  - lazy.py
-  - incremental.py
-  - sentinel/
+  - dotscope/passes/ast_analyzer.py
+  - dotscope/passes/graph_builder.py
+  - dotscope/passes/history_miner.py
+  - dotscope/passes/budget_allocator.py
+  - dotscope/passes/backtest.py
+  - dotscope/passes/virtual.py
+  - dotscope/passes/convention_discovery.py
+  - dotscope/passes/convention_parser.py
+  - dotscope/passes/convention_compliance.py
+  - dotscope/passes/semantic_diff.py
+  - dotscope/passes/voice_discovery.py
+  - dotscope/passes/voice_defaults.py
+  - dotscope/passes/voice.py
+  - dotscope/passes/lang/
+  - dotscope/passes/lazy.py
+  - dotscope/passes/incremental.py
+  - dotscope/passes/sentinel/
+  - dotscope/passes/hint_generator.py
+  - dotscope/passes/preflight.py
+  - dotscope/passes/spatial_autofix.py
 excludes:
   - __pycache__/
 context: |

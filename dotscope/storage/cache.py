@@ -10,8 +10,8 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Optional
 
-from ..graph import DependencyGraph, FileNode, ModuleBoundary
-from ..history import (
+from ..models.core import DependencyGraph, FileNode, ModuleBoundary
+from ..models.history import (
     HistoryAnalysis, FileHistory, ChangeCoupling, ImplicitContract,
 )
 
