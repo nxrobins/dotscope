@@ -3,7 +3,7 @@ import os
 import sys
 
 def _cmd_ingest(args):
-    from .ingest import ingest, format_ingest_report
+    from ..ingest import ingest, format_ingest_report
 
     root = os.path.abspath(args.dir)
     plan = ingest(
