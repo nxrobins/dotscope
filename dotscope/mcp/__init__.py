@@ -71,7 +71,7 @@ def main():
     known, _remaining = parser.parse_known_args()
     _cli_root = known.root
 
-    mcp = FastMCP("dotscope", version=__version__)
+    mcp = FastMCP("dotscope")
 
     # Session-level tracker (lives across tool calls in a single MCP session)
     from ..visibility import SessionTracker
