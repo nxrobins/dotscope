@@ -416,6 +416,7 @@ def _detect_language(filepath: str) -> Optional[str]:
         ".js": "javascript",
         ".ts": "typescript",
         ".go": "go",
+        ".sol": "solidity",
     }.get(ext)
 
 

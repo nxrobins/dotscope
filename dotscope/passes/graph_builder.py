@@ -234,6 +234,9 @@ def _resolve_import(imp, source_file: str, root: str, language: str):
     elif language == "go":
         from .lang.go import resolve_go_import
         return resolve_go_import(imp, os.path.join(root, source_file), root)
+    elif language == "solidity":
+        from .lang.solidity import resolve_solidity_import
+        return resolve_solidity_import(imp, os.path.join(root, source_file), root)
     return None
 
 

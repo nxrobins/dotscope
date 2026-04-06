@@ -47,6 +47,7 @@ SOURCE_EXTS = frozenset({
     ".py", ".js", ".ts", ".tsx", ".jsx",
     ".go", ".rs", ".rb", ".java", ".kt",
     ".swift", ".c", ".cpp", ".cs", ".php",
+    ".sol",
 })
 
 # Extension → language name
@@ -66,4 +67,5 @@ LANG_MAP = {
     ".cpp": "C++",
     ".cs": "C#",
     ".php": "PHP",
+    ".sol": "Solidity",
 }

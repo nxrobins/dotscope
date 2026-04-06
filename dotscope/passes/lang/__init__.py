@@ -27,6 +27,13 @@ def _register_analyzers():
         _analyzers["javascript"] = _js.analyze
         _analyzers["typescript"] = _js.analyze
         _analyzers["go"] = _go.analyze
+
+        try:
+            from .solidity import SolidityAnalyzer
+            _sol = SolidityAnalyzer()
+            _analyzers["solidity"] = _sol.analyze
+        except ImportError:
+            pass  # tree-sitter-solidity not installed
     except ImportError:
         # tree-sitter not installed — analyzers stay empty, regex fallback
         pass
