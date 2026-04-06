@@ -5,7 +5,7 @@ conventions:
       any_of:
         - has_decorator: "dataclass"
     rules:
-      prohibited_imports: [ast_analyzer, git_hooks, hooks, line_filter, sessions]
+      prohibited_imports: [checker, graph_builder, incremental, lessons, near_miss]
       allowed_paths: [dotscope/[^/]+/.*\.py]
     description: "Discovered from 18 files sharing decorator: dataclass"
     compliance: 0.8333333333333334
@@ -16,27 +16,42 @@ conventions:
         - has_decorator: "pytest\.fixture"
         - file_path: "tests/.*\.py"
     rules:
-      prohibited_imports: [antipattern, history, hooks, retriever, session_manager]
+      prohibited_imports: [ast_analyzer, buffer, checker, matcher, timing]
       allowed_paths: [tests/.*\.py]
-    description: "Discovered from 3 files sharing decorator: pytest.fixture"
+    description: "Discovered from 4 files sharing decorator: pytest.fixture"
+    compliance: 1.0
+  - name: "BaseAnalyzer Subclass"
+    source: discovered
+    match:
+      any_of:
+        - base_class: "BaseAnalyzer"
+        - file_path: "dotscope/passes/lang/.*\.py"
+    rules:
+      required_methods: [analyze]
+      prohibited_imports: [ast_analyzer, buffer, checker, matcher, timing]
+      allowed_paths: [dotscope/passes/lang/.*\.py]
+    description: "Discovered from 3 files sharing base_class: BaseAnalyzer"
     compliance: 1.0
 
 voice:
-  mode: prescriptive
+  mode: adaptive
   typing: |
-    Type hints on all function signatures. Return types always specified.
+    Strict type hints on all function signatures.
   docstrings: |
-    Google style. Imperative mood. One-line if the name explains it.
+    Minimal docstrings. Add only when behavior is non-obvious.
   error_handling: |
-    Domain exceptions. No bare excepts. Let unexpected errors propagate.
+    No bare excepts. Catch specific exception types.
   structure: |
-    Early returns over nested conditionals. Guard clauses at the top.
+    Match the pattern of the file being modified.
   density: |
-    Concise. Comprehensions where readable. No filler variables.
-  comments: |
-    Comments explain why, not what.
-  imports: |
-    stdlib first, third-party second, local third. One import per line.
+    Comprehensions preferred where readable.
   enforce:
     bare_excepts: "hold"
     missing_type_hints: "note"
+  stats:
+    type_hint_rate: 0.9
+    bare_except_rate: 0.0
+    early_return_rate: 0.21
+    docstring_count: 804
+    dominant_docstring_style: "other"
+    files_analyzed: 180

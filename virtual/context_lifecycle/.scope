@@ -2,73 +2,48 @@ description: Virtual scope: context_lifecycle (spans 2 modules, hub: dotscope/co
 includes:
   - dotscope/absorber.py
   - dotscope/assertions.py
-  - dotscope/backtest.py
-  - dotscope/cache.py
-  - dotscope/cli.py
+  - dotscope/cli/core.py
   - dotscope/composer.py
   - dotscope/context.py
-  - dotscope/debug.py
   - dotscope/discovery.py
   - dotscope/formatter.py
-  - dotscope/graph.py
-  - dotscope/health.py
-  - dotscope/help.py
-  - dotscope/history.py
   - dotscope/ingest.py
   - dotscope/intent.py
-  - dotscope/lessons.py
   - dotscope/matcher.py
-  - dotscope/mcp_server.py
-  - dotscope/merge/swarm.py
-  - dotscope/models.py
+  - dotscope/mcp/core.py
+  - dotscope/models/__init__.py
   - dotscope/models/core.py
+  - dotscope/models/history.py
   - dotscope/models/passes.py
-  - dotscope/models/state.py
   - dotscope/parser.py
   - dotscope/passes/backtest.py
   - dotscope/passes/budget_allocator.py
-  - dotscope/passes/convention_compliance.py
-  - dotscope/passes/convention_discovery.py
-  - dotscope/passes/convention_parser.py
   - dotscope/passes/graph_builder.py
   - dotscope/passes/history_miner.py
-  - dotscope/passes/incremental.py
   - dotscope/passes/lazy.py
-  - dotscope/passes/sentinel/checker.py
   - dotscope/passes/sentinel/constraints.py
   - dotscope/passes/virtual.py
   - dotscope/passes/voice_defaults.py
-  - dotscope/passes/voice_discovery.py
-  - dotscope/paths.py
+  - dotscope/paths/__init__.py
+  - dotscope/paths/repo.py
   - dotscope/progress.py
   - dotscope/refresh.py
   - dotscope/runtime_overlay.py
   - dotscope/scanner.py
-  - dotscope/search/chunker.py
-  - dotscope/search/models.py
-  - dotscope/search/retriever.py
-  - dotscope/storage/cache.py
-  - dotscope/storage/claude_hooks.py
   - dotscope/storage/git_hooks.py
   - dotscope/storage/incremental_state.py
-  - dotscope/storage/near_miss.py
-  - dotscope/storage/onboarding.py
   - dotscope/storage/session_manager.py
-  - dotscope/telemetry.py
-  - dotscope/textio.py
   - dotscope/tokens.py
   - dotscope/utility.py
-  - dotscope/virtual.py
-  - dotscope/visibility.py
   - tests/test_backtest.py
   - tests/test_context.py
   - tests/test_refresh.py
 context: |
   Cross-cutting concern detected from import graph.
-  Hub file: dotscope/context.py (imported by 62 files across 2 modules)
+  Hub file: dotscope/context.py (imported by 37 files across 2 modules)
   
   Directories spanned: dotscope, tests
-  Cohesion: 86%
+  Cohesion: 77%
 related:
   - dotscope/.scope
   - tests/.scope
@@ -76,4 +51,4 @@ tags:
   - virtual
   - cross-cutting
   - context
-tokens_estimate: 135722
+tokens_estimate: 73965

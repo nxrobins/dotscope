@@ -1,12 +1,11 @@
 description: Virtual scope: parser_lifecycle (spans 2 modules, hub: dotscope/parser.py)
 includes:
-  - dotscope/__init__.py
   - dotscope/absorber.py
   - dotscope/assertions.py
-  - dotscope/backtest.py
   - dotscope/bench.py
-  - dotscope/cache.py
-  - dotscope/cli.py
+  - dotscope/cli/hooks.py
+  - dotscope/cli/ingest.py
+  - dotscope/cli/observability.py
   - dotscope/composer.py
   - dotscope/constants.py
   - dotscope/context.py
@@ -14,29 +13,28 @@ includes:
   - dotscope/discovery.py
   - dotscope/eval/bootstrap.py
   - dotscope/eval/replay.py
+  - dotscope/explain.py
   - dotscope/formatter.py
   - dotscope/generate/atlas.py
   - dotscope/generate/contracts.py
   - dotscope/generate/engine.py
   - dotscope/generate/models.py
-  - dotscope/graph.py
   - dotscope/health.py
-  - dotscope/help.py
-  - dotscope/history.py
   - dotscope/ingest.py
   - dotscope/intent.py
   - dotscope/lessons.py
   - dotscope/matcher.py
-  - dotscope/mcp_server.py
+  - dotscope/mcp/__init__.py
+  - dotscope/mcp/observability.py
   - dotscope/merge/swarm.py
-  - dotscope/models.py
+  - dotscope/models/__init__.py
   - dotscope/models/core.py
+  - dotscope/models/history.py
   - dotscope/models/intent.py
   - dotscope/models/passes.py
   - dotscope/models/state.py
   - dotscope/parser.py
   - dotscope/passes/backtest.py
-  - dotscope/passes/budget_allocator.py
   - dotscope/passes/convention_compliance.py
   - dotscope/passes/convention_discovery.py
   - dotscope/passes/convention_parser.py
@@ -44,42 +42,33 @@ includes:
   - dotscope/passes/history_miner.py
   - dotscope/passes/incremental.py
   - dotscope/passes/lazy.py
-  - dotscope/passes/semantic_diff.py
   - dotscope/passes/sentinel/acknowledge.py
   - dotscope/passes/sentinel/checker.py
   - dotscope/passes/sentinel/constraints.py
   - dotscope/passes/virtual.py
-  - dotscope/passes/voice.py
   - dotscope/passes/voice_defaults.py
   - dotscope/passes/voice_discovery.py
-  - dotscope/paths.py
+  - dotscope/passes/z3_transpiler.py
+  - dotscope/paths/__init__.py
+  - dotscope/paths/repo.py
   - dotscope/progress.py
   - dotscope/refresh.py
   - dotscope/regression.py
   - dotscope/resolver.py
   - dotscope/runtime_overlay.py
-  - dotscope/scanner.py
   - dotscope/search/chunker.py
   - dotscope/search/models.py
   - dotscope/search/retriever.py
   - dotscope/search/synthesizer.py
   - dotscope/storage/cache.py
-  - dotscope/storage/claude_hooks.py
   - dotscope/storage/git_hooks.py
   - dotscope/storage/incremental_state.py
-  - dotscope/storage/mcp_config.py
   - dotscope/storage/near_miss.py
   - dotscope/storage/onboarding.py
   - dotscope/storage/session_manager.py
-  - dotscope/storage/timing.py
-  - dotscope/swarm/merge.py
-  - dotscope/swarm/partition.py
-  - dotscope/swarm/trace.py
-  - dotscope/telemetry.py
   - dotscope/textio.py
   - dotscope/tokens.py
   - dotscope/utility.py
-  - dotscope/virtual.py
   - dotscope/visibility.py
   - tests/test_composer.py
   - tests/test_health.py
@@ -89,10 +78,10 @@ includes:
   - tests/test_textio.py
 context: |
   Cross-cutting concern detected from import graph.
-  Hub file: dotscope/parser.py (imported by 86 files across 2 modules)
+  Hub file: dotscope/parser.py (imported by 75 files across 2 modules)
   
   Directories spanned: dotscope, tests
-  Cohesion: 91%
+  Cohesion: 90%
 related:
   - dotscope/.scope
   - tests/.scope
@@ -100,4 +89,4 @@ tags:
   - virtual
   - cross-cutting
   - parser
-tokens_estimate: 168508
+tokens_estimate: 140575

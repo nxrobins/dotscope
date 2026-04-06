@@ -5,23 +5,25 @@ includes:
   - dotscope/discovery.py
   - dotscope/health.py
   - dotscope/ignore.py
-  - dotscope/models.py
+  - dotscope/models/__init__.py
   - dotscope/parser.py
   - dotscope/passes/graph_builder.py
-  - dotscope/paths.py
+  - dotscope/paths/__init__.py
+  - dotscope/paths/repo.py
   - dotscope/resolver.py
   - dotscope/runtime_overlay.py
   - dotscope/scanner.py
   - dotscope/storage/incremental_state.py
   - dotscope/textio.py
   - dotscope/tokens.py
+  - tests/test_constants.py
   - tests/test_ignore.py
 context: |
   Cross-cutting concern detected from import graph.
-  Hub file: dotscope/constants.py (imported by 15 files across 2 modules)
+  Hub file: dotscope/constants.py (imported by 17 files across 2 modules)
   
   Directories spanned: dotscope, tests
-  Cohesion: 86%
+  Cohesion: 80%
 related:
   - dotscope/.scope
   - tests/.scope
@@ -29,4 +31,4 @@ tags:
   - virtual
   - cross-cutting
   - constants
-tokens_estimate: 22773
+tokens_estimate: 23900

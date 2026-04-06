@@ -1,0 +1,45 @@
+description: Virtual scope: checker_lifecycle (spans 2 modules, hub: dotscope/passes/sentinel/checker.py)
+includes:
+  - dotscope/assertions.py
+  - dotscope/cli/hooks.py
+  - dotscope/composer.py
+  - dotscope/discovery.py
+  - dotscope/eval/corpus.py
+  - dotscope/eval/replay.py
+  - dotscope/explain.py
+  - dotscope/intent.py
+  - dotscope/matcher.py
+  - dotscope/mcp/core.py
+  - dotscope/mcp/observability.py
+  - dotscope/merge/swarm.py
+  - dotscope/models/eval.py
+  - dotscope/models/intent.py
+  - dotscope/parser.py
+  - dotscope/passes/budget_allocator.py
+  - dotscope/passes/incremental.py
+  - dotscope/passes/sentinel/checker.py
+  - dotscope/passes/sentinel/constraints.py
+  - dotscope/paths/repo.py
+  - dotscope/refresh.py
+  - dotscope/storage/claude_hooks.py
+  - dotscope/storage/git_hooks.py
+  - dotscope/storage/near_miss.py
+  - dotscope/storage/onboarding.py
+  - dotscope/storage/session_manager.py
+  - dotscope/utility.py
+  - dotscope/visibility.py
+  - tests/test_enforcement.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/passes/sentinel/checker.py (imported by 28 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 63%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - checker
+tokens_estimate: 66959

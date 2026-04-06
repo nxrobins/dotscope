@@ -1,19 +1,12 @@
 description: Virtual scope: acknowledge_lifecycle (spans 2 modules, hub: dotscope/passes/sentinel/acknowledge.py)
 includes:
-  - dotscope/assertions.py
-  - dotscope/cache.py
-  - dotscope/check/acknowledge.py
-  - dotscope/composer.py
+  - dotscope/bench.py
   - dotscope/discovery.py
-  - dotscope/formatter.py
-  - dotscope/ingest.py
   - dotscope/intent.py
-  - dotscope/lessons.py
-  - dotscope/mcp_server.py
   - dotscope/merge/swarm.py
+  - dotscope/models/intent.py
   - dotscope/parser.py
   - dotscope/passes/ast_analyzer.py
-  - dotscope/passes/graph_builder.py
   - dotscope/passes/sentinel/acknowledge.py
   - dotscope/passes/sentinel/checker.py
   - dotscope/passes/sentinel/checks/antipattern.py
@@ -28,20 +21,15 @@ includes:
   - dotscope/passes/sentinel/checks/voice.py
   - dotscope/passes/sentinel/constraints.py
   - dotscope/passes/sentinel/models.py
-  - dotscope/refresh.py
-  - dotscope/storage/cache.py
-  - dotscope/storage/near_miss.py
-  - dotscope/storage/session_manager.py
   - dotscope/textio.py
-  - dotscope/utility.py
-  - dotscope/visibility.py
+  - tests/test_enforcement.py
   - tests/test_routing.py
 context: |
   Cross-cutting concern detected from import graph.
-  Hub file: dotscope/passes/sentinel/acknowledge.py (imported by 35 files across 2 modules)
+  Hub file: dotscope/passes/sentinel/acknowledge.py (imported by 23 files across 2 modules)
   
   Directories spanned: dotscope, tests
-  Cohesion: 56%
+  Cohesion: 69%
 related:
   - dotscope/.scope
   - tests/.scope
@@ -49,4 +37,4 @@ tags:
   - virtual
   - cross-cutting
   - acknowledge
-tokens_estimate: 79380
+tokens_estimate: 41030

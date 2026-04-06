@@ -1,0 +1,26 @@
+description: Virtual scope: eval_lifecycle (spans 2 modules, hub: dotscope/models/eval.py)
+includes:
+  - dotscope/composer.py
+  - dotscope/eval/compare.py
+  - dotscope/eval/corpus.py
+  - dotscope/eval/harness.py
+  - dotscope/eval/replay.py
+  - dotscope/models/__init__.py
+  - dotscope/models/eval.py
+  - dotscope/models/state.py
+  - dotscope/passes/sentinel/checker.py
+  - tests/test_eval_harness.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/models/eval.py (imported by 9 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 33%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - eval
+tokens_estimate: 19246

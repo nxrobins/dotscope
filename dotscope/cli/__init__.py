@@ -2,6 +2,7 @@ from .core import _cmd_resolve, _cmd_context, _cmd_match, _cmd_init, _cmd_intent
 from .observability import _cmd_stats, _cmd_tree, _cmd_health, _cmd_validate, _cmd_virtual, _cmd_lessons, _cmd_invariants, _cmd_rebuild, _cmd_test_compiler, _cmd_bench, _cmd_debug
 from .ingest import _cmd_ingest, _cmd_impact, _cmd_backtest, _cmd_conventions, _cmd_diff
 from .hooks import _cmd_observe, _cmd_incremental, _cmd_hook, _cmd_refresh, _cmd_check, _cmd_check_backtest, _cmd_voice
+from .serve import _cmd_serve
 
 
 """CLI entry point for dotscope."""
@@ -207,6 +208,10 @@ def main(argv=None):
     p_debug.add_argument("--last", action="store_true", help="Debug most recent bad session")
     p_debug.add_argument("--list", dest="list_bad", action="store_true", help="List bad sessions")
 
+    # --- serve ---
+    p_serve = sub.add_parser("serve", help="Launch interactive 3D topography dashboard")
+    p_serve.add_argument("--port", type=int, default=8080, help="Port to run the local server on")
+
     args = parser.parse_args(argv)
 
     if args.command is None or getattr(args, "show_help", False):
@@ -244,6 +249,7 @@ def main(argv=None):
             "test-compiler": _cmd_test_compiler,
             "bench": _cmd_bench,
             "debug": _cmd_debug,
+            "serve": _cmd_serve,
         }[args.command]
         handler(args)
     except (ValueError, FileNotFoundError) as e:

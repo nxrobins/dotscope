@@ -1,0 +1,39 @@
+description: Virtual scope: assertions_lifecycle (spans 2 modules, hub: dotscope/assertions.py)
+includes:
+  - dotscope/assertions.py
+  - dotscope/composer.py
+  - dotscope/context.py
+  - dotscope/discovery.py
+  - dotscope/formatter.py
+  - dotscope/intent.py
+  - dotscope/lessons.py
+  - dotscope/matcher.py
+  - dotscope/mcp/core.py
+  - dotscope/passes/budget_allocator.py
+  - dotscope/passes/sentinel/checker.py
+  - dotscope/passes/sentinel/constraints.py
+  - dotscope/passes/voice.py
+  - dotscope/paths/repo.py
+  - dotscope/refresh.py
+  - dotscope/scanner.py
+  - dotscope/storage/near_miss.py
+  - dotscope/storage/onboarding.py
+  - dotscope/storage/session_manager.py
+  - dotscope/storage/timing.py
+  - dotscope/utility.py
+  - dotscope/visibility.py
+  - tests/test_rigor.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/assertions.py (imported by 22 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 46%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - assertions
+tokens_estimate: 46091

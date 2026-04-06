@@ -328,6 +328,12 @@ def ingest(
         cache_ingest_data(root, history=plan.history, graph=plan.graph)
         # Cache invariants for enforcement
         _cache_invariants(root, plan.history)
+        # Synthesize actionable Mathematical Z3 boundaries based on graph state 
+        try:
+            from .passes.z3_transpiler import synthesize_proofs
+            synthesize_proofs(root, plan.graph, plan.history, target_dir=".dotscope/proofs")
+        except Exception as e:
+            _log_ingest_error(root, f"Z3 Transpiler Proof Compilation Failed: {e}")
         # Reset incremental state + remove needs_full_ingest marker
         try:
             from .storage.incremental_state import reset_incremental_state

@@ -6,13 +6,16 @@ includes:
   - dotscope/passes/lang/_treesitter.py
   - dotscope/passes/lang/go.py
   - dotscope/passes/lang/javascript.py
+  - dotscope/passes/lang/solidity.py
+  - dotscope/paths/__init__.py
+  - tests/test_lang_solidity.py
   - tests/test_treesitter.py
 context: |
   Cross-cutting concern detected from import graph.
-  Hub file: dotscope/passes/lang/_treesitter.py (imported by 6 files across 2 modules)
+  Hub file: dotscope/passes/lang/_treesitter.py (imported by 9 files across 2 modules)
   
   Directories spanned: dotscope, tests
-  Cohesion: 72%
+  Cohesion: 90%
 related:
   - dotscope/.scope
   - tests/.scope
@@ -20,4 +23,4 @@ tags:
   - virtual
   - cross-cutting
   - _treesitter
-tokens_estimate: 17412
+tokens_estimate: 22777

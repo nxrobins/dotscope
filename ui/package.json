@@ -1,0 +1,17 @@
+{
+  "name": "dotscope-ui",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.69",
+    "jsdom": "^29.0.1",
+    "typescript": "^5.0.0",
+    "vite": "^5.0.0",
+    "vitest": "^4.1.2"
+  }
+}

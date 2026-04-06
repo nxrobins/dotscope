@@ -1,0 +1,31 @@
+description: Virtual scope: timing_lifecycle (spans 2 modules, hub: dotscope/storage/timing.py)
+includes:
+  - dotscope/assertions.py
+  - dotscope/bench.py
+  - dotscope/composer.py
+  - dotscope/discovery.py
+  - dotscope/eval/harness.py
+  - dotscope/intent.py
+  - dotscope/mcp/core.py
+  - dotscope/models/state.py
+  - dotscope/passes/budget_allocator.py
+  - dotscope/passes/sentinel/constraints.py
+  - dotscope/paths/repo.py
+  - dotscope/refresh.py
+  - dotscope/storage/session_manager.py
+  - dotscope/storage/timing.py
+  - tests/test_rigor.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/storage/timing.py (imported by 14 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 46%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - timing
+tokens_estimate: 32089

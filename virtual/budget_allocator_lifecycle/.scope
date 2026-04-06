@@ -1,0 +1,41 @@
+description: Virtual scope: budget_allocator_lifecycle (spans 2 modules, hub: dotscope/passes/budget_allocator.py)
+includes:
+  - dotscope/assertions.py
+  - dotscope/cli/core.py
+  - dotscope/composer.py
+  - dotscope/context.py
+  - dotscope/discovery.py
+  - dotscope/eval/replay.py
+  - dotscope/formatter.py
+  - dotscope/intent.py
+  - dotscope/lessons.py
+  - dotscope/matcher.py
+  - dotscope/mcp/core.py
+  - dotscope/models/__init__.py
+  - dotscope/models/state.py
+  - dotscope/passes/budget_allocator.py
+  - dotscope/passes/sentinel/checker.py
+  - dotscope/passes/sentinel/constraints.py
+  - dotscope/paths/repo.py
+  - dotscope/refresh.py
+  - dotscope/regression.py
+  - dotscope/storage/session_manager.py
+  - dotscope/storage/timing.py
+  - dotscope/utility.py
+  - tests/test_budget.py
+  - tests/test_loop.py
+  - tests/test_rigor.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/passes/budget_allocator.py (imported by 24 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 59%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - budget_allocator
+tokens_estimate: 46643

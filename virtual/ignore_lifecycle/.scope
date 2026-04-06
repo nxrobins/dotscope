@@ -10,7 +10,7 @@ context: |
   Hub file: dotscope/ignore.py (imported by 4 files across 2 modules)
   
   Directories spanned: dotscope, tests
-  Cohesion: 46%
+  Cohesion: 43%
 related:
   - dotscope/.scope
   - tests/.scope
@@ -18,4 +18,4 @@ tags:
   - virtual
   - cross-cutting
   - ignore
-tokens_estimate: 6532
+tokens_estimate: 6586

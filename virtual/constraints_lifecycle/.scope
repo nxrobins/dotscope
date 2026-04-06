@@ -1,31 +1,25 @@
 description: Virtual scope: constraints_lifecycle (spans 2 modules, hub: dotscope/passes/sentinel/constraints.py)
 includes:
   - dotscope/assertions.py
-  - dotscope/check/constraints.py
   - dotscope/composer.py
   - dotscope/context.py
-  - dotscope/debug.py
   - dotscope/discovery.py
   - dotscope/eval/replay.py
   - dotscope/formatter.py
-  - dotscope/generate/engine.py
-  - dotscope/health.py
-  - dotscope/ingest.py
   - dotscope/intent.py
   - dotscope/lessons.py
   - dotscope/matcher.py
-  - dotscope/mcp_server.py
-  - dotscope/merge/swarm.py
-  - dotscope/models.py
+  - dotscope/mcp/core.py
+  - dotscope/models/__init__.py
+  - dotscope/models/intent.py
   - dotscope/parser.py
-  - dotscope/passes/backtest.py
   - dotscope/passes/budget_allocator.py
-  - dotscope/passes/graph_builder.py
   - dotscope/passes/hint_generator.py
   - dotscope/passes/sentinel/acknowledge.py
   - dotscope/passes/sentinel/checker.py
   - dotscope/passes/sentinel/constraints.py
   - dotscope/passes/voice.py
+  - dotscope/paths/repo.py
   - dotscope/refresh.py
   - dotscope/scanner.py
   - dotscope/search/expander.py
@@ -40,20 +34,17 @@ includes:
   - dotscope/storage/onboarding.py
   - dotscope/storage/session_manager.py
   - dotscope/storage/timing.py
-  - dotscope/swarm/merge.py
-  - dotscope/swarm/partition.py
-  - dotscope/swarm/trace.py
-  - dotscope/telemetry.py
   - dotscope/tokens.py
   - dotscope/utility.py
   - dotscope/visibility.py
+  - tests/test_enforcement.py
   - tests/test_routing.py
 context: |
   Cross-cutting concern detected from import graph.
-  Hub file: dotscope/passes/sentinel/constraints.py (imported by 47 files across 2 modules)
+  Hub file: dotscope/passes/sentinel/constraints.py (imported by 38 files across 2 modules)
   
   Directories spanned: dotscope, tests
-  Cohesion: 62%
+  Cohesion: 66%
 related:
   - dotscope/.scope
   - tests/.scope
@@ -61,4 +52,4 @@ tags:
   - virtual
   - cross-cutting
   - constraints
-tokens_estimate: 102654
+tokens_estimate: 71847

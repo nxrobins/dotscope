@@ -1,0 +1,45 @@
+description: Virtual scope: formatter_lifecycle (spans 2 modules, hub: dotscope/formatter.py)
+includes:
+  - dotscope/assertions.py
+  - dotscope/bench.py
+  - dotscope/cli/core.py
+  - dotscope/cli/observability.py
+  - dotscope/composer.py
+  - dotscope/context.py
+  - dotscope/debug.py
+  - dotscope/discovery.py
+  - dotscope/formatter.py
+  - dotscope/health.py
+  - dotscope/intent.py
+  - dotscope/lessons.py
+  - dotscope/matcher.py
+  - dotscope/mcp/core.py
+  - dotscope/parser.py
+  - dotscope/passes/budget_allocator.py
+  - dotscope/passes/graph_builder.py
+  - dotscope/passes/history_miner.py
+  - dotscope/passes/sentinel/constraints.py
+  - dotscope/passes/virtual.py
+  - dotscope/paths/__init__.py
+  - dotscope/paths/repo.py
+  - dotscope/refresh.py
+  - dotscope/regression.py
+  - dotscope/resolver.py
+  - dotscope/storage/session_manager.py
+  - dotscope/tokens.py
+  - dotscope/utility.py
+  - tests/test_formatter.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/formatter.py (imported by 28 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 66%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - formatter
+tokens_estimate: 54083

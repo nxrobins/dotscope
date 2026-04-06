@@ -1,0 +1,34 @@
+description: Virtual scope: virtual_lifecycle (spans 2 modules, hub: dotscope/passes/virtual.py)
+includes:
+  - dotscope/cli/observability.py
+  - dotscope/discovery.py
+  - dotscope/formatter.py
+  - dotscope/ingest.py
+  - dotscope/intent.py
+  - dotscope/lessons.py
+  - dotscope/models/core.py
+  - dotscope/models/history.py
+  - dotscope/parser.py
+  - dotscope/passes/graph_builder.py
+  - dotscope/passes/history_miner.py
+  - dotscope/passes/virtual.py
+  - dotscope/passes/voice_defaults.py
+  - dotscope/paths/__init__.py
+  - dotscope/paths/repo.py
+  - dotscope/storage/session_manager.py
+  - dotscope/tokens.py
+  - tests/test_virtual.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/passes/virtual.py (imported by 17 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 59%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - virtual
+tokens_estimate: 37324

@@ -1,0 +1,36 @@
+description: Virtual scope: near_miss_lifecycle (spans 2 modules, hub: dotscope/storage/near_miss.py)
+includes:
+  - dotscope/assertions.py
+  - dotscope/cli/hooks.py
+  - dotscope/composer.py
+  - dotscope/counterfactual.py
+  - dotscope/discovery.py
+  - dotscope/explain.py
+  - dotscope/intent.py
+  - dotscope/mcp/__init__.py
+  - dotscope/mcp/core.py
+  - dotscope/parser.py
+  - dotscope/passes/sentinel/checker.py
+  - dotscope/passes/sentinel/constraints.py
+  - dotscope/paths/repo.py
+  - dotscope/refresh.py
+  - dotscope/storage/near_miss.py
+  - dotscope/storage/onboarding.py
+  - dotscope/storage/session_manager.py
+  - dotscope/utility.py
+  - dotscope/visibility.py
+  - tests/test_near_miss.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/storage/near_miss.py (imported by 19 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 54%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - near_miss
+tokens_estimate: 45488

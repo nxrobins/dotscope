@@ -1,0 +1,23 @@
+description: Virtual scope: solidity_lifecycle (spans 2 modules, hub: dotscope/passes/lang/solidity.py)
+includes:
+  - dotscope/models/core.py
+  - dotscope/passes/graph_builder.py
+  - dotscope/passes/lang/__init__.py
+  - dotscope/passes/lang/_treesitter.py
+  - dotscope/passes/lang/go.py
+  - dotscope/passes/lang/solidity.py
+  - tests/test_lang_solidity.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/passes/lang/solidity.py (imported by 6 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 65%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - solidity
+tokens_estimate: 14161

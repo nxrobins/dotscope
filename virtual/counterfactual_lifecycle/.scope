@@ -4,11 +4,11 @@ includes:
   - dotscope/discovery.py
   - dotscope/intent.py
   - dotscope/models/state.py
-  - dotscope/near_miss.py
-  - dotscope/onboarding.py
-  - dotscope/paths.py
-  - dotscope/sessions.py
+  - dotscope/paths/__init__.py
   - dotscope/storage/incremental_state.py
+  - dotscope/storage/near_miss.py
+  - dotscope/storage/onboarding.py
+  - dotscope/storage/session_manager.py
   - dotscope/visibility.py
   - tests/test_experience.py
 context: |
@@ -16,7 +16,7 @@ context: |
   Hub file: dotscope/counterfactual.py (imported by 10 files across 2 modules)
   
   Directories spanned: dotscope, tests
-  Cohesion: 52%
+  Cohesion: 55%
 related:
   - dotscope/.scope
   - tests/.scope
@@ -24,4 +24,4 @@ tags:
   - virtual
   - cross-cutting
   - counterfactual
-tokens_estimate: 17548
+tokens_estimate: 21390

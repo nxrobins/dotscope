@@ -1,0 +1,46 @@
+description: Virtual scope: voice_defaults_lifecycle (spans 2 modules, hub: dotscope/passes/voice_defaults.py)
+includes:
+  - dotscope/absorber.py
+  - dotscope/context.py
+  - dotscope/discovery.py
+  - dotscope/ingest.py
+  - dotscope/intent.py
+  - dotscope/models/core.py
+  - dotscope/models/history.py
+  - dotscope/models/passes.py
+  - dotscope/models/state.py
+  - dotscope/parser.py
+  - dotscope/passes/backtest.py
+  - dotscope/passes/convention_compliance.py
+  - dotscope/passes/convention_discovery.py
+  - dotscope/passes/convention_parser.py
+  - dotscope/passes/graph_builder.py
+  - dotscope/passes/history_miner.py
+  - dotscope/passes/virtual.py
+  - dotscope/passes/voice_defaults.py
+  - dotscope/passes/voice_discovery.py
+  - dotscope/passes/z3_transpiler.py
+  - dotscope/paths/__init__.py
+  - dotscope/progress.py
+  - dotscope/runtime_overlay.py
+  - dotscope/search/chunker.py
+  - dotscope/search/models.py
+  - dotscope/search/retriever.py
+  - dotscope/storage/cache.py
+  - dotscope/storage/incremental_state.py
+  - dotscope/tokens.py
+  - tests/test_voice_discovery.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/passes/voice_defaults.py (imported by 29 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 75%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - voice_defaults
+tokens_estimate: 56863

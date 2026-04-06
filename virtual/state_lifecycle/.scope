@@ -2,19 +2,15 @@ description: Virtual scope: state_lifecycle (spans 2 modules, hub: dotscope/mode
 includes:
   - dotscope/bench.py
   - dotscope/composer.py
-  - dotscope/context.py
   - dotscope/counterfactual.py
   - dotscope/debug.py
   - dotscope/discovery.py
   - dotscope/eval/bootstrap.py
   - dotscope/eval/harness.py
   - dotscope/eval/replay.py
-  - dotscope/graph.py
-  - dotscope/history.py
   - dotscope/ingest.py
   - dotscope/intent.py
   - dotscope/lessons.py
-  - dotscope/models.py
   - dotscope/models/__init__.py
   - dotscope/models/core.py
   - dotscope/models/eval.py
@@ -22,24 +18,27 @@ includes:
   - dotscope/models/intent.py
   - dotscope/models/passes.py
   - dotscope/models/state.py
-  - dotscope/onboarding.py
   - dotscope/parser.py
+  - dotscope/passes/budget_allocator.py
+  - dotscope/passes/graph_builder.py
+  - dotscope/passes/history_miner.py
   - dotscope/passes/voice_defaults.py
-  - dotscope/paths.py
+  - dotscope/paths/__init__.py
   - dotscope/regression.py
   - dotscope/resolver.py
-  - dotscope/sessions.py
   - dotscope/storage/incremental_state.py
-  - dotscope/telemetry.py
+  - dotscope/storage/onboarding.py
+  - dotscope/storage/session_manager.py
+  - dotscope/storage/timing.py
   - dotscope/utility.py
   - dotscope/visibility.py
   - tests/test_eval_harness.py
 context: |
   Cross-cutting concern detected from import graph.
-  Hub file: dotscope/models/state.py (imported by 33 files across 2 modules)
+  Hub file: dotscope/models/state.py (imported by 32 files across 2 modules)
   
   Directories spanned: dotscope, tests
-  Cohesion: 70%
+  Cohesion: 69%
 related:
   - dotscope/.scope
   - tests/.scope
@@ -47,4 +46,4 @@ tags:
   - virtual
   - cross-cutting
   - state
-tokens_estimate: 56525
+tokens_estimate: 65829

@@ -1,6 +1,5 @@
-description: Virtual scope: models_lifecycle (spans 2 modules, hub: dotscope/models.py)
+description: Virtual scope: models_lifecycle (spans 2 modules, hub: dotscope/models/__init__.py)
 includes:
-  - dotscope/budget.py
   - dotscope/composer.py
   - dotscope/constants.py
   - dotscope/context.py
@@ -9,10 +8,10 @@ includes:
   - dotscope/eval/replay.py
   - dotscope/formatter.py
   - dotscope/health.py
-  - dotscope/history.py
   - dotscope/lessons.py
   - dotscope/matcher.py
-  - dotscope/models.py
+  - dotscope/models/__init__.py
+  - dotscope/models/history.py
   - dotscope/models/state.py
   - dotscope/parser.py
   - dotscope/passes/ast_analyzer.py
@@ -25,7 +24,8 @@ includes:
   - dotscope/passes/semantic_diff.py
   - dotscope/passes/sentinel/constraints.py
   - dotscope/passes/spatial_autofix.py
-  - dotscope/paths.py
+  - dotscope/paths/__init__.py
+  - dotscope/paths/repo.py
   - dotscope/resolver.py
   - dotscope/runtime_overlay.py
   - dotscope/scanner.py
@@ -33,7 +33,6 @@ includes:
   - dotscope/search/flattener.py
   - dotscope/search/models.py
   - dotscope/search/synthesizer.py
-  - dotscope/sessions.py
   - dotscope/storage/cache.py
   - dotscope/storage/incremental_state.py
   - dotscope/storage/session_manager.py
@@ -50,7 +49,7 @@ includes:
   - tests/test_visibility.py
 context: |
   Cross-cutting concern detected from import graph.
-  Hub file: dotscope/models.py (imported by 47 files across 2 modules)
+  Hub file: dotscope/models/__init__.py (imported by 46 files across 2 modules)
   
   Directories spanned: dotscope, tests
   Cohesion: 88%
@@ -61,4 +60,4 @@ tags:
   - virtual
   - cross-cutting
   - models
-tokens_estimate: 72926
+tokens_estimate: 74604
