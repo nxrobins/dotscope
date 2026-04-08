@@ -8,7 +8,7 @@ Your agent writes code that compiles, passes tests, and breaks production.
 The agent sees files. You see architecture. **dotscope closes that gap.**
 
 ### The Open-Source Architectural Control Plane
-Dotscope is a high-performance headless telemetry engine built natively around the standard Model Context Protocol (MCP). It operates silently in the background, mapping the topological physics of your codebase and transmitting golden templates to your AI agent of choice (Claude, Cursor, Windsurf, Cline).
+Dotscope is a high-performance headless telemetry engine built natively around the standard Model Context Protocol (MCP). It operates silently, mapping the topological physics of your codebase and transmitting structural constraints and contextual boundaries directly to your AI agent of choice (Claude, Cursor, Windsurf, Cline).
 
 ```bash
 pip install dotscope
@@ -46,9 +46,7 @@ One MCP tool call. The agent gets the relevant code, its dependency
 neighborhood, implicit contracts from git history, convention rules,
 swarm lock status, and action hints. One call, not five.
 
-dotscope learns from every commit. Files agents consistently need get
-ranked higher. Conventions that hold get enforced harder. Rules that
-get overridden get quieter. Recall starts at 78% and climbs past 91%.
+By executing `dotscope ingest` and mining your git history, dotscope statically learns from every commit. Files agents consistently need get ranked higher. Architectures are mapped historically. Conventions that hold get enforced harder. Rules that get overridden get quieter. Recall starts at 78% and climbs past 91%.
 
 ```bash
 pip install dotscope && dotscope serve
