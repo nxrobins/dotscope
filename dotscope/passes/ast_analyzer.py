@@ -552,14 +552,17 @@ def resolve_rust_import(imp: ResolvedImport, source_file: str, root: str) -> Opt
         parts = imp.raw.split("::")
         if parts[0] in ("crate", "super", "self"):
             parts = parts[1:]
-            
-        cand_base = os.path.join(source_dir, *parts)
-        cand1 = f"{cand_base}.rs"
-        cand2 = os.path.join(cand_base, "mod.rs")
-        if os.path.isfile(cand1):
-            return normalize_relative_path(os.path.relpath(cand1, root))
-        if os.path.isfile(cand2):
-            return normalize_relative_path(os.path.relpath(cand2, root))
+
+        # Try progressively shorter prefixes: crate::air::mangle_type
+        # → try air/mangle_type.rs (miss), then air.rs (hit)
+        for depth in range(len(parts), 0, -1):
+            cand_base = os.path.join(source_dir, *parts[:depth])
+            cand1 = f"{cand_base}.rs"
+            cand2 = os.path.join(cand_base, "mod.rs")
+            if os.path.isfile(cand1):
+                return normalize_relative_path(os.path.relpath(cand1, root))
+            if os.path.isfile(cand2):
+                return normalize_relative_path(os.path.relpath(cand2, root))
         
     return None
 
