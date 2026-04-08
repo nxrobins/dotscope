@@ -7,6 +7,29 @@ from ._treesitter import AVAILABLE, find_child, node_text, parse
 
 logger = logging.getLogger(__name__)
 
+def expand_rust_use(text: str) -> list[str]:
+    text = "".join(text.split())
+    def _expand(s):
+        if "{" not in s: return [s]
+        start = s.rfind("{")
+        end = s.find("}", start)
+        if end == -1: return [s]
+        prefix = s[:start]
+        suffix = s[end+1:]
+        inner = s[start+1:end]
+        parts = inner.split(",")
+        replaced = []
+        for p in parts:
+            if not p: continue
+            if p == "self" and prefix.endswith("::"):
+                replaced.append(prefix[:-2] + suffix)
+            else:
+                replaced.append(prefix + p + suffix)
+        res = []
+        for r in replaced: res.extend(_expand(r))
+        return res
+    return list(set(_expand(text)))
+
 class RustAnalyzer(BaseAnalyzer):
     """Parses Rust files strictly using tree-sitter.
     
@@ -49,13 +72,13 @@ class RustAnalyzer(BaseAnalyzer):
                 if text.startswith("pub "):
                     text = text.replace("pub ", "", 1).strip()
                     
-                is_relative = text.startswith("crate::") or text.startswith("super::") or text.startswith("self::")
-                
-                api.imports.append(ResolvedImport(
-                    raw=text,
-                    names=[text.split("::")[-1].strip("{} ")],
-                    is_relative=is_relative
-                ))
+                for path in expand_rust_use(text):
+                    is_relative = path.startswith("crate::") or path.startswith("super::") or path.startswith("self::")
+                    api.imports.append(ResolvedImport(
+                        raw=path,
+                        names=[path.split("::")[-1]],
+                        is_relative=is_relative
+                    ))
             elif node.type in ("struct_item", "trait_item", "enum_item"):
                 name_node = find_child(node, "type_identifier")
                 if name_node:
