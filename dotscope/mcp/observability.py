@@ -1,18 +1,12 @@
 import json
 import os
 from typing import Optional
+from .middleware import mcp_tool_route
 
 def register_observability_tools(mcp, **kwargs):
-    tracker = kwargs.get('tracker')
-    client_id = kwargs.get('client_id')
-    _root = kwargs.get('_root')
-    _repo_tokens = kwargs.get('_repo_tokens')
-    _cached_history = kwargs.get('_cached_history')
-    _cached_graph_hubs = kwargs.get('_cached_graph_hubs')
-    _cli_root = kwargs.get('_cli_root')
-
     @mcp.tool()
-    def validate_scopes() -> str:
+    @mcp_tool_route
+    def validate_scopes(root: Optional[str] = None) -> str:
         """Validate all .scope files for broken paths and common issues.
 
         Checks:
@@ -21,13 +15,8 @@ def register_observability_tools(mcp, **kwargs):
         - Description is not empty
         - Context field is present (the most valuable part)
         """
-        from ..paths.repo import find_repo_root
-        from ..discovery import find_all_scopes
-        from ..parser import parse_scope_file
-
-        root = find_repo_root()
-        if root is None:
-            return json.dumps({"error": "Could not find repository root"})
+        from ..engine.discovery import find_all_scopes
+        from ..engine.parser import parse_scope_file
 
         issues = []
         for sf in find_all_scopes(root):
@@ -55,18 +44,15 @@ def register_observability_tools(mcp, **kwargs):
         return json.dumps({"issues": issues, "count": len(issues)}, indent=2)
 
     @mcp.tool()
-    def scope_health() -> str:
+    @mcp_tool_route
+    def scope_health(root: Optional[str] = None) -> str:
         """Report on scope health: staleness, coverage gaps, and import drift.
 
         Staleness: files changed since .scope was last modified
         Coverage: directories with no .scope file
         Drift: imports in scoped files that aren't in the includes list
         """
-        from ..health import full_health_report
-        from ..paths.repo import find_repo_root
-        root = find_repo_root()
-        if root is None:
-            return json.dumps({"error": "Could not find repository root"})
+        from ..ux.health import full_health_report
 
         report = full_health_report(root, use_runtime=True)
         return json.dumps({
@@ -88,9 +74,11 @@ def register_observability_tools(mcp, **kwargs):
         }, indent=2)
 
     @mcp.tool()
+    @mcp_tool_route
     def dotscope_refresh(
         scopes: Optional[list[str]] = None,
         repo: bool = False,
+        root: Optional[str] = None
     ) -> str:
         """Run a synchronous scope or repo refresh.
 
@@ -105,12 +93,7 @@ def register_observability_tools(mcp, **kwargs):
 
         Returns JSON with success, kind, targets_refreshed, duration_ms, error.
         """
-        from ..paths.repo import find_repo_root
-        from ..refresh import run_refresh_inline
-
-        root = find_repo_root()
-        if root is None:
-            return json.dumps({"error": "Could not find repository root"})
+        from ..workflows.refresh import run_refresh_inline
 
         result = run_refresh_inline(
             root,
@@ -120,10 +103,12 @@ def register_observability_tools(mcp, **kwargs):
         return json.dumps(result, indent=2)
 
     @mcp.tool()
+    @mcp_tool_route
     def dotscope_check(
         diff: Optional[str] = None,
         session_id: Optional[str] = None,
         explain: bool = False,
+        root: Optional[str] = None
     ) -> str:
         """Pre-commit verification. Run this before every commit.
 
@@ -139,11 +124,6 @@ def register_observability_tools(mcp, **kwargs):
         Returns JSON with passed, guards, nudges, notes.
         """
         from ..passes.sentinel.checker import check_diff, check_staged
-        from ..paths.repo import find_repo_root
-
-        root = find_repo_root()
-        if root is None:
-            return json.dumps({"error": "Could not find repository root"})
 
         if diff:
             report = check_diff(diff, root, session_id=session_id)
@@ -152,7 +132,7 @@ def register_observability_tools(mcp, **kwargs):
 
         explain_fn = None
         if explain:
-            from ..explain import explain_warning
+            from ..ux.explain import explain_warning
             explain_fn = lambda r: explain_warning(root, r)
 
         def _fmt_result(r):
@@ -183,7 +163,7 @@ def register_observability_tools(mcp, **kwargs):
             "guards": [_fmt_result(r) for r in report.guards],
             "nudges": [_fmt_result(r) for r in report.nudges],
             "notes": [_fmt_result(r) for r in report.notes],
-            "holds": [_fmt_result(r) for r in report.guards],  # backwards compat
+            "holds": [_fmt_result(r) for r in report.guards],
             "files_checked": report.files_checked,
         }, indent=2)
 
@@ -192,10 +172,12 @@ def register_observability_tools(mcp, **kwargs):
     # -------------------------------------------------------------------
 
     @mcp.tool()
+    @mcp_tool_route
     def dotscope_claim_scope(
         agent_id: str,
         task_description: str,
         primary_files: list,
+        root: Optional[str] = None
     ) -> str:
         """Claim exclusive write access before modifying files.
 
@@ -214,15 +196,10 @@ def register_observability_tools(mcp, **kwargs):
         - shared_files: files with soft warnings for other agents.
         - preflight: advisory warnings about what will likely break.
         """
-        from ..paths.repo import find_repo_root
         from ..merge.swarm import claim_scope
-
-        root = find_repo_root()
-        if root is None:
-            return json.dumps({"error": "Could not find repository root"})
-
+        from ..storage.cache import load_cached_graph_hubs, load_cached_network_edges
+        
         try:
-            from ..storage.cache import load_cached_graph_hubs, load_cached_network_edges
             graph_hubs = load_cached_graph_hubs(root)
             network_edges = load_cached_network_edges(root)
         except Exception:
@@ -239,20 +216,17 @@ def register_observability_tools(mcp, **kwargs):
         return json.dumps(result, indent=2)
 
     @mcp.tool()
+    @mcp_tool_route
     def dotscope_renew_lock(
         lock_id: str,
+        root: Optional[str] = None
     ) -> str:
         """Extend an active lock's expiry by 30 minutes.
 
         Args:
             lock_id: The lock ID from dotscope_claim_scope.
         """
-        from ..paths.repo import find_repo_root
         from ..merge.swarm import renew_lock
-
-        root = find_repo_root()
-        if root is None:
-            return json.dumps({"error": "Could not find repository root"})
 
         renewed = renew_lock(root, lock_id)
         return json.dumps({
@@ -262,8 +236,10 @@ def register_observability_tools(mcp, **kwargs):
         })
 
     @mcp.tool()
+    @mcp_tool_route
     def dotscope_escalate(
         conflict_id: str,
+        root: Optional[str] = None
     ) -> str:
         """Escalate an unresolvable conflict to a human operator.
 
@@ -273,12 +249,7 @@ def register_observability_tools(mcp, **kwargs):
         Args:
             conflict_id: The conflict ID from a rejected claim.
         """
-        from ..paths.repo import find_repo_root
         from ..merge.swarm import check_escalation
-
-        root = find_repo_root()
-        if root is None:
-            return json.dumps({"error": "Could not find repository root"})
 
         result = check_escalation(root, conflict_id)
         if result:

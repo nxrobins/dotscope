@@ -1,6 +1,6 @@
 description: Virtual scope: eval_lifecycle (spans 2 modules, hub: dotscope/models/eval.py)
 includes:
-  - dotscope/composer.py
+  - dotscope/engine/composer.py
   - dotscope/eval/compare.py
   - dotscope/eval/corpus.py
   - dotscope/eval/harness.py

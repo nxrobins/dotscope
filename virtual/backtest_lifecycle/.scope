@@ -2,13 +2,13 @@ description: Virtual scope: backtest_lifecycle (spans 2 modules, hub: dotscope/p
 includes:
   - dotscope/cli/core.py
   - dotscope/cli/ingest.py
-  - dotscope/context.py
-  - dotscope/discovery.py
-  - dotscope/ingest.py
-  - dotscope/intent.py
+  - dotscope/engine/context.py
+  - dotscope/engine/discovery.py
+  - dotscope/workflows/ingest.py
+  - dotscope/workflows/intent.py
   - dotscope/models/core.py
   - dotscope/models/history.py
-  - dotscope/parser.py
+  - dotscope/engine/parser.py
   - dotscope/passes/backtest.py
   - dotscope/passes/convention_compliance.py
   - dotscope/passes/convention_discovery.py
@@ -17,7 +17,7 @@ includes:
   - dotscope/passes/history_miner.py
   - dotscope/passes/voice_defaults.py
   - dotscope/paths/repo.py
-  - dotscope/refresh.py
+  - dotscope/workflows/refresh.py
   - tests/test_backtest.py
 context: |
   Cross-cutting concern detected from import graph.

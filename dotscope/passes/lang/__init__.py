@@ -29,6 +29,20 @@ def _register_analyzers():
         _analyzers["go"] = _go.analyze
 
         try:
+            from .java import JavaAnalyzer
+            _java = JavaAnalyzer()
+            _analyzers["java"] = _java.analyze
+        except ImportError:
+            pass
+            
+        try:
+            from .rust import RustAnalyzer
+            _rust = RustAnalyzer()
+            _analyzers["rust"] = _rust.analyze
+        except ImportError:
+            pass
+
+        try:
             from .solidity import SolidityAnalyzer
             _sol = SolidityAnalyzer()
             _analyzers["solidity"] = _sol.analyze

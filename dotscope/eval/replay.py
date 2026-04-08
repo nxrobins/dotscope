@@ -50,7 +50,7 @@ def replay_corpus(
     utility_scores = None
     try:
         from pathlib import Path
-        from ..utility import load_utility_scores
+        from ..engine.utility import load_utility_scores
         dot_dir = Path(repo_root) / ".dotscope"
         if dot_dir.exists():
             utility_scores = load_utility_scores(dot_dir)
@@ -128,18 +128,18 @@ def _replay_single_task(
 ) -> Optional[tuple]:
     """Replay one task. Returns (obs, surfaced, recommended_tests, stale_count, tokens) or None."""
     try:
-        from ..composer import compose_for_task
-        from ..discovery import find_all_scopes
-        from ..matcher import match_task
-        from ..parser import parse_scope_file
-        from ..resolver import resolve
+        from ..engine.composer import compose_for_task
+        from ..engine.discovery import find_all_scopes
+        from ..engine.matcher import match_task
+        from ..engine.parser import parse_scope_file
+        from ..engine.resolver import resolve
 
         # Primary path: auto-compose top-N matching scopes
         resolved = compose_for_task(task.task_description, root=repo_root, max_scopes=2)
 
         # Fallback: compose scopes matching directory prefixes of expected files
         if not resolved.files:
-            from ..composer import compose
+            from ..engine.composer import compose
 
             scope_files = find_all_scopes(repo_root)
             if not scope_files:

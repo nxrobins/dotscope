@@ -16,7 +16,7 @@ from ..models import (
     MissingSuggestion,
     ScopeConfig,
 )
-from ..resolver import resolve
+from ..engine.resolver import resolve
 
 
 def backtest_scopes(

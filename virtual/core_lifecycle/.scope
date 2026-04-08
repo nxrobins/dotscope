@@ -1,17 +1,17 @@
 description: Virtual scope: core_lifecycle (spans 2 modules, hub: dotscope/models/core.py)
 includes:
-  - dotscope/absorber.py
-  - dotscope/context.py
-  - dotscope/discovery.py
-  - dotscope/ingest.py
-  - dotscope/intent.py
+  - dotscope/workflows/absorber.py
+  - dotscope/engine/context.py
+  - dotscope/engine/discovery.py
+  - dotscope/workflows/ingest.py
+  - dotscope/workflows/intent.py
   - dotscope/models/__init__.py
   - dotscope/models/core.py
   - dotscope/models/history.py
   - dotscope/models/intent.py
   - dotscope/models/passes.py
   - dotscope/models/state.py
-  - dotscope/parser.py
+  - dotscope/engine/parser.py
   - dotscope/passes/ast_analyzer.py
   - dotscope/passes/backtest.py
   - dotscope/passes/convention_compliance.py
@@ -33,14 +33,14 @@ includes:
   - dotscope/passes/voice_discovery.py
   - dotscope/passes/z3_transpiler.py
   - dotscope/paths/__init__.py
-  - dotscope/progress.py
-  - dotscope/runtime_overlay.py
+  - dotscope/ux/progress.py
+  - dotscope/engine/runtime_overlay.py
   - dotscope/search/chunker.py
   - dotscope/search/models.py
   - dotscope/search/retriever.py
   - dotscope/storage/cache.py
   - dotscope/storage/incremental_state.py
-  - dotscope/tokens.py
+  - dotscope/engine/tokens.py
   - tests/test_formatter.py
   - tests/test_ingest.py
   - tests/test_lang_solidity.py

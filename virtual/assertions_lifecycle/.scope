@@ -1,31 +1,31 @@
-description: Virtual scope: assertions_lifecycle (spans 2 modules, hub: dotscope/assertions.py)
+description: Virtual scope: assertions_lifecycle (spans 2 modules, hub: dotscope/engine/assertions.py)
 includes:
-  - dotscope/assertions.py
-  - dotscope/composer.py
-  - dotscope/context.py
-  - dotscope/discovery.py
-  - dotscope/formatter.py
-  - dotscope/intent.py
-  - dotscope/lessons.py
-  - dotscope/matcher.py
+  - dotscope/engine/assertions.py
+  - dotscope/engine/composer.py
+  - dotscope/engine/context.py
+  - dotscope/engine/discovery.py
+  - dotscope/ux/formatter.py
+  - dotscope/workflows/intent.py
+  - dotscope/workflows/lessons.py
+  - dotscope/engine/matcher.py
   - dotscope/mcp/core.py
   - dotscope/passes/budget_allocator.py
   - dotscope/passes/sentinel/checker.py
   - dotscope/passes/sentinel/constraints.py
   - dotscope/passes/voice.py
   - dotscope/paths/repo.py
-  - dotscope/refresh.py
-  - dotscope/scanner.py
+  - dotscope/workflows/refresh.py
+  - dotscope/engine/scanner.py
   - dotscope/storage/near_miss.py
   - dotscope/storage/onboarding.py
   - dotscope/storage/session_manager.py
   - dotscope/storage/timing.py
-  - dotscope/utility.py
-  - dotscope/visibility.py
+  - dotscope/engine/utility.py
+  - dotscope/ux/visibility.py
   - tests/test_rigor.py
 context: |
   Cross-cutting concern detected from import graph.
-  Hub file: dotscope/assertions.py (imported by 22 files across 2 modules)
+  Hub file: dotscope/engine/assertions.py (imported by 22 files across 2 modules)
   
   Directories spanned: dotscope, tests
   Cohesion: 46%

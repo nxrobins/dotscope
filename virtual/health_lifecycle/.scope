@@ -1,26 +1,26 @@
-description: Virtual scope: health_lifecycle (spans 2 modules, hub: dotscope/health.py)
+description: Virtual scope: health_lifecycle (spans 2 modules, hub: dotscope/ux/health.py)
 includes:
   - dotscope/cli/observability.py
-  - dotscope/discovery.py
-  - dotscope/formatter.py
-  - dotscope/health.py
-  - dotscope/lessons.py
+  - dotscope/engine/discovery.py
+  - dotscope/ux/formatter.py
+  - dotscope/ux/health.py
+  - dotscope/workflows/lessons.py
   - dotscope/mcp/observability.py
   - dotscope/merge/swarm.py
-  - dotscope/parser.py
+  - dotscope/engine/parser.py
   - dotscope/passes/graph_builder.py
   - dotscope/passes/history_miner.py
   - dotscope/paths/__init__.py
   - dotscope/paths/repo.py
-  - dotscope/refresh.py
-  - dotscope/runtime_overlay.py
+  - dotscope/workflows/refresh.py
+  - dotscope/engine/runtime_overlay.py
   - dotscope/storage/cache.py
   - dotscope/storage/incremental_state.py
   - dotscope/storage/session_manager.py
   - tests/test_health.py
 context: |
   Cross-cutting concern detected from import graph.
-  Hub file: dotscope/health.py (imported by 17 files across 2 modules)
+  Hub file: dotscope/ux/health.py (imported by 17 files across 2 modules)
   
   Directories spanned: dotscope, tests
   Cohesion: 69%

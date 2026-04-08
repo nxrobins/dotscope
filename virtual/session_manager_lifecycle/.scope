@@ -1,26 +1,26 @@
 description: Virtual scope: session_manager_lifecycle (spans 2 modules, hub: dotscope/storage/session_manager.py)
 includes:
-  - dotscope/assertions.py
-  - dotscope/bench.py
+  - dotscope/engine/assertions.py
+  - dotscope/ux/bench.py
   - dotscope/cli/core.py
   - dotscope/cli/hooks.py
   - dotscope/cli/observability.py
-  - dotscope/composer.py
-  - dotscope/context.py
-  - dotscope/counterfactual.py
-  - dotscope/debug.py
-  - dotscope/discovery.py
+  - dotscope/engine/composer.py
+  - dotscope/engine/context.py
+  - dotscope/ux/counterfactual.py
+  - dotscope/ux/debug.py
+  - dotscope/engine/discovery.py
   - dotscope/eval/bootstrap.py
-  - dotscope/explain.py
-  - dotscope/formatter.py
-  - dotscope/health.py
-  - dotscope/intent.py
-  - dotscope/lessons.py
-  - dotscope/matcher.py
+  - dotscope/ux/explain.py
+  - dotscope/ux/formatter.py
+  - dotscope/ux/health.py
+  - dotscope/workflows/intent.py
+  - dotscope/workflows/lessons.py
+  - dotscope/engine/matcher.py
   - dotscope/mcp/core.py
   - dotscope/models/__init__.py
   - dotscope/models/state.py
-  - dotscope/parser.py
+  - dotscope/engine/parser.py
   - dotscope/passes/budget_allocator.py
   - dotscope/passes/graph_builder.py
   - dotscope/passes/history_miner.py
@@ -30,19 +30,19 @@ includes:
   - dotscope/passes/voice.py
   - dotscope/paths/__init__.py
   - dotscope/paths/repo.py
-  - dotscope/refresh.py
-  - dotscope/regression.py
-  - dotscope/resolver.py
-  - dotscope/scanner.py
+  - dotscope/workflows/refresh.py
+  - dotscope/workflows/regression.py
+  - dotscope/engine/resolver.py
+  - dotscope/engine/scanner.py
   - dotscope/storage/claude_hooks.py
   - dotscope/storage/git_hooks.py
   - dotscope/storage/near_miss.py
   - dotscope/storage/onboarding.py
   - dotscope/storage/session_manager.py
   - dotscope/storage/timing.py
-  - dotscope/tokens.py
-  - dotscope/utility.py
-  - dotscope/visibility.py
+  - dotscope/engine/tokens.py
+  - dotscope/engine/utility.py
+  - dotscope/ux/visibility.py
   - tests/test_loop.py
   - tests/test_sessions.py
 context: |

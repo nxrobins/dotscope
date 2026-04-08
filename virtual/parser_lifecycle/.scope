@@ -1,29 +1,29 @@
-description: Virtual scope: parser_lifecycle (spans 2 modules, hub: dotscope/parser.py)
+description: Virtual scope: parser_lifecycle (spans 2 modules, hub: dotscope/engine/parser.py)
 includes:
-  - dotscope/absorber.py
-  - dotscope/assertions.py
-  - dotscope/bench.py
+  - dotscope/workflows/absorber.py
+  - dotscope/engine/assertions.py
+  - dotscope/ux/bench.py
   - dotscope/cli/hooks.py
   - dotscope/cli/ingest.py
   - dotscope/cli/observability.py
-  - dotscope/composer.py
-  - dotscope/constants.py
-  - dotscope/context.py
-  - dotscope/debug.py
-  - dotscope/discovery.py
+  - dotscope/engine/composer.py
+  - dotscope/engine/constants.py
+  - dotscope/engine/context.py
+  - dotscope/ux/debug.py
+  - dotscope/engine/discovery.py
   - dotscope/eval/bootstrap.py
   - dotscope/eval/replay.py
-  - dotscope/explain.py
-  - dotscope/formatter.py
+  - dotscope/ux/explain.py
+  - dotscope/ux/formatter.py
   - dotscope/generate/atlas.py
   - dotscope/generate/contracts.py
   - dotscope/generate/engine.py
   - dotscope/generate/models.py
-  - dotscope/health.py
-  - dotscope/ingest.py
-  - dotscope/intent.py
-  - dotscope/lessons.py
-  - dotscope/matcher.py
+  - dotscope/ux/health.py
+  - dotscope/workflows/ingest.py
+  - dotscope/workflows/intent.py
+  - dotscope/workflows/lessons.py
+  - dotscope/engine/matcher.py
   - dotscope/mcp/__init__.py
   - dotscope/mcp/observability.py
   - dotscope/merge/swarm.py
@@ -33,7 +33,7 @@ includes:
   - dotscope/models/intent.py
   - dotscope/models/passes.py
   - dotscope/models/state.py
-  - dotscope/parser.py
+  - dotscope/engine/parser.py
   - dotscope/passes/backtest.py
   - dotscope/passes/convention_compliance.py
   - dotscope/passes/convention_discovery.py
@@ -51,11 +51,11 @@ includes:
   - dotscope/passes/z3_transpiler.py
   - dotscope/paths/__init__.py
   - dotscope/paths/repo.py
-  - dotscope/progress.py
-  - dotscope/refresh.py
-  - dotscope/regression.py
-  - dotscope/resolver.py
-  - dotscope/runtime_overlay.py
+  - dotscope/ux/progress.py
+  - dotscope/workflows/refresh.py
+  - dotscope/workflows/regression.py
+  - dotscope/engine/resolver.py
+  - dotscope/engine/runtime_overlay.py
   - dotscope/search/chunker.py
   - dotscope/search/models.py
   - dotscope/search/retriever.py
@@ -66,10 +66,10 @@ includes:
   - dotscope/storage/near_miss.py
   - dotscope/storage/onboarding.py
   - dotscope/storage/session_manager.py
-  - dotscope/textio.py
-  - dotscope/tokens.py
-  - dotscope/utility.py
-  - dotscope/visibility.py
+  - dotscope/ux/textio.py
+  - dotscope/engine/tokens.py
+  - dotscope/engine/utility.py
+  - dotscope/ux/visibility.py
   - tests/test_composer.py
   - tests/test_health.py
   - tests/test_parser.py
@@ -78,7 +78,7 @@ includes:
   - tests/test_textio.py
 context: |
   Cross-cutting concern detected from import graph.
-  Hub file: dotscope/parser.py (imported by 75 files across 2 modules)
+  Hub file: dotscope/engine/parser.py (imported by 75 files across 2 modules)
   
   Directories spanned: dotscope, tests
   Cohesion: 90%

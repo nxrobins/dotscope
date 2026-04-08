@@ -227,9 +227,9 @@ def _compute_scope_import_matrix(
 def _load_scope_data(root: str) -> dict:
     """Load scope data from .scope files."""
     try:
-        from ..discovery import find_all_scopes
-        from ..parser import parse_scope_file
-        from ..intent import load_conventions
+        from ..engine.discovery import find_all_scopes
+        from ..engine.parser import parse_scope_file
+        from ..workflows.intent import load_conventions
 
         scopes = {}
         for sf in find_all_scopes(root):

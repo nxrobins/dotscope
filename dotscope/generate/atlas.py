@@ -325,8 +325,8 @@ def _load_network_edges(root: str) -> Dict[str, Dict[str, list]]:
 
 def _build_file_scope_index(root: str) -> Dict[str, str]:
     try:
-        from ..discovery import find_all_scopes
-        from ..parser import parse_scope_file
+        from ..engine.discovery import find_all_scopes
+        from ..engine.parser import parse_scope_file
         index = {}
         for sf in find_all_scopes(root):
             try:

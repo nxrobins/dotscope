@@ -4,8 +4,8 @@ import sys
 
 def _cmd_validate(args):
     from ..paths.repo import find_repo_root
-    from ..discovery import find_all_scopes
-    from ..parser import parse_scope_file
+    from ..engine.discovery import find_all_scopes
+    from ..engine.parser import parse_scope_file
 
     root = find_repo_root()
     if root is None:
@@ -57,11 +57,11 @@ def _cmd_validate(args):
 
 def _cmd_stats(args):
     from ..paths.repo import find_repo_root
-    from ..discovery import find_all_scopes
-    from ..parser import parse_scope_file
-    from ..resolver import resolve
-    from ..tokens import estimate_file_tokens
-    from ..formatter import format_stats
+    from ..engine.discovery import find_all_scopes
+    from ..engine.parser import parse_scope_file
+    from ..engine.resolver import resolve
+    from ..engine.tokens import estimate_file_tokens
+    from ..ux.formatter import format_stats
 
     root = find_repo_root()
     if root is None:
@@ -93,9 +93,9 @@ def _cmd_stats(args):
 
 def _cmd_tree(args):
     from ..paths.repo import find_repo_root
-    from ..discovery import find_all_scopes
-    from ..parser import parse_scope_file
-    from ..formatter import format_tree
+    from ..engine.discovery import find_all_scopes
+    from ..engine.parser import parse_scope_file
+    from ..ux.formatter import format_tree
 
     root = find_repo_root()
     if root is None:
@@ -112,7 +112,7 @@ def _cmd_tree(args):
     print(format_tree(scopes, root))
 
 def _cmd_health(args):
-    from ..health import full_health_report
+    from ..ux.health import full_health_report
     from ..paths.repo import find_repo_root
 
     root = find_repo_root()
@@ -153,7 +153,7 @@ def _cmd_virtual(args):
 def _cmd_lessons(args):
     from ..paths.repo import find_repo_root
     from ..storage.session_manager import SessionManager
-    from ..lessons import generate_lessons
+    from ..workflows.lessons import generate_lessons
 
     root = find_repo_root()
     if root is None:
@@ -183,7 +183,7 @@ def _cmd_lessons(args):
 def _cmd_invariants(args):
     from ..paths.repo import find_repo_root
     from ..passes.graph_builder import build_graph
-    from ..lessons import detect_invariants
+    from ..workflows.lessons import detect_invariants
     from ..passes.history_miner import analyze_history
 
     root = find_repo_root()
@@ -218,8 +218,8 @@ def _cmd_invariants(args):
 def _cmd_rebuild(args):
     from ..paths.repo import find_repo_root
     from ..storage.session_manager import SessionManager
-    from ..utility import rebuild_utility
-    from ..lessons import generate_lessons, save_lessons, detect_invariants, save_invariants
+    from ..engine.utility import rebuild_utility
+    from ..workflows.lessons import generate_lessons, save_lessons, detect_invariants, save_invariants
     from ..passes.graph_builder import build_graph
 
     root = find_repo_root()
@@ -258,7 +258,7 @@ def _cmd_rebuild(args):
 
 def _cmd_test_compiler(args):
     from ..paths.repo import find_repo_root
-    from ..regression import load_regressions, replay_regression, format_replay_report
+    from ..workflows.regression import load_regressions, replay_regression, format_replay_report
 
     root = find_repo_root()
     if root is None:
@@ -305,7 +305,7 @@ def _cmd_bench(args):
 
 def _cmd_debug(args):
     from ..paths.repo import find_repo_root
-    from ..debug import debug_session, list_bad_sessions, format_debug_report
+    from ..ux.debug import debug_session, list_bad_sessions, format_debug_report
 
     root = find_repo_root()
     if root is None:

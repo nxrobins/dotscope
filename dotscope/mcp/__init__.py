@@ -74,7 +74,7 @@ def main():
     mcp = FastMCP("dotscope")
 
     # Session-level tracker (lives across tool calls in a single MCP session)
-    from ..visibility import SessionTracker
+    from ..ux.visibility import SessionTracker
     tracker = SessionTracker()
     
     client_id = _detect_client()
@@ -89,7 +89,7 @@ def main():
     _cached_graph_hubs = {}
     try:
         from ..paths.repo import find_repo_root
-        from ..parser import parse_scopes_index
+        from ..engine.parser import parse_scopes_index
         from ..storage.cache import load_cached_history, load_cached_graph_hubs
         _root = find_repo_root(_cli_root)
         if _root:

@@ -21,18 +21,18 @@ def _safe_print(text, **kwargs):
         print(text.encode("ascii", errors="replace").decode("ascii"), **kwargs)
 
 def main(argv=None):
-    from ..textio import consume_decode_warnings
+    from ..ux.textio import consume_decode_warnings
 
     consume_decode_warnings()
 
     # Intercept help before argparse touches it
     args_list = argv if argv is not None else sys.argv[1:]
     if not args_list or args_list == ["help"] or args_list == ["--help"] or args_list == ["-h"]:
-        from ..help import print_help
+        from ..ux.help import print_help
         print_help()
         return
     if len(args_list) >= 2 and args_list[1] in ("--help", "-h"):
-        from ..help import print_help, HELP_COMMANDS
+        from ..ux.help import print_help, HELP_COMMANDS
         cmd = args_list[0]
         if cmd in HELP_COMMANDS:
             print_help(cmd)
@@ -211,11 +211,12 @@ def main(argv=None):
     # --- serve ---
     p_serve = sub.add_parser("serve", help="Launch interactive 3D topography dashboard")
     p_serve.add_argument("--port", type=int, default=8080, help="Port to run the local server on")
+    p_serve.add_argument("--headless", action="store_true", help="Launch the API server exclusively without WebGPU payload mounting")
 
     args = parser.parse_args(argv)
 
     if args.command is None or getattr(args, "show_help", False):
-        from ..help import print_help
+        from ..ux.help import print_help
         print_help()
         return
 

@@ -1,35 +1,35 @@
-description: Virtual scope: runtime_overlay_lifecycle (spans 2 modules, hub: dotscope/runtime_overlay.py)
+description: Virtual scope: runtime_overlay_lifecycle (spans 2 modules, hub: dotscope/engine/runtime_overlay.py)
 includes:
-  - dotscope/absorber.py
-  - dotscope/composer.py
-  - dotscope/constants.py
-  - dotscope/context.py
-  - dotscope/discovery.py
-  - dotscope/health.py
-  - dotscope/ingest.py
-  - dotscope/intent.py
+  - dotscope/workflows/absorber.py
+  - dotscope/engine/composer.py
+  - dotscope/engine/constants.py
+  - dotscope/engine/context.py
+  - dotscope/engine/discovery.py
+  - dotscope/ux/health.py
+  - dotscope/workflows/ingest.py
+  - dotscope/workflows/intent.py
   - dotscope/models/__init__.py
   - dotscope/models/core.py
   - dotscope/models/history.py
   - dotscope/models/passes.py
-  - dotscope/parser.py
+  - dotscope/engine/parser.py
   - dotscope/passes/graph_builder.py
   - dotscope/passes/history_miner.py
   - dotscope/passes/incremental.py
   - dotscope/passes/lazy.py
   - dotscope/passes/voice_defaults.py
   - dotscope/paths/__init__.py
-  - dotscope/progress.py
-  - dotscope/refresh.py
-  - dotscope/runtime_overlay.py
+  - dotscope/ux/progress.py
+  - dotscope/workflows/refresh.py
+  - dotscope/engine/runtime_overlay.py
   - dotscope/storage/cache.py
   - dotscope/storage/incremental_state.py
-  - dotscope/tokens.py
+  - dotscope/engine/tokens.py
   - tests/test_refresh.py
   - tests/test_runtime_overlay.py
 context: |
   Cross-cutting concern detected from import graph.
-  Hub file: dotscope/runtime_overlay.py (imported by 26 files across 2 modules)
+  Hub file: dotscope/engine/runtime_overlay.py (imported by 26 files across 2 modules)
   
   Directories spanned: dotscope, tests
   Cohesion: 78%

@@ -118,7 +118,7 @@ def _load_config(root: str) -> GenerateConfig:
         return GenerateConfig()
 
     try:
-        from ..parser import _parse_yaml
+        from ..engine.parser import _parse_yaml
         data = _parse_yaml(config_path.read_text(encoding="utf-8"))
         gen = data.get("generate", {})
         return GenerateConfig(

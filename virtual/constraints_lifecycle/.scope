@@ -1,18 +1,18 @@
 description: Virtual scope: constraints_lifecycle (spans 2 modules, hub: dotscope/passes/sentinel/constraints.py)
 includes:
-  - dotscope/assertions.py
-  - dotscope/composer.py
-  - dotscope/context.py
-  - dotscope/discovery.py
+  - dotscope/engine/assertions.py
+  - dotscope/engine/composer.py
+  - dotscope/engine/context.py
+  - dotscope/engine/discovery.py
   - dotscope/eval/replay.py
-  - dotscope/formatter.py
-  - dotscope/intent.py
-  - dotscope/lessons.py
-  - dotscope/matcher.py
+  - dotscope/ux/formatter.py
+  - dotscope/workflows/intent.py
+  - dotscope/workflows/lessons.py
+  - dotscope/engine/matcher.py
   - dotscope/mcp/core.py
   - dotscope/models/__init__.py
   - dotscope/models/intent.py
-  - dotscope/parser.py
+  - dotscope/engine/parser.py
   - dotscope/passes/budget_allocator.py
   - dotscope/passes/hint_generator.py
   - dotscope/passes/sentinel/acknowledge.py
@@ -20,8 +20,8 @@ includes:
   - dotscope/passes/sentinel/constraints.py
   - dotscope/passes/voice.py
   - dotscope/paths/repo.py
-  - dotscope/refresh.py
-  - dotscope/scanner.py
+  - dotscope/workflows/refresh.py
+  - dotscope/engine/scanner.py
   - dotscope/search/expander.py
   - dotscope/search/flattener.py
   - dotscope/search/models.py
@@ -34,9 +34,9 @@ includes:
   - dotscope/storage/onboarding.py
   - dotscope/storage/session_manager.py
   - dotscope/storage/timing.py
-  - dotscope/tokens.py
-  - dotscope/utility.py
-  - dotscope/visibility.py
+  - dotscope/engine/tokens.py
+  - dotscope/engine/utility.py
+  - dotscope/ux/visibility.py
   - tests/test_enforcement.py
   - tests/test_routing.py
 context: |

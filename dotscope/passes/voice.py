@@ -5,7 +5,7 @@ import os
 from typing import Dict, List, Optional
 
 from ..models.intent import CanonicalExample
-from ..textio import read_repo_text
+from ..ux.textio import read_repo_text
 
 
 def build_voice_response(

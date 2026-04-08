@@ -1,28 +1,28 @@
-description: Virtual scope: explain_lifecycle (spans 2 modules, hub: dotscope/explain.py)
+description: Virtual scope: explain_lifecycle (spans 2 modules, hub: dotscope/ux/explain.py)
 includes:
   - dotscope/cli/hooks.py
-  - dotscope/discovery.py
-  - dotscope/explain.py
-  - dotscope/intent.py
+  - dotscope/engine/discovery.py
+  - dotscope/ux/explain.py
+  - dotscope/workflows/intent.py
   - dotscope/mcp/observability.py
   - dotscope/merge/swarm.py
   - dotscope/models/intent.py
-  - dotscope/parser.py
+  - dotscope/engine/parser.py
   - dotscope/passes/incremental.py
   - dotscope/passes/sentinel/checker.py
   - dotscope/paths/repo.py
-  - dotscope/refresh.py
+  - dotscope/workflows/refresh.py
   - dotscope/storage/claude_hooks.py
   - dotscope/storage/git_hooks.py
   - dotscope/storage/near_miss.py
   - dotscope/storage/onboarding.py
   - dotscope/storage/session_manager.py
-  - dotscope/utility.py
-  - dotscope/visibility.py
+  - dotscope/engine/utility.py
+  - dotscope/ux/visibility.py
   - tests/test_explain.py
 context: |
   Cross-cutting concern detected from import graph.
-  Hub file: dotscope/explain.py (imported by 19 files across 2 modules)
+  Hub file: dotscope/ux/explain.py (imported by 19 files across 2 modules)
   
   Directories spanned: dotscope, tests
   Cohesion: 58%

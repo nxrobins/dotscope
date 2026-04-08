@@ -1,21 +1,21 @@
-description: Virtual scope: context_lifecycle (spans 2 modules, hub: dotscope/context.py)
+description: Virtual scope: context_lifecycle (spans 2 modules, hub: dotscope/engine/context.py)
 includes:
-  - dotscope/absorber.py
-  - dotscope/assertions.py
+  - dotscope/workflows/absorber.py
+  - dotscope/engine/assertions.py
   - dotscope/cli/core.py
-  - dotscope/composer.py
-  - dotscope/context.py
-  - dotscope/discovery.py
-  - dotscope/formatter.py
-  - dotscope/ingest.py
-  - dotscope/intent.py
-  - dotscope/matcher.py
+  - dotscope/engine/composer.py
+  - dotscope/engine/context.py
+  - dotscope/engine/discovery.py
+  - dotscope/ux/formatter.py
+  - dotscope/workflows/ingest.py
+  - dotscope/workflows/intent.py
+  - dotscope/engine/matcher.py
   - dotscope/mcp/core.py
   - dotscope/models/__init__.py
   - dotscope/models/core.py
   - dotscope/models/history.py
   - dotscope/models/passes.py
-  - dotscope/parser.py
+  - dotscope/engine/parser.py
   - dotscope/passes/backtest.py
   - dotscope/passes/budget_allocator.py
   - dotscope/passes/graph_builder.py
@@ -26,21 +26,21 @@ includes:
   - dotscope/passes/voice_defaults.py
   - dotscope/paths/__init__.py
   - dotscope/paths/repo.py
-  - dotscope/progress.py
-  - dotscope/refresh.py
-  - dotscope/runtime_overlay.py
-  - dotscope/scanner.py
+  - dotscope/ux/progress.py
+  - dotscope/workflows/refresh.py
+  - dotscope/engine/runtime_overlay.py
+  - dotscope/engine/scanner.py
   - dotscope/storage/git_hooks.py
   - dotscope/storage/incremental_state.py
   - dotscope/storage/session_manager.py
-  - dotscope/tokens.py
-  - dotscope/utility.py
+  - dotscope/engine/tokens.py
+  - dotscope/engine/utility.py
   - tests/test_backtest.py
   - tests/test_context.py
   - tests/test_refresh.py
 context: |
   Cross-cutting concern detected from import graph.
-  Hub file: dotscope/context.py (imported by 37 files across 2 modules)
+  Hub file: dotscope/engine/context.py (imported by 37 files across 2 modules)
   
   Directories spanned: dotscope, tests
   Cohesion: 77%

@@ -13,7 +13,7 @@ import os
 from typing import List, Optional
 
 from ..models import FileAnalysis
-from ..tokens import estimate_tokens
+from ..engine.tokens import estimate_tokens
 from .models import RetrievalChunk
 
 # Threshold: files with average line length above this are minified/bundled

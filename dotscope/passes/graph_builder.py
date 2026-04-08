@@ -13,8 +13,8 @@ from .ast_analyzer import (
     resolve_js_import,
     resolve_python_import,
 )
-from ..constants import LANG_MAP, SKIP_DIRS
-from ..ignore import load_ignore_patterns, should_skip
+from ..engine.constants import LANG_MAP, SKIP_DIRS
+from ..engine.ignore import load_ignore_patterns, should_skip
 from ..models.core import (
     DependencyGraph,
     FileNode,
@@ -237,6 +237,12 @@ def _resolve_import(imp, source_file: str, root: str, language: str):
     elif language == "solidity":
         from .lang.solidity import resolve_solidity_import
         return resolve_solidity_import(imp, os.path.join(root, source_file), root)
+    elif language == "java":
+        from .ast_analyzer import resolve_java_import
+        return resolve_java_import(imp, os.path.join(root, source_file), root)
+    elif language == "rust":
+        from .ast_analyzer import resolve_rust_import
+        return resolve_rust_import(imp, os.path.join(root, source_file), root)
     return None
 
 

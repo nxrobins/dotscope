@@ -5,10 +5,9 @@ conventions:
       any_of:
         - has_decorator: "dataclass"
     rules:
-      prohibited_imports: [checker, graph_builder, incremental, lessons, near_miss]
-      allowed_paths: [dotscope/[^/]+/.*\.py]
-    description: "Discovered from 18 files sharing decorator: dataclass"
-    compliance: 0.8333333333333334
+      prohibited_imports: [Base, a, backend-client, budget_allocator, hooks]
+    description: "Discovered from 19 files sharing decorator: dataclass"
+    compliance: 1.0
   - name: "Fixture"
     source: discovered
     match:
@@ -16,9 +15,29 @@ conventions:
         - has_decorator: "pytest\.fixture"
         - file_path: "tests/.*\.py"
     rules:
-      prohibited_imports: [ast_analyzer, buffer, checker, matcher, timing]
+      prohibited_imports: [a, backend-client, budget_allocator, discovery, hooks]
       allowed_paths: [tests/.*\.py]
     description: "Discovered from 4 files sharing decorator: pytest.fixture"
+    compliance: 1.0
+  - name: "Given"
+    source: discovered
+    match:
+      any_of:
+        - has_decorator: "given"
+        - file_path: "ui/GitNexus/eval/tests/.*\.py"
+    rules:
+      prohibited_imports: [a, backend-client, budget_allocator, discovery, hooks]
+      allowed_paths: [ui/GitNexus/eval/tests/.*\.py]
+    description: "Discovered from 3 files sharing decorator: given"
+    compliance: 1.0
+  - name: "ABC Subclass"
+    source: discovered
+    match:
+      any_of:
+        - base_class: "ABC"
+    rules:
+      prohibited_imports: [a, backend-client, budget_allocator, discovery, hooks]
+    description: "Discovered from 3 files sharing base_class: ABC"
     compliance: 1.0
   - name: "BaseAnalyzer Subclass"
     source: discovered
@@ -28,30 +47,36 @@ conventions:
         - file_path: "dotscope/passes/lang/.*\.py"
     rules:
       required_methods: [analyze]
-      prohibited_imports: [ast_analyzer, buffer, checker, matcher, timing]
+      prohibited_imports: [a, backend-client, budget_allocator, discovery, hooks]
       allowed_paths: [dotscope/passes/lang/.*\.py]
     description: "Discovered from 3 files sharing base_class: BaseAnalyzer"
     compliance: 1.0
+  - name: "BaseModel Subclass"
+    source: discovered
+    match:
+      any_of:
+        - base_class: "BaseModel"
+    rules:
+      prohibited_imports: [a, backend-client, budget_allocator, discovery, hooks]
+    description: "Discovered from 5 files sharing base_class: BaseModel"
+    compliance: 1.0
 
 voice:
-  mode: adaptive
+  mode: prescriptive
   typing: |
-    Strict type hints on all function signatures.
+    Type hints on all function signatures. Return types always specified.
   docstrings: |
-    Minimal docstrings. Add only when behavior is non-obvious.
+    Google style. Imperative mood. One-line if the name explains it.
   error_handling: |
-    No bare excepts. Catch specific exception types.
+    Domain exceptions. No bare excepts. Let unexpected errors propagate.
   structure: |
-    Match the pattern of the file being modified.
+    Early returns over nested conditionals. Guard clauses at the top.
   density: |
-    Comprehensions preferred where readable.
+    Concise. Comprehensions where readable. No filler variables.
+  comments: |
+    Comments explain why, not what.
+  imports: |
+    stdlib first, third-party second, local third. One import per line.
   enforce:
     bare_excepts: "hold"
     missing_type_hints: "note"
-  stats:
-    type_hint_rate: 0.9
-    bare_except_rate: 0.0
-    early_return_rate: 0.21
-    docstring_count: 804
-    dominant_docstring_style: "other"
-    files_analyzed: 180

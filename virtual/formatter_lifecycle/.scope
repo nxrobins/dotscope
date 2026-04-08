@@ -1,20 +1,20 @@
-description: Virtual scope: formatter_lifecycle (spans 2 modules, hub: dotscope/formatter.py)
+description: Virtual scope: formatter_lifecycle (spans 2 modules, hub: dotscope/ux/formatter.py)
 includes:
-  - dotscope/assertions.py
-  - dotscope/bench.py
+  - dotscope/engine/assertions.py
+  - dotscope/ux/bench.py
   - dotscope/cli/core.py
   - dotscope/cli/observability.py
-  - dotscope/composer.py
-  - dotscope/context.py
-  - dotscope/debug.py
-  - dotscope/discovery.py
-  - dotscope/formatter.py
-  - dotscope/health.py
-  - dotscope/intent.py
-  - dotscope/lessons.py
-  - dotscope/matcher.py
+  - dotscope/engine/composer.py
+  - dotscope/engine/context.py
+  - dotscope/ux/debug.py
+  - dotscope/engine/discovery.py
+  - dotscope/ux/formatter.py
+  - dotscope/ux/health.py
+  - dotscope/workflows/intent.py
+  - dotscope/workflows/lessons.py
+  - dotscope/engine/matcher.py
   - dotscope/mcp/core.py
-  - dotscope/parser.py
+  - dotscope/engine/parser.py
   - dotscope/passes/budget_allocator.py
   - dotscope/passes/graph_builder.py
   - dotscope/passes/history_miner.py
@@ -22,16 +22,16 @@ includes:
   - dotscope/passes/virtual.py
   - dotscope/paths/__init__.py
   - dotscope/paths/repo.py
-  - dotscope/refresh.py
-  - dotscope/regression.py
-  - dotscope/resolver.py
+  - dotscope/workflows/refresh.py
+  - dotscope/workflows/regression.py
+  - dotscope/engine/resolver.py
   - dotscope/storage/session_manager.py
-  - dotscope/tokens.py
-  - dotscope/utility.py
+  - dotscope/engine/tokens.py
+  - dotscope/engine/utility.py
   - tests/test_formatter.py
 context: |
   Cross-cutting concern detected from import graph.
-  Hub file: dotscope/formatter.py (imported by 28 files across 2 modules)
+  Hub file: dotscope/ux/formatter.py (imported by 28 files across 2 modules)
   
   Directories spanned: dotscope, tests
   Cohesion: 66%

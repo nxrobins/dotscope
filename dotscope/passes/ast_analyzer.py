@@ -512,6 +512,58 @@ def resolve_js_import(imp: ResolvedImport, source_file: str, root: str) -> Optio
     return None
 
 
+def resolve_java_import(imp: ResolvedImport, source_file: str, root: str) -> Optional[str]:
+    """Resolve a Java package import into a physical module directory limit."""
+    if not imp.raw:
+        return None
+    
+    parts = imp.raw.split(".")
+    candidate = os.path.join(root, *parts) + ".java"
+    if os.path.isfile(candidate):
+        return normalize_relative_path(os.path.relpath(candidate, root))
+        
+    if imp.is_star:
+        parts = parts[:-1]
+        candidate_dir = os.path.join(root, *parts)
+        if os.path.isdir(candidate_dir):
+            return normalize_relative_path(os.path.relpath(candidate_dir, root))
+
+    return None
+
+
+def resolve_rust_import(imp: ResolvedImport, source_file: str, root: str) -> Optional[str]:
+    """Resolve a Rust import string strictly executing Cargos physical filesystem topology rules."""
+    source_dir = os.path.dirname(source_file)
+    
+    if imp.raw.startswith("mod:"):
+        mod_name = imp.raw[4:]
+        
+        cand1 = os.path.join(source_dir, f"{mod_name}.rs")
+        if os.path.isfile(cand1):
+            return normalize_relative_path(os.path.relpath(cand1, root))
+            
+        cand2 = os.path.join(source_dir, mod_name, "mod.rs")
+        if os.path.isfile(cand2):
+            return normalize_relative_path(os.path.relpath(cand2, root))
+            
+        return None
+        
+    if imp.is_relative and "::" in imp.raw:
+        parts = imp.raw.split("::")
+        if parts[0] in ("crate", "super", "self"):
+            parts = parts[1:]
+            
+        cand_base = os.path.join(source_dir, *parts)
+        cand1 = f"{cand_base}.rs"
+        cand2 = os.path.join(cand_base, "mod.rs")
+        if os.path.isfile(cand1):
+            return normalize_relative_path(os.path.relpath(cand1, root))
+        if os.path.isfile(cand2):
+            return normalize_relative_path(os.path.relpath(cand2, root))
+        
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Polyglot Context: Network endpoint extraction
 # ---------------------------------------------------------------------------

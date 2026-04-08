@@ -1,32 +1,32 @@
 description: Virtual scope: onboarding_lifecycle (spans 2 modules, hub: dotscope/storage/onboarding.py)
 includes:
-  - dotscope/assertions.py
+  - dotscope/engine/assertions.py
   - dotscope/cli/hooks.py
   - dotscope/cli/ingest.py
-  - dotscope/composer.py
-  - dotscope/counterfactual.py
-  - dotscope/discovery.py
-  - dotscope/explain.py
-  - dotscope/intent.py
+  - dotscope/engine/composer.py
+  - dotscope/ux/counterfactual.py
+  - dotscope/engine/discovery.py
+  - dotscope/ux/explain.py
+  - dotscope/workflows/intent.py
   - dotscope/mcp/core.py
   - dotscope/models/intent.py
   - dotscope/models/state.py
-  - dotscope/parser.py
+  - dotscope/engine/parser.py
   - dotscope/passes/graph_builder.py
   - dotscope/passes/incremental.py
   - dotscope/passes/sentinel/checker.py
   - dotscope/passes/sentinel/constraints.py
   - dotscope/paths/__init__.py
   - dotscope/paths/repo.py
-  - dotscope/refresh.py
+  - dotscope/workflows/refresh.py
   - dotscope/storage/claude_hooks.py
   - dotscope/storage/git_hooks.py
   - dotscope/storage/incremental_state.py
   - dotscope/storage/near_miss.py
   - dotscope/storage/onboarding.py
   - dotscope/storage/session_manager.py
-  - dotscope/utility.py
-  - dotscope/visibility.py
+  - dotscope/engine/utility.py
+  - dotscope/ux/visibility.py
   - tests/test_experience.py
 context: |
   Cross-cutting concern detected from import graph.

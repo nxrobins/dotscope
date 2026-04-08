@@ -1,11 +1,11 @@
 description: Virtual scope: acknowledge_lifecycle (spans 2 modules, hub: dotscope/passes/sentinel/acknowledge.py)
 includes:
-  - dotscope/bench.py
-  - dotscope/discovery.py
-  - dotscope/intent.py
+  - dotscope/ux/bench.py
+  - dotscope/engine/discovery.py
+  - dotscope/workflows/intent.py
   - dotscope/merge/swarm.py
   - dotscope/models/intent.py
-  - dotscope/parser.py
+  - dotscope/engine/parser.py
   - dotscope/passes/ast_analyzer.py
   - dotscope/passes/sentinel/acknowledge.py
   - dotscope/passes/sentinel/checker.py
@@ -21,7 +21,7 @@ includes:
   - dotscope/passes/sentinel/checks/voice.py
   - dotscope/passes/sentinel/constraints.py
   - dotscope/passes/sentinel/models.py
-  - dotscope/textio.py
+  - dotscope/ux/textio.py
   - tests/test_enforcement.py
   - tests/test_routing.py
 context: |

@@ -2,25 +2,25 @@ description: Root interfaces and orchestrators
 includes:
   - dotscope/cli/
   - dotscope/mcp/
-  - dotscope/composer.py
-  - dotscope/resolver.py
-  - dotscope/intent.py
-  - dotscope/ingest.py
-  - dotscope/formatter.py
-  - dotscope/discovery.py
-  - dotscope/parser.py
-  - dotscope/visibility.py
-  - dotscope/assertions.py
-  - dotscope/health.py
-  - dotscope/utility.py
-  - dotscope/lessons.py
-  - dotscope/textio.py
-  - dotscope/tokens.py
-  - dotscope/matcher.py
-  - dotscope/explain.py
-  - dotscope/refresh.py
+  - dotscope/engine/composer.py
+  - dotscope/engine/resolver.py
+  - dotscope/workflows/intent.py
+  - dotscope/workflows/ingest.py
+  - dotscope/ux/formatter.py
+  - dotscope/engine/discovery.py
+  - dotscope/engine/parser.py
+  - dotscope/ux/visibility.py
+  - dotscope/engine/assertions.py
+  - dotscope/ux/health.py
+  - dotscope/engine/utility.py
+  - dotscope/workflows/lessons.py
+  - dotscope/ux/textio.py
+  - dotscope/engine/tokens.py
+  - dotscope/engine/matcher.py
+  - dotscope/ux/explain.py
+  - dotscope/workflows/refresh.py
   - dotscope/paths/
-  - dotscope/constants.py
+  - dotscope/engine/constants.py
   - .scopes
 excludes:
   - dotscope/__pycache__/

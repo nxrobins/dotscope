@@ -1,19 +1,19 @@
 description: Virtual scope: models_lifecycle (spans 2 modules, hub: dotscope/models/__init__.py)
 includes:
-  - dotscope/composer.py
-  - dotscope/constants.py
-  - dotscope/context.py
-  - dotscope/discovery.py
+  - dotscope/engine/composer.py
+  - dotscope/engine/constants.py
+  - dotscope/engine/context.py
+  - dotscope/engine/discovery.py
   - dotscope/eval/bootstrap.py
   - dotscope/eval/replay.py
-  - dotscope/formatter.py
-  - dotscope/health.py
-  - dotscope/lessons.py
-  - dotscope/matcher.py
+  - dotscope/ux/formatter.py
+  - dotscope/ux/health.py
+  - dotscope/workflows/lessons.py
+  - dotscope/engine/matcher.py
   - dotscope/models/__init__.py
   - dotscope/models/history.py
   - dotscope/models/state.py
-  - dotscope/parser.py
+  - dotscope/engine/parser.py
   - dotscope/passes/ast_analyzer.py
   - dotscope/passes/backtest.py
   - dotscope/passes/budget_allocator.py
@@ -26,9 +26,9 @@ includes:
   - dotscope/passes/spatial_autofix.py
   - dotscope/paths/__init__.py
   - dotscope/paths/repo.py
-  - dotscope/resolver.py
-  - dotscope/runtime_overlay.py
-  - dotscope/scanner.py
+  - dotscope/engine/resolver.py
+  - dotscope/engine/runtime_overlay.py
+  - dotscope/engine/scanner.py
   - dotscope/search/chunker.py
   - dotscope/search/flattener.py
   - dotscope/search/models.py
@@ -37,9 +37,9 @@ includes:
   - dotscope/storage/incremental_state.py
   - dotscope/storage/session_manager.py
   - dotscope/storage/swarm_state.py
-  - dotscope/textio.py
-  - dotscope/tokens.py
-  - dotscope/utility.py
+  - dotscope/ux/textio.py
+  - dotscope/engine/tokens.py
+  - dotscope/engine/utility.py
   - tests/test_ast_analyzer.py
   - tests/test_backtest.py
   - tests/test_budget.py

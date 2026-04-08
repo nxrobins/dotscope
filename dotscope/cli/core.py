@@ -3,11 +3,11 @@ import os
 import sys
 
 def _cmd_resolve(args):
-    from ..composer import compose
+    from ..engine.composer import compose
     from ..passes.budget_allocator import apply_budget
     from ..paths.repo import find_repo_root
-    from ..formatter import format_resolved
-    from ..refresh import ensure_resolution_freshness
+    from ..ux.formatter import format_resolved
+    from ..workflows.refresh import ensure_resolution_freshness
 
     root = find_repo_root()
     follow_related = not args.no_related
@@ -24,9 +24,9 @@ def _cmd_resolve(args):
 
 def _cmd_context(args):
     from ..paths.repo import find_repo_root
-    from ..discovery import find_resolution_scope
-    from ..context import query_context
-    from ..refresh import ensure_resolution_freshness
+    from ..engine.discovery import find_resolution_scope
+    from ..engine.context import query_context
+    from ..workflows.refresh import ensure_resolution_freshness
 
     root = find_repo_root()
     if root is not None:
@@ -43,9 +43,9 @@ def _cmd_context(args):
         print(f"No context found for scope '{args.scope}'{section_msg}", file=sys.stderr)
 
 def _cmd_match(args):
-    from ..matcher import match_task
+    from ..engine.matcher import match_task
     from ..paths.repo import find_repo_root
-    from ..discovery import load_resolution_index, load_resolution_scopes
+    from ..engine.discovery import load_resolution_index, load_resolution_scopes
 
     root = find_repo_root()
     if root is None:
@@ -78,7 +78,7 @@ def _cmd_init(args):
     quiet = getattr(args, "quiet", False)
 
     # 1. Ingest
-    from ..ingest import ingest
+    from ..workflows.ingest import ingest
     result = ingest(root, quiet=quiet)
 
     # 2. Install hooks
@@ -143,7 +143,7 @@ def _cmd_init(args):
 def _cmd_utility(args):
     from ..paths.repo import find_repo_root
     from ..storage.session_manager import SessionManager
-    from ..utility import compute_utility_scores
+    from ..engine.utility import compute_utility_scores
 
     root = find_repo_root()
     if root is None:
@@ -176,7 +176,7 @@ def _cmd_utility(args):
 
 def _cmd_intent(args):
     from ..paths.repo import find_repo_root
-    from ..intent import load_intents, add_intent, remove_intent
+    from ..workflows.intent import load_intents, add_intent, remove_intent
 
     root = find_repo_root()
     if root is None:

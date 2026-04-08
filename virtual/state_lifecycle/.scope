@@ -1,16 +1,16 @@
 description: Virtual scope: state_lifecycle (spans 2 modules, hub: dotscope/models/state.py)
 includes:
-  - dotscope/bench.py
-  - dotscope/composer.py
-  - dotscope/counterfactual.py
-  - dotscope/debug.py
-  - dotscope/discovery.py
+  - dotscope/ux/bench.py
+  - dotscope/engine/composer.py
+  - dotscope/ux/counterfactual.py
+  - dotscope/ux/debug.py
+  - dotscope/engine/discovery.py
   - dotscope/eval/bootstrap.py
   - dotscope/eval/harness.py
   - dotscope/eval/replay.py
-  - dotscope/ingest.py
-  - dotscope/intent.py
-  - dotscope/lessons.py
+  - dotscope/workflows/ingest.py
+  - dotscope/workflows/intent.py
+  - dotscope/workflows/lessons.py
   - dotscope/models/__init__.py
   - dotscope/models/core.py
   - dotscope/models/eval.py
@@ -18,20 +18,20 @@ includes:
   - dotscope/models/intent.py
   - dotscope/models/passes.py
   - dotscope/models/state.py
-  - dotscope/parser.py
+  - dotscope/engine/parser.py
   - dotscope/passes/budget_allocator.py
   - dotscope/passes/graph_builder.py
   - dotscope/passes/history_miner.py
   - dotscope/passes/voice_defaults.py
   - dotscope/paths/__init__.py
-  - dotscope/regression.py
-  - dotscope/resolver.py
+  - dotscope/workflows/regression.py
+  - dotscope/engine/resolver.py
   - dotscope/storage/incremental_state.py
   - dotscope/storage/onboarding.py
   - dotscope/storage/session_manager.py
   - dotscope/storage/timing.py
-  - dotscope/utility.py
-  - dotscope/visibility.py
+  - dotscope/engine/utility.py
+  - dotscope/ux/visibility.py
   - tests/test_eval_harness.py
 context: |
   Cross-cutting concern detected from import graph.

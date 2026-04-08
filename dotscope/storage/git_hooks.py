@@ -433,8 +433,8 @@ def _update_gitattributes(repo_root: str) -> None:
     analyzes. Only those patterns get the custom merge driver — everything
     else uses Git's default.
     """
-    from ..discovery import find_all_scopes
-    from ..parser import parse_scope_file
+    from ..engine.discovery import find_all_scopes
+    from ..engine.parser import parse_scope_file
 
     scope_files = find_all_scopes(repo_root)
     patterns = set()

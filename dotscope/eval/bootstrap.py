@@ -35,10 +35,10 @@ def bootstrap_observations(
 
     Returns summary stats.
     """
-    from ..composer import compose_for_task
-    from ..discovery import find_all_scopes
-    from ..parser import parse_scope_file
-    from ..resolver import resolve
+    from ..engine.composer import compose_for_task
+    from ..engine.discovery import find_all_scopes
+    from ..engine.parser import parse_scope_file
+    from ..engine.resolver import resolve
 
     dot_dir = Path(repo_root) / ".dotscope"
     sessions_dir = dot_dir / "sessions"
@@ -220,7 +220,7 @@ def _resolve_by_directory(
 def _rebuild_utility(repo_root: str) -> None:
     """Rebuild utility scores from session + observation data."""
     from ..storage.session_manager import SessionManager
-    from ..utility import rebuild_utility
+    from ..engine.utility import rebuild_utility
 
     dot_dir = Path(repo_root) / ".dotscope"
     mgr = SessionManager(repo_root)

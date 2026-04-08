@@ -10,17 +10,17 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from ..absorber import absorb_docs
-from ..context import parse_context
+from ..workflows.absorber import absorb_docs
+from ..engine.context import parse_context
 from ..models.history import HistoryAnalysis
 from .history_miner import analyze_history
 from ..models.core import ScopeConfig
 from ..models.passes import PlannedScope
-from ..parser import serialize_scope
+from ..engine.parser import serialize_scope
 from ..paths import normalize_directory_include, normalize_relative_path
-from ..progress import ProgressEmitter
+from ..ux.progress import ProgressEmitter
 from ..runtime_overlay import write_runtime_scope
-from ..tokens import estimate_scope_tokens
+from ..engine.tokens import estimate_scope_tokens
 
 
 def lazy_ingest_module(
@@ -131,7 +131,7 @@ def lazy_ingest_module(
         with open(scope_path, "w", encoding="utf-8") as f:
             f.write(content)
 
-        from ..ingest import append_to_index
+        from ..workflows.ingest import append_to_index
 
         planned = PlannedScope(
             directory=module_name,

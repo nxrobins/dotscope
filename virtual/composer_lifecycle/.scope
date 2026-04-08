@@ -1,35 +1,35 @@
-description: Virtual scope: composer_lifecycle (spans 2 modules, hub: dotscope/composer.py)
+description: Virtual scope: composer_lifecycle (spans 2 modules, hub: dotscope/engine/composer.py)
 includes:
-  - dotscope/assertions.py
+  - dotscope/engine/assertions.py
   - dotscope/cli/core.py
-  - dotscope/composer.py
-  - dotscope/context.py
-  - dotscope/discovery.py
+  - dotscope/engine/composer.py
+  - dotscope/engine/context.py
+  - dotscope/engine/discovery.py
   - dotscope/eval/bootstrap.py
   - dotscope/eval/corpus.py
   - dotscope/eval/harness.py
   - dotscope/eval/replay.py
-  - dotscope/formatter.py
-  - dotscope/ingest.py
-  - dotscope/intent.py
-  - dotscope/lessons.py
-  - dotscope/matcher.py
+  - dotscope/ux/formatter.py
+  - dotscope/workflows/ingest.py
+  - dotscope/workflows/intent.py
+  - dotscope/workflows/lessons.py
+  - dotscope/engine/matcher.py
   - dotscope/mcp/core.py
   - dotscope/models/__init__.py
   - dotscope/models/eval.py
   - dotscope/models/state.py
-  - dotscope/parser.py
+  - dotscope/engine/parser.py
   - dotscope/passes/budget_allocator.py
   - dotscope/passes/incremental.py
   - dotscope/passes/sentinel/checker.py
   - dotscope/passes/sentinel/constraints.py
   - dotscope/passes/voice.py
   - dotscope/paths/repo.py
-  - dotscope/refresh.py
-  - dotscope/regression.py
-  - dotscope/resolver.py
-  - dotscope/runtime_overlay.py
-  - dotscope/scanner.py
+  - dotscope/workflows/refresh.py
+  - dotscope/workflows/regression.py
+  - dotscope/engine/resolver.py
+  - dotscope/engine/runtime_overlay.py
+  - dotscope/engine/scanner.py
   - dotscope/search/synthesizer.py
   - dotscope/storage/cache.py
   - dotscope/storage/git_hooks.py
@@ -37,14 +37,14 @@ includes:
   - dotscope/storage/onboarding.py
   - dotscope/storage/session_manager.py
   - dotscope/storage/timing.py
-  - dotscope/utility.py
-  - dotscope/visibility.py
+  - dotscope/engine/utility.py
+  - dotscope/ux/visibility.py
   - tests/test_composer.py
   - tests/test_loop.py
   - tests/test_refresh.py
 context: |
   Cross-cutting concern detected from import graph.
-  Hub file: dotscope/composer.py (imported by 41 files across 2 modules)
+  Hub file: dotscope/engine/composer.py (imported by 41 files across 2 modules)
   
   Directories spanned: dotscope, tests
   Cohesion: 68%

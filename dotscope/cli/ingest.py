@@ -3,7 +3,7 @@ import os
 import sys
 
 def _cmd_ingest(args):
-    from ..ingest import ingest, format_ingest_report
+    from ..workflows.ingest import ingest, format_ingest_report
 
     root = os.path.abspath(args.dir)
     plan = ingest(
@@ -91,8 +91,8 @@ def _cmd_impact(args):
 def _cmd_backtest(args):
     from ..passes.backtest import backtest_scopes, format_backtest_report
     from ..paths.repo import find_repo_root
-    from ..discovery import find_all_scopes
-    from ..parser import parse_scope_file
+    from ..engine.discovery import find_all_scopes
+    from ..engine.parser import parse_scope_file
 
     root = find_repo_root()
     if root is None:
@@ -152,7 +152,7 @@ def _cmd_conventions(args):
             print()
 
         if args.accept:
-            from ..intent import save_conventions
+            from ..workflows.intent import save_conventions
             save_conventions(root, viable)
             print(f"Accepted {len(viable)} conventions. Written to intent.yaml.")
         else:
@@ -160,7 +160,7 @@ def _cmd_conventions(args):
         return
 
     # List existing conventions
-    from ..intent import load_conventions
+    from ..workflows.intent import load_conventions
     conventions = load_conventions(root)
 
     if not conventions:
@@ -218,7 +218,7 @@ def _cmd_diff(args):
         print("No changes to diff.")
         return
 
-    from ..intent import load_conventions
+    from ..workflows.intent import load_conventions
     from ..passes.semantic_diff import semantic_diff, format_semantic_diff
 
     conventions = load_conventions(root)

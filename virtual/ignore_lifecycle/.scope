@@ -1,13 +1,13 @@
-description: Virtual scope: ignore_lifecycle (spans 2 modules, hub: dotscope/ignore.py)
+description: Virtual scope: ignore_lifecycle (spans 2 modules, hub: dotscope/engine/ignore.py)
 includes:
-  - dotscope/constants.py
-  - dotscope/ignore.py
+  - dotscope/engine/constants.py
+  - dotscope/engine/ignore.py
   - dotscope/passes/graph_builder.py
-  - dotscope/scanner.py
+  - dotscope/engine/scanner.py
   - tests/test_ignore.py
 context: |
   Cross-cutting concern detected from import graph.
-  Hub file: dotscope/ignore.py (imported by 4 files across 2 modules)
+  Hub file: dotscope/engine/ignore.py (imported by 4 files across 2 modules)
   
   Directories spanned: dotscope, tests
   Cohesion: 43%

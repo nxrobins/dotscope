@@ -9,7 +9,7 @@ allocation between abstractions, network edges, companions, and routing.
 from typing import Dict, List, Optional
 
 from ..models import ResolvedScope
-from ..tokens import estimate_file_tokens, estimate_context_tokens
+from ..engine.tokens import estimate_file_tokens, estimate_context_tokens
 
 
 # Task-type budget weight profiles
@@ -122,7 +122,7 @@ def apply_budget(
             total_file_tokens += file_tokens
         elif path in required:
             # Required file doesn't fit — hard error
-            from ..assertions import ContextExhaustionError
+            from ..engine.assertions import ContextExhaustionError
             raise ContextExhaustionError(
                 assertion_type="ensure_includes",
                 detail=f"Budget ({max_tokens}) cannot fit required file: {path} ({file_tokens} tokens)",
@@ -212,7 +212,7 @@ def _rank_files(
     5. Static heuristics — test/fixture penalty, file size bonus/penalty
     """
     import os
-    from ..utility import effective_score as _effective_score
+    from ..engine.utility import effective_score as _effective_score
 
     task_words = set()
     if task:

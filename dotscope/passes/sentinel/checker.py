@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .models import CheckReport, CheckResult, Severity
-from ...textio import read_repo_text
+from ...ux.textio import read_repo_text
 from .checks.boundary import check_boundaries
 from .checks.contracts import check_contracts
 from .checks.antipattern import check_antipatterns
@@ -273,8 +273,8 @@ def _load_invariants(repo_root: str) -> dict:
 
 def _load_scopes_with_antipatterns(repo_root: str) -> Dict[str, dict]:
     """Load scope files with anti_patterns field."""
-    from ...discovery import find_all_scopes
-    from ...parser import parse_scope_file, _parse_yaml
+    from ...engine.discovery import find_all_scopes
+    from ...engine.parser import parse_scope_file, _parse_yaml
 
     scopes = {}
     for sf in find_all_scopes(repo_root):
@@ -373,7 +373,7 @@ def _resolve_session(
 def _load_intents(repo_root: str) -> list:
     """Load architectural intents."""
     try:
-        from ...intent import load_intents
+        from ...workflows.intent import load_intents
         return load_intents(repo_root)
     except Exception:
         return []
@@ -385,7 +385,7 @@ def _load_conventions_and_ast(
 ) -> tuple:
     """Load conventions and parse AST for modified files."""
     try:
-        from ...intent import load_conventions
+        from ...workflows.intent import load_conventions
         conventions = load_conventions(repo_root)
     except Exception:
         conventions = []
@@ -423,7 +423,7 @@ def _detect_language(filepath: str) -> Optional[str]:
 def _load_voice_config(repo_root: str) -> Optional[dict]:
     """Load voice config from intent.yaml."""
     try:
-        from ...intent import load_voice_config
+        from ...workflows.intent import load_voice_config
         return load_voice_config(repo_root)
     except Exception:
         return None

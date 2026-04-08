@@ -6,7 +6,7 @@ def _cmd_observe(args):
     from pathlib import Path
     from ..storage.session_manager import SessionManager
     from ..paths.repo import find_repo_root
-    from ..visibility import format_observation_delta
+    from ..ux.visibility import format_observation_delta
 
     root = find_repo_root()
     if root is None:
@@ -41,7 +41,7 @@ def _cmd_observe(args):
 
         # Update utility scores after observation
         try:
-            from ..utility import compute_utility_scores, save_utility_scores
+            from ..engine.utility import compute_utility_scores, save_utility_scores
             all_sessions = mgr.get_sessions(limit=500)
             all_obs = mgr.get_observations(limit=500)
             scores = compute_utility_scores(all_sessions, all_obs)
@@ -56,8 +56,8 @@ def _cmd_observe(args):
                 detect_near_misses as detect_nms,
                 store_near_misses, load_session_scopes,
             )
-            from ..discovery import find_scope
-            from ..parser import parse_scope_file
+            from ..engine.discovery import find_scope
+            from ..engine.parser import parse_scope_file
 
             # Get scopes from session or current observation
             scope_name = scope_expr.split("+")[0].split("-")[0].split("@")[0]
@@ -93,7 +93,7 @@ def _cmd_observe(args):
     else:
         # No session matched — check if any scopes exist
         try:
-            from ..discovery import load_index
+            from ..engine.discovery import load_index
             idx = load_index(root)
             if idx:
                 print(
@@ -179,7 +179,7 @@ def _cmd_hook(args):
 
 def _cmd_refresh(args):
     from ..paths.repo import find_repo_root
-    from ..refresh import (
+    from ..workflows.refresh import (
         enqueue_commit_refresh,
         enqueue_repo_refresh,
         enqueue_scope_refresh,
@@ -300,7 +300,7 @@ def _cmd_check(args):
                 } if r.proposed_fix else None,
             }
             if explain:
-                from ..explain import explain_warning
+                from ..ux.explain import explain_warning
                 d["explain"] = explain_warning(root, r)
             return d
 
@@ -328,7 +328,7 @@ def _cmd_check(args):
             "files_checked": report.files_checked,
         }
         if explain:
-            from ..explain import explain_warning
+            from ..ux.explain import explain_warning
         print(json_mod.dumps(data, indent=2))
     else:
         output = format_terminal(report)
@@ -338,7 +338,7 @@ def _cmd_check(args):
             print(output.encode("ascii", errors="replace").decode("ascii"))
 
         if explain:
-            from ..explain import explain_warning, format_explanation
+            from ..ux.explain import explain_warning, format_explanation
             all_results = list(report.holds) + list(report.notes)
             if all_results:
                 print("\n--- Explanations ---")
@@ -429,7 +429,7 @@ def _cmd_check_backtest(root, n_commits, json_output):
 def _cmd_voice(args):
     import json as json_mod
     from ..paths.repo import find_repo_root
-    from ..intent import load_voice_config
+    from ..workflows.intent import load_voice_config
 
     root = find_repo_root(".")
     voice = load_voice_config(root)
@@ -462,7 +462,7 @@ def _cmd_voice(args):
             stats=voice.get("stats", {}),
             enforce=enforce,
         )
-        from ..intent import save_voice_config
+        from ..workflows.intent import save_voice_config
         save_voice_config(root, dv)
         print(f"{rule}: upgraded to {enforce[rule]}")
         return

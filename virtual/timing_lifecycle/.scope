@@ -1,17 +1,17 @@
 description: Virtual scope: timing_lifecycle (spans 2 modules, hub: dotscope/storage/timing.py)
 includes:
-  - dotscope/assertions.py
-  - dotscope/bench.py
-  - dotscope/composer.py
-  - dotscope/discovery.py
+  - dotscope/engine/assertions.py
+  - dotscope/ux/bench.py
+  - dotscope/engine/composer.py
+  - dotscope/engine/discovery.py
   - dotscope/eval/harness.py
-  - dotscope/intent.py
+  - dotscope/workflows/intent.py
   - dotscope/mcp/core.py
   - dotscope/models/state.py
   - dotscope/passes/budget_allocator.py
   - dotscope/passes/sentinel/constraints.py
   - dotscope/paths/repo.py
-  - dotscope/refresh.py
+  - dotscope/workflows/refresh.py
   - dotscope/storage/session_manager.py
   - dotscope/storage/timing.py
   - tests/test_rigor.py

@@ -1,19 +1,19 @@
 description: Virtual scope: incremental_state_lifecycle (spans 2 modules, hub: dotscope/storage/incremental_state.py)
 includes:
-  - dotscope/absorber.py
-  - dotscope/constants.py
-  - dotscope/context.py
-  - dotscope/counterfactual.py
-  - dotscope/discovery.py
-  - dotscope/health.py
-  - dotscope/ingest.py
-  - dotscope/intent.py
+  - dotscope/workflows/absorber.py
+  - dotscope/engine/constants.py
+  - dotscope/engine/context.py
+  - dotscope/ux/counterfactual.py
+  - dotscope/engine/discovery.py
+  - dotscope/ux/health.py
+  - dotscope/workflows/ingest.py
+  - dotscope/workflows/intent.py
   - dotscope/models/__init__.py
   - dotscope/models/core.py
   - dotscope/models/history.py
   - dotscope/models/passes.py
   - dotscope/models/state.py
-  - dotscope/parser.py
+  - dotscope/engine/parser.py
   - dotscope/passes/graph_builder.py
   - dotscope/passes/history_miner.py
   - dotscope/passes/incremental.py
@@ -21,15 +21,15 @@ includes:
   - dotscope/passes/voice_defaults.py
   - dotscope/paths/__init__.py
   - dotscope/paths/repo.py
-  - dotscope/progress.py
-  - dotscope/refresh.py
-  - dotscope/runtime_overlay.py
+  - dotscope/ux/progress.py
+  - dotscope/workflows/refresh.py
+  - dotscope/engine/runtime_overlay.py
   - dotscope/storage/cache.py
   - dotscope/storage/incremental_state.py
   - dotscope/storage/onboarding.py
-  - dotscope/textio.py
-  - dotscope/tokens.py
-  - dotscope/visibility.py
+  - dotscope/ux/textio.py
+  - dotscope/engine/tokens.py
+  - dotscope/ux/visibility.py
   - tests/test_health.py
   - tests/test_ingest.py
   - tests/test_visibility.py

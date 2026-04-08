@@ -1,21 +1,21 @@
-description: Virtual scope: refresh_lifecycle (spans 2 modules, hub: dotscope/refresh.py)
+description: Virtual scope: refresh_lifecycle (spans 2 modules, hub: dotscope/workflows/refresh.py)
 includes:
-  - dotscope/assertions.py
+  - dotscope/engine/assertions.py
   - dotscope/cli/core.py
   - dotscope/cli/hooks.py
-  - dotscope/composer.py
-  - dotscope/context.py
-  - dotscope/discovery.py
-  - dotscope/explain.py
-  - dotscope/formatter.py
-  - dotscope/ingest.py
-  - dotscope/intent.py
-  - dotscope/lessons.py
-  - dotscope/matcher.py
+  - dotscope/engine/composer.py
+  - dotscope/engine/context.py
+  - dotscope/engine/discovery.py
+  - dotscope/ux/explain.py
+  - dotscope/ux/formatter.py
+  - dotscope/workflows/ingest.py
+  - dotscope/workflows/intent.py
+  - dotscope/workflows/lessons.py
+  - dotscope/engine/matcher.py
   - dotscope/mcp/core.py
   - dotscope/mcp/observability.py
   - dotscope/merge/swarm.py
-  - dotscope/parser.py
+  - dotscope/engine/parser.py
   - dotscope/passes/backtest.py
   - dotscope/passes/budget_allocator.py
   - dotscope/passes/incremental.py
@@ -23,8 +23,8 @@ includes:
   - dotscope/passes/sentinel/constraints.py
   - dotscope/passes/voice.py
   - dotscope/paths/repo.py
-  - dotscope/refresh.py
-  - dotscope/scanner.py
+  - dotscope/workflows/refresh.py
+  - dotscope/engine/scanner.py
   - dotscope/storage/claude_hooks.py
   - dotscope/storage/git_hooks.py
   - dotscope/storage/mcp_config.py
@@ -32,12 +32,12 @@ includes:
   - dotscope/storage/onboarding.py
   - dotscope/storage/session_manager.py
   - dotscope/storage/timing.py
-  - dotscope/utility.py
-  - dotscope/visibility.py
+  - dotscope/engine/utility.py
+  - dotscope/ux/visibility.py
   - tests/test_refresh.py
 context: |
   Cross-cutting concern detected from import graph.
-  Hub file: dotscope/refresh.py (imported by 34 files across 2 modules)
+  Hub file: dotscope/workflows/refresh.py (imported by 34 files across 2 modules)
   
   Directories spanned: dotscope, tests
   Cohesion: 59%

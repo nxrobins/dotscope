@@ -5,7 +5,7 @@ import subprocess
 from typing import Dict, List, Optional
 
 from ..models import ConventionNode, ConventionRule, FileAnalysis, SemanticDiffReport
-from ..textio import decode_repo_bytes, read_repo_text
+from ..ux.textio import decode_repo_bytes, read_repo_text
 from .convention_parser import parse_conventions
 
 

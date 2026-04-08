@@ -2,14 +2,25 @@
   <img src="logo.png" alt="dotscope" width="400">
 </p>
 
+# The Hardware-Accelerated Architectural Compiler
+
 Your agent writes code that compiles, passes tests, and breaks production.
+The agent sees files. You see architecture. **dotscope closes that gap.**
 
-It changed a backend endpoint without touching the frontend that calls it.
-It put a file in `src/helpers/` instead of next to the module that uses it.
-It ignored the convention every other file follows. Two agents working at
-the same time silently overwrote each other.
+### N-Body Physics in your Browser
+See your codebase's exact structural limits mapped securely across an interactive hardware-accelerated WebGPU rendering engine. Zero browser dependencies. Pure mathematical execution.
 
-The agent sees files. You see architecture. dotscope closes that gap.
+![Topography Visualization Physics Placeholder](demo.webp)
+
+```bash
+pip install dotscope
+dotscope serve
+```
+
+---
+
+### The CLI Compiler
+dotscope also operates natively in your terminal, acting as the ultimate boundary enforcer natively hooking into MCP.
 
 ```
 $ dotscope ingest

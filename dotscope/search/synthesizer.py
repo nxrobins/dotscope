@@ -113,7 +113,7 @@ def synthesize_search(
     # Build context from scope contexts
     context_parts = []
     try:
-        from ..composer import compose_for_task
+        from ..engine.composer import compose_for_task
         composed = compose_for_task(query, root=root, max_scopes=2)
         if composed.context:
             context_parts.append(composed.context)
@@ -158,7 +158,7 @@ def synthesize_search(
         pass
 
     # Budget allocation: inside-out truncation
-    from ..tokens import estimate_tokens
+    from ..engine.tokens import estimate_tokens
     used = 0
     budget_files = []
     for f in unique_files:
@@ -286,8 +286,8 @@ def _build_import_map(
 def _build_scope_index(root: str) -> Dict[str, str]:
     """Build {file_path: scope_name} from the .scopes index."""
     try:
-        from ..discovery import find_all_scopes
-        from ..parser import parse_scope_file
+        from ..engine.discovery import find_all_scopes
+        from ..engine.parser import parse_scope_file
         index = {}
         for sf in find_all_scopes(root):
             try:

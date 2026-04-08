@@ -1,21 +1,17 @@
 import json
 import os
+from typing import Optional
+from .middleware import mcp_tool_route
 
 def register_ingest_tools(mcp, **kwargs):
-    tracker = kwargs.get('tracker')
-    client_id = kwargs.get('client_id')
-    _root = kwargs.get('_root')
-    _repo_tokens = kwargs.get('_repo_tokens')
-    _cached_history = kwargs.get('_cached_history')
-    _cached_graph_hubs = kwargs.get('_cached_graph_hubs')
-    _cli_root = kwargs.get('_cli_root')
-
     @mcp.tool()
+    @mcp_tool_route
     def ingest_codebase(
         directory: str = ".",
         mine_history: bool = True,
         absorb_docs: bool = True,
         dry_run: bool = False,
+        root: Optional[str] = None
     ) -> str:
         """Reverse-engineer .scope files from an existing codebase.
 
@@ -30,19 +26,18 @@ def register_ingest_tools(mcp, **kwargs):
             absorb_docs: Whether to scan for README, docstrings, signal comments
             dry_run: If True, return the plan without writing files
         """
-        from ..ingest import ingest
+        from ..workflows.ingest import ingest
 
-        root = os.path.abspath(directory)
+        ingest_root = os.path.abspath(directory)
         plan = ingest(
-            root,
+            ingest_root,
             mine_history=mine_history,
             absorb=absorb_docs,
             dry_run=dry_run,
             quiet=True,
         )
 
-        # Discovery data for programmatic consumers
-        from ..ingest import (
+        from ..workflows.ingest import (
             _is_cross_module, _find_hub_discoveries, _find_volatility_surprises,
         )
         cross_module_contracts = []
@@ -57,7 +52,6 @@ def register_ingest_tools(mcp, **kwargs):
             _find_volatility_surprises(plan.history) if plan.history else []
         )
 
-        # Token reduction
         real_scopes = [
             ps for ps in plan.scopes
             if not ps.directory.startswith("virtual/")
@@ -96,4 +90,3 @@ def register_ingest_tools(mcp, **kwargs):
                 "volatility_surprises": len(surprises),
             },
         }, indent=2)
-

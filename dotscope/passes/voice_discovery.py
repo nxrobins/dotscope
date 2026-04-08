@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from ..models.intent import DiscoveredVoice
-from ..textio import read_repo_text
+from ..ux.textio import read_repo_text
 
 
 @dataclass

@@ -5,7 +5,7 @@ import os
 from typing import Dict, List, Optional
 
 from ..models import CheckCategory, CheckResult, Severity
-from ....textio import read_repo_text
+from ....ux.textio import read_repo_text
 
 
 def check_voice(

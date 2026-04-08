@@ -16,12 +16,12 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-from ..context import parse_context
+from ..engine.context import parse_context
 from ..models.core import DependencyGraph
 from ..models.core import ScopeConfig
 from ..models.passes import VirtualScope  # noqa: F401
 from ..paths import make_relative, normalize_relative_path, normalize_scope_ref
-from ..tokens import estimate_scope_tokens
+from ..engine.tokens import estimate_scope_tokens
 
 # Utility directories whose files connect everything (not meaningful clusters)
 _UTILITY_DIRS = {"utils", "helpers", "common", "shared", "lib", "core"}

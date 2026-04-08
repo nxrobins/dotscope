@@ -56,6 +56,23 @@ def _load_telemetry_payload(root: str) -> dict:
         except Exception:
             pass
 
+    # 3. Load Scope Boundaries (For Semantic Side Panel navigation)
+    try:
+        import yaml
+        scopes_dict = {}
+        for scope_file in Path(root).rglob("*.scope"):
+            try:
+                with open(scope_file, "r", encoding="utf-8") as sf:
+                    parsed = yaml.safe_load(sf)
+                    if parsed and "includes" in parsed:
+                        name = scope_file.parent.name if scope_file.name == ".scope" else scope_file.stem
+                        scopes_dict[name] = parsed["includes"]
+            except Exception as e:
+                print(f"Failed to parse scope {scope_file}: {e}", file=sys.stderr)
+        payload["scopes"] = scopes_dict
+    except ImportError:
+        print("PyYAML not found, skipping scope ingestion.", file=sys.stderr)
+
     return payload
 
 
@@ -82,37 +99,52 @@ def _cmd_serve(args):
     payload = _load_telemetry_payload(root)
     json_payload = json.dumps(payload)
     
-    ui_dir = _get_ui_bundle_path()
-    index_path = ui_dir / "index.html"
+    is_headless = getattr(args, "headless", False)
     
-    if not index_path.exists():
-        print(f"Error: UI bundle not found at {ui_dir}. Have you run 'npm run build'?", file=sys.stderr)
-        sys.exit(1)
+    if not is_headless:
+        ui_dir = _get_ui_bundle_path()
+        index_path = ui_dir / "index.html"
+        
+        if not index_path.exists():
+            print(f"Error: UI bundle not found at {ui_dir}. Have you run 'npm run build' or sync_ui.py?", file=sys.stderr)
+            sys.exit(1)
 
-    # Read the raw template
-    with open(index_path, "r", encoding="utf-8") as f:
-        html_template = f.read()
+        # Read the raw template
+        with open(index_path, "r", encoding="utf-8") as f:
+            html_template = f.read()
 
-    # Hydrate the template with real-time graph data (Zero CORS, Zero Fetches)
-    hydrated_html = html_template.replace(
-        "'__GRAPH_DATA_PAYLOAD__'", 
-        json_payload
-    )
+        # Hydrate the template with real-time graph data (Zero CORS, Zero Fetches)
+        # Using <script type="application/json"> mapping to prevent syntax errors
+        hydrated_html = html_template.replace(
+            "__GRAPH_DATA_PAYLOAD__", 
+            json_payload.replace("</script>", "<\\/script>")
+        )
 
     # 2. Setup embedded request handler
     class TopographyHandler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
-            super().__init__(*args, directory=str(ui_dir), **kwargs)
+            if is_headless:
+                # Discard directory mapping for purely headless mode
+                super().__init__(*args, **kwargs)
+            else:
+                super().__init__(*args, directory=str(ui_dir), **kwargs)
 
         def do_GET(self):
-            if self.path == '/':
+            if is_headless and self.path == '/api/telemetry':
+                self.send_response(200)
+                self.send_header("Content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(json_payload.encode("utf-8"))
+            elif not is_headless and self.path == '/':
                 self.send_response(200)
                 self.send_header("Content-type", "text/html")
                 self.end_headers()
                 self.wfile.write(hydrated_html.encode("utf-8"))
-            else:
+            elif not is_headless:
                 # Serve bundled assets (JS/CSS)
                 super().do_GET()
+            else:
+                self.send_error(404, "Endpoint Not Found (Running in Headless Data Pump Mode)")
 
         def log_message(self, format, *args):
             # Suppress default logging to keep terminal clean
@@ -136,14 +168,18 @@ def _cmd_serve(args):
         sys.exit(1)
 
     url = f"http://localhost:{port}"
-    print(f"dotscope visualizer running at {url}")
+    if is_headless:
+        print(f"dotscope API running in HEADLESS mode at {url}/api/telemetry")
+    else:
+        print(f"dotscope visualizer running at {url}")
     print("Press Ctrl+C to stop.")
 
     # 4. Auto-open browser
-    def open_browser():
-        webbrowser.open(url)
-        
-    threading.Timer(0.5, open_browser).start()
+    if not is_headless:
+        def open_browser():
+            webbrowser.open(url)
+            
+        threading.Timer(0.5, open_browser).start()
 
     try:
         httpd.serve_forever()
