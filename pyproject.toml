@@ -1,6 +1,6 @@
 [project]
 name = "dotscope"
-version = "1.5.0"
+version = "1.5.1"
 description = "Agents see files. You see architecture. dotscope gives agents the architecture."
 readme = "README.md"
 license = "MIT"

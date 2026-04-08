@@ -9,4 +9,4 @@ build/
 .mypy_cache/
 .dotscope/
 
-ui/
+/ui/
