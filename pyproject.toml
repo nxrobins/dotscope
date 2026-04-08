@@ -1,6 +1,6 @@
 [project]
 name = "dotscope"
-version = "1.5.3"
+version = "1.5.4"
 description = "Agents see files. You see architecture. dotscope gives agents the architecture."
 readme = "README.md"
 license = "MIT"
@@ -43,8 +43,7 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["dotscope"]
 
-[tool.hatch.build.targets.wheel.force-include]
-"dotscope/assets/ui" = "dotscope/assets/ui"
+
 
 [tool.ruff]
 target-version = "py310"
