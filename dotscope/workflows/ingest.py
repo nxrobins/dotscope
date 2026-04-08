@@ -216,7 +216,7 @@ def ingest(
                     pass
 
             # Cap chunk count to prevent OOM on large repos
-            max_chunks = getattr(args, "max_chunks", 50_000) if args else 50_000
+            max_chunks = 50_000
             if len(all_chunks) > max_chunks:
                 # Prefer source files over tests/configs
                 def _chunk_priority(c):
@@ -686,6 +686,33 @@ def _write_scopes(plan: IngestPlan) -> None:
         with open(index_path, "w", encoding="utf-8") as f:
             f.write(content)
         written += 1
+
+    import json
+    real_scopes = [s for s in plan.scopes if not s.directory.startswith("virtual/")]
+    avg_tokens = 0
+    if real_scopes:
+        avg_tokens = sum(s.config.tokens_estimate or 0 for s in real_scopes) / max(len(real_scopes), 1)
+        
+    manifest_data = {
+        "telemetry_paths": {
+            "graph": ".dotscope/cache/graph.json",
+            "history": ".dotscope/cache/history.json",
+            "npmi_index": ".dotscope/cache/npmi_index.json",
+            "scopes_index": ".scopes"
+        },
+        "bounds": {
+            "total_repo_tokens": plan.total_repo_tokens,
+            "average_scope_tokens": int(avg_tokens),
+            "total_scopes": len(plan.scopes)
+        }
+    }
+    try:
+        manifest_path = os.path.join(plan.root, ".dotscope", "manifest.json")
+        os.makedirs(os.path.dirname(manifest_path), exist_ok=True)
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(manifest_data, f, indent=2)
+    except Exception as e:
+        _log_ingest_error(plan.root, f"Failed to write manifest.json: {e}")
 
     pass  # Progress is handled by the caller
 

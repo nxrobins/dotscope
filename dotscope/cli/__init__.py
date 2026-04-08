@@ -1,6 +1,6 @@
 from .core import _cmd_resolve, _cmd_context, _cmd_match, _cmd_init, _cmd_intent, _cmd_utility
 from .observability import _cmd_stats, _cmd_tree, _cmd_health, _cmd_validate, _cmd_virtual, _cmd_lessons, _cmd_invariants, _cmd_rebuild, _cmd_test_compiler, _cmd_bench, _cmd_debug
-from .ingest import _cmd_ingest, _cmd_impact, _cmd_backtest, _cmd_conventions, _cmd_diff
+from .ingest import _cmd_ingest, _cmd_impact, _cmd_backtest, _cmd_conventions, _cmd_diff, _cmd_bootstrap
 from .hooks import _cmd_observe, _cmd_incremental, _cmd_hook, _cmd_refresh, _cmd_check, _cmd_check_backtest, _cmd_voice
 from .serve import _cmd_serve
 
@@ -95,6 +95,10 @@ def main(argv=None):
     p_ingest.add_argument("--quiet", action="store_true", help="Suppress progress output (for CI)")
     p_ingest.add_argument("--voice", choices=["prescriptive", "adaptive"], default=None,
                           help="Override voice mode (prescriptive for new, adaptive for existing)")
+
+    # --- bootstrap ---
+    p_bootstrap = sub.add_parser("bootstrap", help="Output Phase 2 payload for automated tool handoff")
+    p_bootstrap.add_argument("--dir", default=".", help="Repository root")
 
     # --- voice ---
     p_voice = sub.add_parser("voice", help="View and manage code voice")
@@ -231,6 +235,7 @@ def main(argv=None):
             "tree": _cmd_tree,
             "health": _cmd_health,
             "ingest": _cmd_ingest,
+            "bootstrap": _cmd_bootstrap,
             "impact": _cmd_impact,
             "backtest": _cmd_backtest,
             "observe": _cmd_observe,

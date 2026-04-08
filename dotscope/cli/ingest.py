@@ -42,6 +42,37 @@ def _cmd_ingest(args):
         except Exception:
             pass
 
+        # Environment Detection
+        is_dotswarm = False
+        if os.path.exists(os.path.join(root, "epic.yaml")) or os.path.exists(os.path.join(root, ".dotswarm")):
+            is_dotswarm = True
+        else:
+            pyproject = os.path.join(root, "pyproject.toml")
+            if os.path.exists(pyproject):
+                try:
+                    content = open(pyproject, "r", encoding="utf-8").read()
+                    if "dotswarm" in content:
+                        is_dotswarm = True
+                except Exception:
+                    pass
+        
+        print()
+        if is_dotswarm:
+            print("Dotswarm Phase 2 Plan Generated: Telemetry handoff ready. Run 'dotswarm plan' (or equivalent) to bootstrap execution.")
+        else:
+            print("Phase 2 Plan Generated: Read .dotscope/manifest.json for telemetry paths.")
+
+def _cmd_bootstrap(args):
+    root = os.path.abspath(args.dir)
+    manifest_path = os.path.join(root, ".dotscope", "manifest.json")
+    if not os.path.exists(manifest_path):
+        print(f"Error: No manifest found at {manifest_path}", file=sys.stderr)
+        print("Please run `dotscope ingest` first to generate the Phase 2 handoff.", file=sys.stderr)
+        sys.exit(1)
+    
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        print(f.read())
+
 def _cmd_impact(args):
     from ..passes.graph_builder import build_graph, transitive_dependents
     from ..paths.repo import find_repo_root
