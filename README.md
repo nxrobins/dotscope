@@ -2,7 +2,7 @@
   <img src="logo.png" alt="dotscope" width="400">
 </p>
 
-# The Hardware-Accelerated Architectural Compiler
+# The Architectural Control Plane for AI Agents
 
 Your agent writes code that compiles, passes tests, and breaks production.
 The agent sees files. You see architecture. **dotscope closes that gap.**
