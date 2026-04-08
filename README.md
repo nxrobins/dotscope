@@ -7,20 +7,22 @@
 Your agent writes code that compiles, passes tests, and breaks production.
 The agent sees files. You see architecture. **dotscope closes that gap.**
 
-### N-Body Physics in your Browser
-See your codebase's exact structural limits mapped securely across an interactive hardware-accelerated WebGPU rendering engine. Zero browser dependencies. Pure mathematical execution.
-
-![Topography Visualization Physics Placeholder](demo.webp)
+### The Open-Source Architectural Control Plane
+Dotscope is a high-performance headless telemetry engine built natively around the standard Model Context Protocol (MCP). It operates silently in the background, mapping the topological physics of your codebase and transmitting golden templates to your AI agent of choice (Claude, Cursor, Windsurf, Cline).
 
 ```bash
 pip install dotscope
-dotscope serve
+dotscope serve --headless
 ```
 
 ---
 
-### The CLI Compiler
-dotscope also operates natively in your terminal, acting as the ultimate boundary enforcer natively hooking into MCP.
+### Strict Execution Taxonomy
+Dotscope is engineered for uncompromising speed, operating strictly across decoupled bounds ensuring zero data drift between human CLI inputs and Agent MCP tool queries:
+
+- **`<Engine>`**: Resolves abstract scope mathematics (e.g. `auth+payments-tests&api@context`) down to concrete file constraints with zero side effects.
+- **`<Workflows>`**: Deploys multi-stage sequence migrations and automated ingest cycles that silently reverse-engineer architectural logic from raw Git history.
+- **`<UX>`**: Formats headless semantic JSON outputs perfectly into FastMCP standard payloads and terminal outputs for instantaneous debugging scenarios.
 
 ```
 $ dotscope ingest
@@ -48,10 +50,10 @@ dotscope learns from every commit. Files agents consistently need get
 ranked higher. Conventions that hold get enforced harder. Rules that
 get overridden get quieter. Recall starts at 78% and climbs past 91%.
 
-```
-pip install dotscope && dotscope init
+```bash
+pip install dotscope && dotscope serve
 ```
 
-Zero dependencies. Python 3.9+ stdlib only. MIT.
+Zero dependencies. Open Source. MIT.
 
 [How It Works](docs/how-it-works.md) · [Scope Files](docs/scope-file.md) · [Agent Instructions](AGENT_INSTRUCTIONS.md) · [MIT](LICENSE)
