@@ -87,8 +87,10 @@ def ingest(
 
     # --- SUPREMUM FFI BIFURCATION ---
     try:
-        import dotscope_core
+        import threading
+        from dotscope import dotscope_core
         progress.start("invoking bare-metal rust physics engine")
+        print(f"[{threading.get_native_id()}] Calling Python Pyo3 Bridge -> dotscope_core.ingest_repository")
         topology_raw = dotscope_core.ingest_repository(root, max_commits, mine_history)
         
         # Bifurcate the payload

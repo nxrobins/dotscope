@@ -1,7 +1,10 @@
 import os
 import sys
+import gc
+import json
+import tracemalloc
 import psutil
-import dotscope_core
+from dotscope import dotscope_core
 
 def run_stress_test(root_path: str, loops: int = 25):
     process = psutil.Process(os.getpid())
