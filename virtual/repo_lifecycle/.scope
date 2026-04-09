@@ -1,0 +1,66 @@
+description: Virtual scope: repo_lifecycle (spans 2 modules, hub: dotscope/paths/repo.py)
+includes:
+  - dotscope/cli/core.py
+  - dotscope/cli/hooks.py
+  - dotscope/cli/ingest.py
+  - dotscope/cli/observability.py
+  - dotscope/engine/composer.py
+  - dotscope/engine/constants.py
+  - dotscope/engine/context.py
+  - dotscope/engine/discovery.py
+  - dotscope/engine/matcher.py
+  - dotscope/engine/parser.py
+  - dotscope/engine/resolver.py
+  - dotscope/engine/runtime_overlay.py
+  - dotscope/engine/tokens.py
+  - dotscope/engine/utility.py
+  - dotscope/mcp/__init__.py
+  - dotscope/mcp/logger.py
+  - dotscope/mcp/middleware.py
+  - dotscope/models/__init__.py
+  - dotscope/models/intent.py
+  - dotscope/passes/backtest.py
+  - dotscope/passes/budget_allocator.py
+  - dotscope/passes/convention_compliance.py
+  - dotscope/passes/convention_discovery.py
+  - dotscope/passes/convention_parser.py
+  - dotscope/passes/graph_builder.py
+  - dotscope/passes/history_miner.py
+  - dotscope/passes/incremental.py
+  - dotscope/passes/semantic_diff.py
+  - dotscope/passes/sentinel/checker.py
+  - dotscope/passes/virtual.py
+  - dotscope/paths/__init__.py
+  - dotscope/paths/repo.py
+  - dotscope/storage/claude_hooks.py
+  - dotscope/storage/git_hooks.py
+  - dotscope/storage/incremental_state.py
+  - dotscope/storage/mcp_config.py
+  - dotscope/storage/near_miss.py
+  - dotscope/storage/onboarding.py
+  - dotscope/storage/session_manager.py
+  - dotscope/ux/debug.py
+  - dotscope/ux/explain.py
+  - dotscope/ux/formatter.py
+  - dotscope/ux/health.py
+  - dotscope/ux/visibility.py
+  - dotscope/workflows/ingest.py
+  - dotscope/workflows/intent.py
+  - dotscope/workflows/lessons.py
+  - dotscope/workflows/refresh.py
+  - dotscope/workflows/regression.py
+  - tests/test_discovery.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/paths/repo.py (imported by 49 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 77%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - repo
+tokens_estimate: 97539

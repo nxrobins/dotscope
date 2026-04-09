@@ -9,26 +9,37 @@ logger = logging.getLogger(__name__)
 
 def expand_rust_use(text: str) -> list[str]:
     text = "".join(text.split())
-    def _expand(s):
-        if "{" not in s: return [s]
+    queue = [text]
+    results = []
+    MAX_EXPANSIONS = 2000
+    
+    while queue and len(results) + len(queue) < MAX_EXPANSIONS:
+        s = queue.pop(0)
+        if "{" not in s:
+            results.append(s)
+            continue
+            
         start = s.rfind("{")
         end = s.find("}", start)
-        if end == -1: return [s]
+        if end == -1:
+            results.append(s)
+            continue
+            
         prefix = s[:start]
         suffix = s[end+1:]
         inner = s[start+1:end]
-        parts = inner.split(",")
-        replaced = []
-        for p in parts:
+        
+        for p in inner.split(","):
             if not p: continue
             if p == "self" and prefix.endswith("::"):
-                replaced.append(prefix[:-2] + suffix)
+                queue.append(prefix[:-2] + suffix)
             else:
-                replaced.append(prefix + p + suffix)
-        res = []
-        for r in replaced: res.extend(_expand(r))
-        return res
-    return list(set(_expand(text)))
+                queue.append(prefix + p + suffix)
+                
+    if len(results) + len(queue) >= MAX_EXPANSIONS:
+        return [text] # Graceful degradation
+        
+    return list(set(results))
 
 class RustAnalyzer(BaseAnalyzer):
     """Parses Rust files strictly using tree-sitter.

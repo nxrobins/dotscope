@@ -19,7 +19,7 @@ from ..models.passes import PlannedScope
 from ..engine.parser import serialize_scope
 from ..paths import normalize_directory_include, normalize_relative_path
 from ..ux.progress import ProgressEmitter
-from ..runtime_overlay import write_runtime_scope
+from ..engine.runtime_overlay import write_runtime_scope
 from ..engine.tokens import estimate_scope_tokens
 
 

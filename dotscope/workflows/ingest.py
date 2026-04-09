@@ -85,6 +85,35 @@ def ingest(
     from ..ux.progress import ProgressEmitter
     progress = ProgressEmitter(quiet=quiet)
 
+    # --- SUPREMUM FFI BIFURCATION ---
+    try:
+        import dotscope_core
+        progress.start("invoking bare-metal rust physics engine")
+        topology_raw = dotscope_core.ingest_repository(root, max_commits, mine_history)
+        
+        # Bifurcate the payload
+        manifest_path = os.path.join(root, ".dotscope", "structural_manifest.json")
+        bin_path = os.path.join(root, ".dotscope", "topology.bin")
+        os.makedirs(os.path.dirname(manifest_path), exist_ok=True)
+        
+        # Isolate semantic strings inside JSON boundary
+        import json
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "nodes": topology_raw.get("node_names", []),
+                "commits_analyzed": topology_raw.get("commits_analyzed", 0)
+            }, f)
+        
+        # Flush the zero-copy array entirely bypassing serialization
+        with open(bin_path, "wb") as f:
+            f.write(topology_raw.get("edge_sources", b""))
+            f.write(topology_raw.get("edge_targets", b""))
+            f.write(topology_raw.get("edge_weights", b""))
+        progress.finish("Zero-copy WebGPU pipeline synchronized")
+    except ImportError:
+        pass # Fallback to python standard pipeline if deployed in non-native environments
+    # --------------------------------
+
     # Step 0: Dependency graph (Moved up for Topological Physics)
     progress.start("building dependency graph")
     graph = build_graph(root)

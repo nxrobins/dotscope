@@ -318,6 +318,21 @@ def _write_agent_instructions(root: str, quiet: bool = False):
     if not quiet:
         print("dotscope: AGENT_INSTRUCTIONS.md written", file=sys.stderr)
 
+    # 2. Write the strict Cursor/Windsurf rules
+    manifesto = (
+        "CRITICAL REPOSITORY RULES:\n\n"
+        "This codebase is structurally managed by Dotscope.\n\n"
+        "You are FORBIDDEN from using standard file search. You must use `dotscope_search` to locate code.\n\n"
+        "Before modifying any file with an architectural_gravity of HIGH or CRITICAL HUB, you must review its structural_dependencies to ensure you do not break downstream contracts.\n"
+    )
+
+    for rule_file in [".cursorrules", ".windsurfrules"]:
+        rule_target = os.path.join(root, rule_file)
+        if not os.path.exists(rule_target):
+            with open(rule_target, "w", encoding="utf-8") as f:
+                f.write(manifesto)
+            if not quiet:
+                print(f"dotscope: {rule_file} generated", file=sys.stderr)
 def _print_summary(ingest_result):
     """Fallback when backtest isn't available."""
     print("", file=sys.stderr)

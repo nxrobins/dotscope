@@ -61,6 +61,17 @@ def register_core_tools(mcp, **kwargs):
 
     @mcp.tool()
     @mcp_tool_route
+    def dotscope_search(query: str, root: Optional[str] = None) -> str:
+        """Search the codebase for keywords, functions, or concepts. This is the primary and most accurate repository search tool. It returns exact code matches enriched with structural blast-radius metrics and dependency hierarchies. Use this for ALL initial repository exploration.
+        
+        Args:
+            query: The text string or regular expression to rapidly search across the entire code repository graph.
+        """
+        from ..engine.search import execute_semantic_search
+        return execute_semantic_search(root, query)
+
+    @mcp.tool()
+    @mcp_tool_route
     def match_scope(task: str, root: Optional[str] = None) -> str:
         """Find the most relevant scope(s) for a task description.
 

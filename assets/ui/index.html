@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dotscope Topography</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #08080A;
+      --neon-green: #10b981;
+      --glass-bg: rgba(10, 10, 20, 0.55);
+      --glass-border: rgba(255, 255, 255, 0.05);
+      --text-main: #ffffff;
+      --text-muted: rgba(255, 255, 255, 0.5);
+      --font-ui: 'Outfit', sans-serif;
+      --font-mono: monospace;
+    }
+
+    body {
+      background: var(--bg-color);
+      color: var(--text-main);
+      font-family: var(--font-ui);
+      margin: 0;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* Typography Protection */
+    .glass-panel {
+      text-shadow: 0px 1px 4px rgba(0,0,0,0.8);
+    }
+    
+    /* Global Ambient Shield */
+    body::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 100px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%);
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    /* 1. The WebGPU Canvas is the Universe */
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      display: block;
+      z-index: 0;
+      opacity: 0;
+      transition: opacity 2s ease-out; /* Universe expands into view */
+    }
+    body.engine-ready canvas {
+      opacity: 1;
+    }
+    canvas.canvas-frozen { 
+      filter: blur(8px) brightness(0.4); 
+      transition: filter 0.3s ease; 
+      pointer-events: none;
+    }
+
+    /* 2. Global HUD Wrapper */
+    #hud-layer {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none; /* Let clicks pass to 3D */
+      z-index: 10;
+    }
+    
+    #hud-layer .top-nav,
+    #hud-layer .sidebar,
+    #hud-layer .right-panels, 
+    #ui-inspector {
+      pointer-events: auto; /* Re-enable interactivity for UI panels ONLY */
+    }
+    
+    body.zen-mode .sidebar,
+    body.zen-mode .right-panels,
+    body.zen-mode #ui-inspector {
+       opacity: 0 !important;
+       pointer-events: none !important;
+       transition: opacity 0.4s ease;
+    }
+    #hud-layer {
+      display: grid;
+      grid-template-columns: 260px 1fr 340px;
+      grid-template-rows: 64px 1fr auto;
+      padding: 0;
+    }
+
+    /* Shared Glass Panel Styles */
+    .glass-panel {
+      background: var(--glass-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--glass-border);
+      pointer-events: auto; /* Re-enable clicks inside panels */
+      opacity: 0;
+      transform: scale(0.96) translateY(10px);
+      transition: all 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    body.engine-ready .glass-panel {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+
+    /* --- Top Navbar --- */
+    .top-nav {
+      grid-column: 1 / -1;
+      grid-row: 1;
+      border-bottom: 1px solid var(--glass-border);
+      display: flex;
+      align-items: center;
+      padding: 0 32px;
+      gap: 40px;
+      transform-origin: top;
+    }
+    
+    .brand {
+      color: var(--neon-green);
+      font-weight: 600;
+      font-size: 16px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      text-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+    }
+    
+    .nav-links {
+      display: flex;
+      gap: 32px;
+    }
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+    .nav-links a.active, .nav-links a:hover {
+      color: var(--neon-green);
+    }
+
+    .top-search {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    
+    .top-search input {
+      background: transparent;
+      border: none;
+      color: var(--text-main);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      width: 250px;
+      border-bottom: 1px solid var(--glass-border);
+      padding: 6px 0;
+      outline: none;
+      text-shadow: inherit;
+    }
+    .top-search input::placeholder {
+      color: var(--text-muted);
+    }
+
+    /* --- Left Sidebar --- */
+    .sidebar {
+      grid-column: 1;
+      grid-row: 2 / -1;
+      border-right: 1px solid var(--glass-border);
+      display: flex;
+      flex-direction: column;
+      transform-origin: left;
+    }
+
+    .sidebar-header {
+      padding: 32px;
+    }
+    .sidebar-header .mission-control {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--neon-green);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--neon-green);
+    }
+    .branch-info {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 12px;
+      text-transform: uppercase;
+    }
+
+    .nav-menu {
+      display: flex;
+      flex-direction: column;
+      margin-top: 24px;
+    }
+    .menu-item {
+      padding: 16px 32px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      transition: all 0.2s;
+    }
+    .menu-item.active {
+      background: rgba(16, 185, 129, 0.05);
+      color: var(--neon-green);
+      border-right: 2px solid var(--neon-green);
+    }
+    .menu-item:hover:not(.active) {
+      color: var(--text-main);
+      background: rgba(255,255,255,0.02);
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    
+    .btn-dispatch {
+      background: transparent;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: var(--neon-green);
+      font-family: var(--font-ui);
+      font-weight: 600;
+      font-size: 12px;
+      letter-spacing: 1.5px;
+      padding: 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      text-transform: uppercase;
+      /* The Tactile Hover Update */
+      transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    }
+    .btn-dispatch:hover {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.8);
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.2), inset 0 0 10px rgba(16, 185, 129, 0.1);
+      transform: scale(1.02);
+      color: var(--text-main);
+    }
+    
+    .footer-links a {
+      display: block;
+      color: var(--text-muted);
+      font-size: 11px;
+      margin-top: 8px;
+      text-decoration: none;
+      text-shadow: inherit;
+    }
+    .footer-links a:hover {
+      color: var(--text-main);
+    }
+
+    /* --- Right Panels Container --- */
+    .right-panels {
+      grid-column: 3;
+      grid-row: 2;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      padding: 32px 32px 0 0;
+      pointer-events: none;
+      transform-origin: right;
+    }
+
+    .hud-box {
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .hud-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Telemetry Sync */
+    .telemetry-sync .latency {
+      font-size: 24px;
+      font-weight: 300;
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      margin-bottom: 24px;
+    }
+    .latency span {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+    }
+    .stat-label { color: var(--text-muted); }
+    .stat-val { color: var(--text-main); }
+    .progress-bar {
+      height: 2px;
+      background: var(--glass-border);
+      width: 100%;
+      margin-bottom: 20px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--neon-green);
+      width: 80%;
+      box-shadow: 0 0 4px var(--neon-green);
+    }
+
+    /* Domain Clusters */
+    .cluster-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      background: rgba(255,255,255,0.02);
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+    }
+    .cluster-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-main);
+    }
+    .c-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .c-green { background: var(--neon-green); box-shadow: 0 0 5px var(--neon-green); }
+    .c-red { background: #ef4444; box-shadow: 0 0 5px #ef4444; }
+    .c-orange { background: #f97316; box-shadow: 0 0 5px #f97316; }
+    .cluster-val { color: var(--text-muted); }
+
+    /* Node Inspector (Bottom Right) */
+    .node-inspector {
+      grid-column: 3;
+      grid-row: 3;
+      margin: 0 32px 32px 0;
+      border-radius: 12px;
+      padding: 24px;
+      /* Starts hidden */
+      opacity: 0;
+      transform: scale(0.96) translateY(10px);
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      pointer-events: none;
+    }
+    body.engine-ready .node-inspector.active {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+      pointer-events: auto;
+    }
+    
+    .inspector-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .icon-box {
+      width: 40px;
+      height: 40px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--neon-green);
+      font-family: var(--font-mono);
+      font-size: 16px;
+    }
+    .node-details { flex: 1; }
+    .node-name {
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+    .node-meta {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--neon-green);
+    }
+    .link-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .link-box {
+      background: rgba(0,0,0,0.3);
+      padding: 12px;
+      border-radius: 6px;
+    }
+    .link-box .label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .link-box .val {
+      font-size: 16px;
+      font-weight: 300;
+    }
+
+    /* Fallback Modal */
+    #fallback { 
+      display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+      padding: 2.5rem; text-align: center; pointer-events: auto; z-index: 100;
+      border-radius: 12px;
+    }
+    #fallback h3 { margin-top: 0; font-weight: 600; color: var(--neon-green); }
+
+    /* The Loading Illusion */
+    #loader-overlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 50; /* Over UI before engine-ready */
+      background: var(--bg-color); /* Pure dark */
+      transition: opacity 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      pointer-events: none;
+    }
+    body.engine-ready #loader-overlay {
+      opacity: 0;
+    }
+    .loader-text {
+      color: var(--neon-green);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 4px;
+      animation: pulse 1.5s infinite;
+      text-shadow: 0 0 15px rgba(16, 185, 129, 0.6);
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    /* The Zero State Escape */
+    #zero-state {
+      display: none; /* Triggers via JS */
+      position: absolute;
+      top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 400px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(24px);
+      border: 1px solid rgba(255,255,255,0.08); /* Sophisticated empty box */
+      border-radius: 12px;
+      padding: 40px;
+      text-align: center;
+      z-index: 100;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    }
+    #zero-state.active {
+      display: flex;
+    }
+    .zero-icon {
+      font-size: 32px;
+      opacity: 0.3;
+      margin-bottom: 8px;
+    }
+    .zero-title {
+      font-weight: 600;
+      font-size: 16px;
+      letter-spacing: 1px;
+    }
+    .zero-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+    .zero-cmd {
+      margin-top: 16px;
+      background: rgba(0,0,0,0.4);
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      color: var(--neon-green);
+      font-size: 12px;
+      border: 1px solid rgba(16, 185, 129, 0.1);
+    }
+
+  </style>
+  <script type="module" crossorigin src="/bundle.js"></script>
+</head>
+<body>
+
+  <!-- The Loading Illusion -->
+  <div id="loader-overlay">
+    <div class="loader-text">CALCULATING GRAVITY...</div>
+  </div>
+
+  <!-- Ambient Shield -->
+  <div class="ambient-shield"></div>
+
+  <!-- Background WebGPU Canvas -->
+  <canvas id="topo"></canvas>
+
+  <!-- Global HUD Layer -->
+  <div id="hud-layer">
+    
+    <!-- Top Nav -->
+    <nav class="top-nav glass-panel">
+      <div class="brand">DOTSCOPE_v1.0</div>
+      <div class="nav-links">
+        <a href="#" id="nav-telemetry" class="active">TELEMETRY</a>
+        <a href="#" id="nav-structural">STRUCTURAL</a>
+        <a href="#" id="nav-sync">SYNC</a>
+      </div>
+      <div class="top-search">
+        <span style="color:var(--text-muted); font-size: 12px;">&#128269;</span>
+        <input type="text" id="global-search" placeholder="QUERY_NODES...">
+      </div>
+    </nav>
+
+    <!-- Left Sidebar -->
+    <aside class="sidebar glass-panel">
+      <div class="sidebar-header">
+        <div class="mission-control">
+          <div class="status-dot"></div>
+          MISSION_CONTROL
+        </div>
+        <div class="branch-info">ACTIVE_BRANCH: MAIN</div>
+      </div>
+      
+      <div class="nav-menu">
+        <div class="menu-item active" id="tab-canvas"><span style="font-family: monospace;">//</span> CANVAS</div>
+        <div class="menu-item" id="tab-mcp"><span style="font-family: monospace;">&gt;_</span> MCP CONTROL</div>
+        <div class="menu-item" id="tab-history"><span style="font-family: monospace;">@</span> HISTORY</div>
+        <div class="menu-item" id="tab-nodes"><span style="font-family: monospace;">::</span> NODES</div>
+      </div>
+
+      <div class="sidebar-footer">
+        <button class="btn-dispatch">DISPATCH_AGENT</button>
+        <div class="footer-links">
+          <a href="#">Documentation</a>
+          <a href="#">Support</a>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Right Panels -->
+    <div class="right-panels">
+      
+      <!-- Telemetry Sync -->
+      <div class="hud-box glass-panel telemetry-sync">
+        <div class="hud-title">
+          <span>TELEMETRY_SYNC</span>
+          <span style="color:var(--neon-green)">&#8644;</span>
+        </div>
+        <div class="latency">
+          <span id="ui-fps" style="font-size: 24px; color: var(--text-main);">--</span> <span>FPS</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">ACTIVE NODES</span>
+          <span class="stat-val" id="ui-nodes">0</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width: 100%;"></div></div>
+        
+        <div class="stat-row">
+          <span class="stat-label">GRAVITY DRIFT</span>
+          <span class="stat-val" id="ui-alpha">1.000</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width: 30%; background: var(--text-muted); box-shadow: none;"></div></div>
+      </div>
+
+      <!-- Domain Clusters (Legend) -->
+      <div class="hud-box glass-panel domain-clusters">
+        <div class="hud-title">DOMAIN_CLUSTERS</div>
+        <div class="cluster-item">
+          <div class="cluster-name"><div class="c-dot c-green"></div> CORE_MODULE</div>
+          <div class="cluster-val">-</div>
+        </div>
+        <div class="cluster-item">
+          <div class="cluster-name"><div class="c-dot c-red"></div> AUTH_VAULT</div>
+          <div class="cluster-val">-</div>
+        </div>
+        <div class="cluster-item">
+          <div class="cluster-name"><div class="c-dot c-orange"></div> BILLING_HUB</div>
+          <div class="cluster-val">-</div>
+        </div>
+      </div>
+      
+    </div>
+
+    <!-- Node Inspector (Bottom Right) -->
+    <div class="node-inspector glass-panel" id="ui-inspector">
+      <div class="inspector-header">
+        <div class="icon-box">{}</div>
+        <div class="node-details">
+          <div class="node-name" id="ui-node-name">REQUEST_HANDLER.GO</div>
+          <div class="node-meta">DEPTH: <span id="ui-node-depth">0</span> | GRAVITY: HIGH</div>
+        </div>
+        <button id="ui-desync" style="background: none; border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); font-size: 9px; letter-spacing: 1px; padding: 4px 8px; border-radius: 4px; cursor: pointer; transition: all 0.2s;">[ DE-SYNC ]</button>
+      </div>
+      <div class="link-stats">
+        <div class="link-box">
+          <div class="label">INCOMING LINKS</div>
+          <div class="val" id="ui-node-in">0</div>
+        </div>
+        <div class="link-box">
+          <div class="label">OUTGOING LINKS</div>
+          <div class="val" id="ui-node-out">0</div>
+        </div>
+      </div>
+    </div>
+    
+  </div> <!-- /hud-layer -->
+
+  <!-- The Zero State Fallback -->
+  <div id="zero-state">
+    <div class="zero-icon">{}</div>
+    <div class="zero-title">ARCHITECTURE UNAVAILABLE</div>
+    <div class="zero-desc">Dotscope failed to parse structural boundaries. <br/>This directory may be empty, or telemetry has not been synchronized.</div>
+    <div class="zero-cmd">dotscope refresh --repo</div>
+  </div>
+
+  <div id="fallback" class="glass-panel">
+    <h3>Unsupported Browser</h3>
+    <p>dotscope's hardware-accelerated physics engine requires a WebGPU-enabled browser.</p>
+  </div>
+  
+  <script type="application/json" id="__dotscope_data__">
+    __GRAPH_DATA_PAYLOAD__
+  </script>
+</body>
+</html>

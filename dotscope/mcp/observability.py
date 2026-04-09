@@ -1,12 +1,19 @@
-import json
 import os
 from typing import Optional
 from .middleware import mcp_tool_route
 
 def register_observability_tools(mcp, **kwargs):
+    tracker = kwargs.get('tracker')
+    client_id = kwargs.get('client_id')
+    _root = kwargs.get('_root')
+    _repo_tokens = kwargs.get('_repo_tokens')
+    _cached_history = kwargs.get('_cached_history')
+    _cached_graph_hubs = kwargs.get('_cached_graph_hubs')
+    _cli_root = kwargs.get('_cli_root')
+
     @mcp.tool()
     @mcp_tool_route
-    def validate_scopes(root: Optional[str] = None) -> str:
+    def validate_scopes(root: Optional[str] = None) -> dict:
         """Validate all .scope files for broken paths and common issues.
 
         Checks:
@@ -15,8 +22,8 @@ def register_observability_tools(mcp, **kwargs):
         - Description is not empty
         - Context field is present (the most valuable part)
         """
-        from ..engine.discovery import find_all_scopes
-        from ..engine.parser import parse_scope_file
+        from ..discovery import find_all_scopes
+        from ..parser import parse_scope_file
 
         issues = []
         for sf in find_all_scopes(root):
@@ -41,21 +48,21 @@ def register_observability_tools(mcp, **kwargs):
                     "message": "no context — this is the most valuable part",
                 })
 
-        return json.dumps({"issues": issues, "count": len(issues)}, indent=2)
+        return {"issues": issues, "count": len(issues)}
 
     @mcp.tool()
     @mcp_tool_route
-    def scope_health(root: Optional[str] = None) -> str:
+    def scope_health(root: Optional[str] = None) -> dict:
         """Report on scope health: staleness, coverage gaps, and import drift.
 
         Staleness: files changed since .scope was last modified
         Coverage: directories with no .scope file
         Drift: imports in scoped files that aren't in the includes list
         """
-        from ..ux.health import full_health_report
+        from ..health import full_health_report
 
         report = full_health_report(root, use_runtime=True)
-        return json.dumps({
+        return {
             "scopes_checked": report.scopes_checked,
             "coverage_pct": round(report.coverage_pct, 1),
             "directories_covered": report.directories_covered,
@@ -71,7 +78,7 @@ def register_observability_tools(mcp, **kwargs):
             ],
             "error_count": len(report.errors),
             "warning_count": len(report.warnings),
-        }, indent=2)
+        }
 
     @mcp.tool()
     @mcp_tool_route
@@ -79,7 +86,7 @@ def register_observability_tools(mcp, **kwargs):
         scopes: Optional[list[str]] = None,
         repo: bool = False,
         root: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """Run a synchronous scope or repo refresh.
 
         Refreshes runtime scopes so that resolve, health, and check use
@@ -93,14 +100,14 @@ def register_observability_tools(mcp, **kwargs):
 
         Returns JSON with success, kind, targets_refreshed, duration_ms, error.
         """
-        from ..workflows.refresh import run_refresh_inline
+        from ..refresh import run_refresh_inline
 
         result = run_refresh_inline(
             root,
             targets=scopes if scopes and not repo else None,
             repo=repo or not scopes,
         )
-        return json.dumps(result, indent=2)
+        return result
 
     @mcp.tool()
     @mcp_tool_route
@@ -109,7 +116,7 @@ def register_observability_tools(mcp, **kwargs):
         session_id: Optional[str] = None,
         explain: bool = False,
         root: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """Pre-commit verification. Run this before every commit.
 
         Checks your changes against: implicit contracts, network contracts,
@@ -132,7 +139,7 @@ def register_observability_tools(mcp, **kwargs):
 
         explain_fn = None
         if explain:
-            from ..ux.explain import explain_warning
+            from ..explain import explain_warning
             explain_fn = lambda r: explain_warning(root, r)
 
         def _fmt_result(r):
@@ -158,14 +165,14 @@ def register_observability_tools(mcp, **kwargs):
                 d["explain"] = explain_fn(r)
             return d
 
-        return json.dumps({
+        return {
             "passed": report.passed,
             "guards": [_fmt_result(r) for r in report.guards],
             "nudges": [_fmt_result(r) for r in report.nudges],
             "notes": [_fmt_result(r) for r in report.notes],
-            "holds": [_fmt_result(r) for r in report.guards],
+            "holds": [_fmt_result(r) for r in report.guards],  # backwards compat
             "files_checked": report.files_checked,
-        }, indent=2)
+        }
 
     # -------------------------------------------------------------------
     # Swarm Lock MCP tools
@@ -178,7 +185,7 @@ def register_observability_tools(mcp, **kwargs):
         task_description: str,
         primary_files: list,
         root: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """Claim exclusive write access before modifying files.
 
         Call AFTER codebase_search/resolve_scope, BEFORE writing code.
@@ -197,9 +204,9 @@ def register_observability_tools(mcp, **kwargs):
         - preflight: advisory warnings about what will likely break.
         """
         from ..merge.swarm import claim_scope
-        from ..storage.cache import load_cached_graph_hubs, load_cached_network_edges
-        
+
         try:
+            from ..storage.cache import load_cached_graph_hubs, load_cached_network_edges
             graph_hubs = load_cached_graph_hubs(root)
             network_edges = load_cached_network_edges(root)
         except Exception:
@@ -213,14 +220,14 @@ def register_observability_tools(mcp, **kwargs):
             graph_hubs=graph_hubs,
             network_edges=network_edges,
         )
-        return json.dumps(result, indent=2)
+        return result
 
     @mcp.tool()
     @mcp_tool_route
     def dotscope_renew_lock(
         lock_id: str,
         root: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """Extend an active lock's expiry by 30 minutes.
 
         Args:
@@ -229,18 +236,18 @@ def register_observability_tools(mcp, **kwargs):
         from ..merge.swarm import renew_lock
 
         renewed = renew_lock(root, lock_id)
-        return json.dumps({
+        return {
             "renewed": renewed,
             "lock_id": lock_id,
             "message": "Lock extended by 30 minutes" if renewed else "Lock not found or expired",
-        })
+        }
 
     @mcp.tool()
     @mcp_tool_route
     def dotscope_escalate(
         conflict_id: str,
         root: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """Escalate an unresolvable conflict to a human operator.
 
         Use when interlocking locks prevent progress or contract violations
@@ -253,8 +260,8 @@ def register_observability_tools(mcp, **kwargs):
 
         result = check_escalation(root, conflict_id)
         if result:
-            return json.dumps(result, indent=2)
-        return json.dumps({
+            return result
+        return {
             "escalation": False,
             "message": "Not yet at escalation threshold. Continue resolution attempts.",
-        })
+        }

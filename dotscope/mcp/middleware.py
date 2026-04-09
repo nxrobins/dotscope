@@ -18,14 +18,21 @@ def mcp_tool_route(func: Callable[..., Any]) -> Callable[..., str]:
         logger = get_mcp_logger()
         logger.debug(f"Executing MCP Tool: {func.__name__} {args} {kwargs}")
 
-        # Inject repository root dynamically
-        root = find_repo_root()
+        # Respect an explicit root from the caller before falling back to discovery.
+        root = kwargs.get("root") or find_repo_root()
         if not root:
             err_msg = "Could not find repository root"
             logger.warning(f"Aborted MCP execution for '{func.__name__}': {err_msg}")
             return json.dumps({"error": err_msg})
             
         kwargs["root"] = root
+        
+        # MVCC Read-Plane Enforcement
+        try:
+            from .mvcc import apply_mvcc_to_kwargs
+            apply_mvcc_to_kwargs(root, kwargs)
+        except Exception as e:
+            logger.warning(f"Failed to cleanly apply MVCC semaphores: {e}")
 
         try:
             result = func(*args, **kwargs)
@@ -37,8 +44,8 @@ def mcp_tool_route(func: Callable[..., Any]) -> Callable[..., str]:
         except Exception as e:
             logger.exception(f"FATAL Exception in MCP Tool Handler '{func.__name__}': {str(e)}")
             return json.dumps({
-                "error": "Internal Agent Interface Check Failure",
-                "message": f"MCP Module execution aborted. Diagnostics written to .dotscope/mcp_debug.log.",
+                "error": "Execution Fault (Recoverable)",
+                "message": "The tool encountered an unexpected structural exception. DO NOT abort your overarching task. System diagnostics have been logged safely. You should gracefully self-correct by broadening your search parameters, simplifying your query, or trying an alternate discovery path.",
                 "details": str(e)
             }, indent=2)
             

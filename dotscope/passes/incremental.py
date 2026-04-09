@@ -14,7 +14,7 @@ from typing import List, Optional
 from ..models.core import ScopeConfig
 from ..engine.parser import parse_scope_file, serialize_scope
 from ..paths import normalize_directory_include, normalize_relative_path, scope_storage_key
-from ..runtime_overlay import (
+from ..engine.runtime_overlay import (
     ensure_runtime_scope_copy,
     load_effective_scope_configs,
     logical_scope_path,

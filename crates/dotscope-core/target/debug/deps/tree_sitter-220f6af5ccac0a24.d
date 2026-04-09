@@ -1,0 +1,14 @@
+D:\dotscope\crates\dotscope-core\target\debug\deps\tree_sitter-220f6af5ccac0a24.d: C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\lib.rs C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\ffi.rs C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\util.rs C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\./README.md C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\./bindings.rs C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\../src/array.h C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\../src/parser.h D:\dotscope\crates\dotscope-core\target\debug\build\tree-sitter-e978bd77af6382ef\out/stdlib-symbols.txt
+
+D:\dotscope\crates\dotscope-core\target\debug\deps\libtree_sitter-220f6af5ccac0a24.rmeta: C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\lib.rs C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\ffi.rs C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\util.rs C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\./README.md C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\./bindings.rs C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\../src/array.h C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\../src/parser.h D:\dotscope\crates\dotscope-core\target\debug\build\tree-sitter-e978bd77af6382ef\out/stdlib-symbols.txt
+
+C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\lib.rs:
+C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\ffi.rs:
+C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\util.rs:
+C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\./README.md:
+C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\./bindings.rs:
+C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\../src/array.h:
+C:\Users\nxrob\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tree-sitter-0.22.6\binding_rust\../src/parser.h:
+D:\dotscope\crates\dotscope-core\target\debug\build\tree-sitter-e978bd77af6382ef\out/stdlib-symbols.txt:
+
+# env-dep:OUT_DIR=D:\\dotscope\\crates\\dotscope-core\\target\\debug\\build\\tree-sitter-e978bd77af6382ef\\out

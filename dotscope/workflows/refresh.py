@@ -372,23 +372,31 @@ def run_repo_refresh(root: str, quiet: bool = True) -> bool:
     """Rebuild the full runtime overlay without touching tracked scope files."""
     from ..storage.cache import cache_ingest_data
     from ..workflows.ingest import _cache_invariants, ingest
+    from ..engine.discovery import find_all_scopes
+    from ..engine.runtime_overlay import sync_runtime_overlay, write_runtime_scope
 
     plan = ingest(
         root,
         dry_run=True,
         quiet=quiet,
-        respect_existing_scopes=False,
+        respect_existing_scopes=True,
     )
-    replace_runtime_overlay(
-        root,
-        [planned.config for planned in plan.scopes],
-        index=plan.index,
-    )
+    tracked_scope_paths = find_all_scopes(root)
+    if tracked_scope_paths:
+        sync_runtime_overlay(root)
+        for planned in plan.scopes:
+            write_runtime_scope(root, planned.config)
+    else:
+        replace_runtime_overlay(
+            root,
+            [planned.config for planned in plan.scopes],
+            index=plan.index,
+        )
     cache_ingest_data(root, history=plan.history, graph=plan.graph)
     _cache_invariants(root, plan.history)
     reset_incremental_state(
         root,
-        scope_paths=[planned.config.path for planned in plan.scopes],
+        scope_paths=list(tracked_scope_paths) + [planned.config.path for planned in plan.scopes],
     )
 
     marker = os.path.join(root, ".dotscope", "needs_full_ingest")

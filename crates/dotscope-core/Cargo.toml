@@ -1,0 +1,30 @@
+[package]
+name = "dotscope-core"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "dotscope_core"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.23.4", features = ["extension-module", "abi3-py310"] }
+git2 = "0.18.3"
+petgraph = "0.6.4"
+rayon = "1.10.0"
+serde = { version = "1.0", features = ["derive"] }
+tree-sitter = "~0.22.6"
+tree-sitter-python = "=0.21.0"
+tree-sitter-javascript = "=0.21.3"
+tree-sitter-typescript = "=0.21.1"
+tree-sitter-rust = "=0.21.2"
+tree-sitter-java = "=0.21.0"
+tree-sitter-go = "=0.21.2"
+ignore = "0.4.25"
+notify = "8.2.0"
+memmap2 = "0.9.10"
+
+[[bin]]
+name = "dotscope_daemon"
+path = "src/bin/daemon.rs"

@@ -65,7 +65,7 @@ def register_ingest_tools(mcp, **kwargs):
                 (1 - avg / plan.total_repo_tokens) * 100, 1
             )
 
-        return json.dumps({
+        return {
             "scopes_planned": len(plan.scopes),
             "scopes": [
                 {
@@ -89,4 +89,4 @@ def register_ingest_tools(mcp, **kwargs):
                 "cross_cutting_hubs": len(hubs),
                 "volatility_surprises": len(surprises),
             },
-        }, indent=2)
+        }

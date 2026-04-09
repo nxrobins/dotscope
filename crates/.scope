@@ -1,0 +1,11 @@
+description: crates -- Rust module (5 files)
+includes:
+  - crates/
+excludes:
+  - crates/__pycache__/
+  - "*.pyc"
+context: |
+  CRITICAL: Transitive Gravity: explicitly bind track_renames so the graph doesn't shatter
+tags:
+  - crates
+tokens_estimate: 2349

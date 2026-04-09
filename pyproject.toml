@@ -37,11 +37,13 @@ dotscope = "dotscope.cli:main"
 dotscope-mcp = "dotscope.mcp:main"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
 
-[tool.hatch.build.targets.wheel]
-packages = ["dotscope"]
+[tool.maturin]
+features = ["pyo3/extension-module"]
+module-name = "dotscope_core"
+manifest-path = "crates/dotscope-core/Cargo.toml"
 
 
 
