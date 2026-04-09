@@ -160,13 +160,25 @@ def load_scope_from_logical_path(
     scope_path: str,
     prefer_runtime: bool = True,
 ) -> Tuple[Optional[ScopeConfig], Optional[str]]:
-    """Load a scope by logical path, optionally preferring the runtime overlay."""
+    """Load a scope by logical path, safely preventing stale overlay caches by checking physical mtime."""
     from ..engine.parser import parse_scope_file
 
     logical = logical_scope_path(scope_path, root=root)
     candidates: List[Tuple[str, str]] = []
     runtime_path = runtime_scope_path(root, logical)
     tracked_path = tracked_scope_path(root, logical)
+
+    tracked_mtime = 0
+    if os.path.isfile(tracked_path):
+        tracked_mtime = os.path.getmtime(tracked_path)
+
+    runtime_mtime = 0
+    if os.path.isfile(runtime_path):
+        runtime_mtime = os.path.getmtime(runtime_path)
+
+    # Absolute Cache Bypass: Forensically ensure the cache is invalidated if the IDE file shifted
+    if tracked_mtime > runtime_mtime:
+        prefer_runtime = False
 
     if prefer_runtime:
         candidates.extend([
@@ -175,7 +187,7 @@ def load_scope_from_logical_path(
         ])
     else:
         candidates.extend([
-            (tracked_path, "tracked_snapshot"),
+            (tracked_path, "direct_tracked_override" if tracked_mtime > runtime_mtime else "tracked_snapshot"),
             (runtime_path, "runtime_overlay"),
         ])
 

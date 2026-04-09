@@ -31,38 +31,10 @@ def prescriptive_defaults() -> DiscoveredVoice:
 
 
 def prescriptive_spatial_conventions() -> List[ConventionRule]:
-    """Return DDD spatial conventions for a greenfield project.
+    """Return an empty baseline for spatial conventions.
 
-    Agents building from scratch get a clean Domain-Driven Design scaffold
-    so files land in the right place from the very first commit.
+    Dotscope is a universal physics engine spanning Rust, Java, Typescript, and Python.
+    Dictating web-framework specific layouts (like REST Controllers) artificially biases 
+    codebase architectures, violating the clean-room abstraction of the engine.
     """
-    return [
-        ConventionRule(
-            name="Domain Model",
-            source="prescriptive",
-            match_criteria={"any_of": [{"base_class": "BaseModel"}]},
-            rules={"allowed_paths": [r"domains/[^/]+/models/.*\.py"]},
-            description="Domain models live under domains/<module>/models/",
-        ),
-        ConventionRule(
-            name="REST Controller",
-            source="prescriptive",
-            match_criteria={"any_of": [{"has_decorator": "router"}]},
-            rules={"allowed_paths": [r"domains/[^/]+/api/.*\.py"]},
-            description="Route handlers live under domains/<module>/api/",
-        ),
-        ConventionRule(
-            name="Service Layer",
-            source="prescriptive",
-            match_criteria={"any_of": [{"file_path": r".*_service\.py"}]},
-            rules={"allowed_paths": [r"domains/[^/]+/services/.*\.py"]},
-            description="Service files live under domains/<module>/services/",
-        ),
-        ConventionRule(
-            name="Repository",
-            source="prescriptive",
-            match_criteria={"any_of": [{"file_path": r".*_repo\.py"}]},
-            rules={"allowed_paths": [r"domains/[^/]+/repos/.*\.py"]},
-            description="Repository files live under domains/<module>/repos/",
-        ),
-    ]
+    return []

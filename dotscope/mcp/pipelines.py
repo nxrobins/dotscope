@@ -145,7 +145,7 @@ class FormattingStage(PipelineStage):
         # Determine format injection map immediately.
         if fmt == "json":
             state["data"] = json.loads(output)
-            state["data"]["freshness"] = state.get("freshness")
+            state["data"]["source_of_truth"] = state.get("freshness")
         else:
             state["raw_output"] = output
         return state
