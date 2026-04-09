@@ -55,3 +55,15 @@ Instead of forcing your AI to ping slower Python GIL-bound scripts or bloated La
 1. **The Write-Plane:** A compiled `dotscope_daemon.exe` uses `notify` to debounce IDE file-write spikes into a Token Bucket, safely calculating zero-latency $O(V + E)$ dependency subgraphs gracefully. 
 2. **The Read-Plane:** We leverage standard C-aligned memory mapping (`memmap2`) to deploy double-buffered matrices (`topology_A.bin` / `topology_B.bin`). The Python MCP read-plane structurally casts these zero-copy bounds into memory in exactly 0 CPU cycles.
 3. **Multi-Version Concurrency Control (MVCC):** Your AI reads from an immortal `control.mmap` atomic semaphore. If the agent queries the repo while a massive file modification is resolving, a local Unix-style blocking socket catches the Python process and formally halts the AI's thread natively until the matrix mathematically resolves. Zero hallucinogenic state is explicitly enforced at the OS level.
+
+---
+
+## Scaling to the Swarm (Coming Soon)
+
+Local `.mmap` daemons are built for isolated IDEs. But when you deploy autonomous agents at planetary scale, the physics must scale with them.
+
+### Dotscope Pro: The Genesis Matrix
+Open-source Dotscope calculates the physical layout of your local codebase in realtime. **Dotscope Pro** is the global intelligence vector. By connecting to the Pro WebSocket, your agents don't have to compile graphs from scratch; they instantly stream pre-compiled structural fingerprints from over 10,000 top-tier open-source architectural hubs. Your agent doesn't just know how *you* construct code, it mathematically recognizes how *the planet* constructs it natively across boundaries.
+
+### Dotswarm: Fleet Telemetry & Swarm Locks
+What happens when you deploy 50 autonomous agents against a single enterprise monorepo infrastructure? They clobber each other's execution states. **Dotswarm** lifts our zero-latency local MVCC synchronization primitives directly into a distributed backend. It formally enforces **Swarm Locks** across distributed memory pools, guaranteeing massive AI fleets can orchestrate cross-repository execution simultaneously without triggering catastrophic merge collisions.
