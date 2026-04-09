@@ -1,0 +1,1 @@
+D:\dotscope\crates\dotscope-core\target\debug\dotscope_core.dll: D:\dotscope\crates\dotscope-core\build.rs D:\dotscope\crates\dotscope-core\src\ast.rs D:\dotscope\crates\dotscope-core\src\git.rs D:\dotscope\crates\dotscope-core\src\graph.rs D:\dotscope\crates\dotscope-core\src\lib.rs

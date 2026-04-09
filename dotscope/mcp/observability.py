@@ -22,8 +22,8 @@ def register_observability_tools(mcp, **kwargs):
         - Description is not empty
         - Context field is present (the most valuable part)
         """
-        from ..discovery import find_all_scopes
-        from ..parser import parse_scope_file
+        from ..engine.discovery import find_all_scopes
+        from ..engine.parser import parse_scope_file
 
         issues = []
         for sf in find_all_scopes(root):
@@ -59,7 +59,7 @@ def register_observability_tools(mcp, **kwargs):
         Coverage: directories with no .scope file
         Drift: imports in scoped files that aren't in the includes list
         """
-        from ..health import full_health_report
+        from ..ux.health import full_health_report
 
         report = full_health_report(root, use_runtime=True)
         return {
@@ -100,7 +100,7 @@ def register_observability_tools(mcp, **kwargs):
 
         Returns JSON with success, kind, targets_refreshed, duration_ms, error.
         """
-        from ..refresh import run_refresh_inline
+        from ..workflows.refresh import run_refresh_inline
 
         result = run_refresh_inline(
             root,
@@ -139,7 +139,7 @@ def register_observability_tools(mcp, **kwargs):
 
         explain_fn = None
         if explain:
-            from ..explain import explain_warning
+            from ..ux.explain import explain_warning
             explain_fn = lambda r: explain_warning(root, r)
 
         def _fmt_result(r):

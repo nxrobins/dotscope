@@ -12,7 +12,7 @@ def execute_semantic_search(root: str, query: str) -> str:
     # STEP 1: The Fast Grep Pass via git grep
     try:
         cmd = [
-            "git", "grep",
+            "git", "--no-pager", "grep",
             "-I",          # Ignore binary
             "-E",          # Extended Regex 
             "-n",          # Line Numbers
