@@ -130,7 +130,31 @@ def _cmd_serve(args):
                 super().__init__(*args, directory=str(ui_dir), **kwargs)
 
         def do_GET(self):
-            if is_headless and self.path == '/api/telemetry':
+            if self.path == '/api/activity':
+                self.send_response(200)
+                self.send_header("Content-type", "application/json")
+                # CORS just in case
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                
+                # Natively read the tail
+                activity = []
+                activity_path = Path(root) / ".dotscope" / "mcp_activity.jsonl"
+                try:
+                    if activity_path.exists():
+                        with open(activity_path, "r", encoding="utf-8") as f:
+                            lines = f.readlines()
+                            # Grab strictly the last 15
+                            for line in lines[-15:]:
+                                if line.strip():
+                                    try:
+                                        activity.append(json.loads(line))
+                                    except Exception:
+                                        pass
+                except Exception:
+                    pass
+                self.wfile.write(json.dumps(activity).encode("utf-8"))
+            elif is_headless and self.path == '/api/telemetry':
                 self.send_response(200)
                 self.send_header("Content-type", "application/json")
                 self.end_headers()

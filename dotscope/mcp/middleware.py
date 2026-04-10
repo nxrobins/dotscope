@@ -27,6 +27,36 @@ def mcp_tool_route(func: Callable[..., Any]) -> Callable[..., str]:
             
         kwargs["root"] = root
         
+        # Log to the real-time Mission Control feed
+        try:
+            import time
+            import os
+            from pathlib import Path
+            activity_path = Path(root) / ".dotscope" / "mcp_activity.jsonl"
+            
+            # Simple sanitize formatting for the UI
+            target_str = str(kwargs)
+            if "task_description" in kwargs:
+                target_str = f"Task: {kwargs['task_description'][:30]}..."
+            elif "scope" in kwargs:
+                target_str = f"Scope: ({kwargs.get('scope')})"
+            elif "task" in kwargs:
+                target_str = f"Task: {kwargs['task'][:30]}..."
+            elif "query" in kwargs:
+                target_str = f"Query: <{kwargs['query']}>"
+            elif "primary_files" in kwargs:
+                 target_str = f"Locks: {len(kwargs['primary_files'])} targets"
+            
+            activity = {
+                "ts": int(time.time() * 1000),
+                "tool": func.__name__.replace('mcp_dotscope_', ''),
+                "target": target_str
+            }
+            with open(activity_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(activity) + "\n")
+        except Exception:
+            pass
+        
         # MVCC Read-Plane Enforcement
         try:
             from .mvcc import apply_mvcc_to_kwargs

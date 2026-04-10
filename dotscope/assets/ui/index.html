@@ -515,148 +515,143 @@
       border: 1px solid rgba(16, 185, 129, 0.1);
     }
 
+    /* Mission Control Live Feed */
+    .live-activity {
+      position: absolute;
+      bottom: 40px;
+      left: 40px;
+      width: 380px;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 20;
+    }
+    
+    .feed-item {
+      background: var(--glass-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      border-left: 3px solid var(--neon-green);
+      padding: 16px;
+      border-radius: 6px;
+      transform: translateX(-400px);
+      opacity: 0;
+      animation: slideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    
+    .feed-item.pulse {
+      animation: slideIn 0.4s forwards, hologramPulse 2s infinite;
+    }
+
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .tool-badge {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: #000;
+      background: var(--neon-green);
+      padding: 2px 6px;
+      border-radius: 2px;
+      font-weight: 600;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+      text-transform: uppercase;
+    }
+    
+    .time-badge {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+    
+    .target-text {
+      font-size: 12px;
+      color: var(--text-main);
+      font-family: var(--font-mono);
+      word-break: break-all;
+    }
+
+    @keyframes slideIn {
+      100% {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    
+    @keyframes hologramPulse {
+      0%, 100% { box-shadow: 0 0 5px rgba(16, 185, 129, 0.1); }
+      50% { box-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
+    }
   </style>
   <script type="module" crossorigin src="/bundle.js"></script>
 </head>
 <body>
-
-  <!-- The Loading Illusion -->
-  <div id="loader-overlay">
-    <div class="loader-text">CALCULATING GRAVITY...</div>
-  </div>
-
-  <!-- Ambient Shield -->
-  <div class="ambient-shield"></div>
-
-  <!-- Background WebGPU Canvas -->
-  <canvas id="topo"></canvas>
-
-  <!-- Global HUD Layer -->
-  <div id="hud-layer">
-    
-    <!-- Top Nav -->
-    <nav class="top-nav glass-panel">
-      <div class="brand">DOTSCOPE_v1.0</div>
-      <div class="nav-links">
-        <a href="#" id="nav-telemetry" class="active">TELEMETRY</a>
-        <a href="#" id="nav-structural">STRUCTURAL</a>
-        <a href="#" id="nav-sync">SYNC</a>
-      </div>
-      <div class="top-search">
-        <span style="color:var(--text-muted); font-size: 12px;">&#128269;</span>
-        <input type="text" id="global-search" placeholder="QUERY_NODES...">
-      </div>
-    </nav>
-
-    <!-- Left Sidebar -->
-    <aside class="sidebar glass-panel">
-      <div class="sidebar-header">
-        <div class="mission-control">
-          <div class="status-dot"></div>
-          MISSION_CONTROL
-        </div>
-        <div class="branch-info">ACTIVE_BRANCH: MAIN</div>
-      </div>
-      
-      <div class="nav-menu">
-        <div class="menu-item active" id="tab-canvas"><span style="font-family: monospace;">//</span> CANVAS</div>
-        <div class="menu-item" id="tab-mcp"><span style="font-family: monospace;">&gt;_</span> MCP CONTROL</div>
-        <div class="menu-item" id="tab-history"><span style="font-family: monospace;">@</span> HISTORY</div>
-        <div class="menu-item" id="tab-nodes"><span style="font-family: monospace;">::</span> NODES</div>
-      </div>
-
-      <div class="sidebar-footer">
-        <button class="btn-dispatch">DISPATCH_AGENT</button>
-        <div class="footer-links">
-          <a href="#">Documentation</a>
-          <a href="#">Support</a>
-        </div>
-      </div>
-    </aside>
-
-    <!-- Right Panels -->
-    <div class="right-panels">
-      
-      <!-- Telemetry Sync -->
-      <div class="hud-box glass-panel telemetry-sync">
-        <div class="hud-title">
-          <span>TELEMETRY_SYNC</span>
-          <span style="color:var(--neon-green)">&#8644;</span>
-        </div>
-        <div class="latency">
-          <span id="ui-fps" style="font-size: 24px; color: var(--text-main);">--</span> <span>FPS</span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">ACTIVE NODES</span>
-          <span class="stat-val" id="ui-nodes">0</span>
-        </div>
-        <div class="progress-bar"><div class="progress-fill" style="width: 100%;"></div></div>
-        
-        <div class="stat-row">
-          <span class="stat-label">GRAVITY DRIFT</span>
-          <span class="stat-val" id="ui-alpha">1.000</span>
-        </div>
-        <div class="progress-bar"><div class="progress-fill" style="width: 30%; background: var(--text-muted); box-shadow: none;"></div></div>
-      </div>
-
-      <!-- Domain Clusters (Legend) -->
-      <div class="hud-box glass-panel domain-clusters">
-        <div class="hud-title">DOMAIN_CLUSTERS</div>
-        <div class="cluster-item">
-          <div class="cluster-name"><div class="c-dot c-green"></div> CORE_MODULE</div>
-          <div class="cluster-val">-</div>
-        </div>
-        <div class="cluster-item">
-          <div class="cluster-name"><div class="c-dot c-red"></div> AUTH_VAULT</div>
-          <div class="cluster-val">-</div>
-        </div>
-        <div class="cluster-item">
-          <div class="cluster-name"><div class="c-dot c-orange"></div> BILLING_HUB</div>
-          <div class="cluster-val">-</div>
-        </div>
-      </div>
-      
-    </div>
-
-    <!-- Node Inspector (Bottom Right) -->
-    <div class="node-inspector glass-panel" id="ui-inspector">
-      <div class="inspector-header">
-        <div class="icon-box">{}</div>
-        <div class="node-details">
-          <div class="node-name" id="ui-node-name">REQUEST_HANDLER.GO</div>
-          <div class="node-meta">DEPTH: <span id="ui-node-depth">0</span> | GRAVITY: HIGH</div>
-        </div>
-        <button id="ui-desync" style="background: none; border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); font-size: 9px; letter-spacing: 1px; padding: 4px 8px; border-radius: 4px; cursor: pointer; transition: all 0.2s;">[ DE-SYNC ]</button>
-      </div>
-      <div class="link-stats">
-        <div class="link-box">
-          <div class="label">INCOMING LINKS</div>
-          <div class="val" id="ui-node-in">0</div>
-        </div>
-        <div class="link-box">
-          <div class="label">OUTGOING LINKS</div>
-          <div class="val" id="ui-node-out">0</div>
-        </div>
-      </div>
-    </div>
-    
-  </div> <!-- /hud-layer -->
-
-  <!-- The Zero State Fallback -->
-  <div id="zero-state">
-    <div class="zero-icon">{}</div>
-    <div class="zero-title">ARCHITECTURE UNAVAILABLE</div>
-    <div class="zero-desc">Dotscope failed to parse structural boundaries. <br/>This directory may be empty, or telemetry has not been synchronized.</div>
-    <div class="zero-cmd">dotscope refresh --repo</div>
-  </div>
-
-  <div id="fallback" class="glass-panel">
-    <h3>Unsupported Browser</h3>
-    <p>dotscope's hardware-accelerated physics engine requires a WebGPU-enabled browser.</p>
-  </div>
-  
-  <script type="application/json" id="__dotscope_data__">
+    <div id="nebula-layer"></div><canvas id="topo"></canvas><div id="hud-layer"><div class="live-activity" id="agent-feed"></div></div><div id="fallback" class="glass-panel"><h3>Unsupported Browser</h3></div><script type="application/json" id="__dotscope_data__">
     __GRAPH_DATA_PAYLOAD__
   </script>
+  <script>
+    const feedContainer = document.getElementById('agent-feed');
+    let knownActivity = new Set();
+    
+    async function pollAgentActivity() {
+      try {
+        const resp = await fetch('/api/activity');
+        if (!resp.ok) return;
+        const activities = await resp.json();
+        
+        activities.forEach(act => {
+          const id = act.ts + '-' + act.tool;
+          if (!knownActivity.has(id)) {
+            knownActivity.add(id);
+            
+            const node = document.createElement('div');
+            node.className = 'feed-item pulse';
+            
+            const date = new Date(act.ts);
+            const timeStr = date.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit' }) + '.' + String(date.getMilliseconds()).padStart(3, '0');
+            
+            node.innerHTML = '<div class="feed-header"><div class="tool-badge">' + act.tool + '</div><div class="time-badge">' + timeStr + '</div></div><div class="target-text">' + (act.target ? act.target.replace(/</g, "&lt;").replace(/>/g, "&gt;") : '') + '</div>';
+            
+            if(feedContainer) feedContainer.prepend(node);
+          }
+        });
+        
+        if (knownActivity.size > 100) {
+            knownActivity = new Set(Array.from(knownActivity).slice(-50));
+        }
+        
+        if(feedContainer) {
+            while (feedContainer.children.length > 5) {
+              const old = feedContainer.children[feedContainer.children.length - 1];
+              old.style.opacity = '0';
+              old.style.transition = 'opacity 0.4s ease';
+              setTimeout(() => { if(old.parentNode) old.parentNode.removeChild(old); }, 400);
+            }
+        }
+      } catch (e) {
+      }
+    }
+    
+    setInterval(pollAgentActivity, 1000);
+  </script>
+<script>
+    const nebula = document.getElementById('nebula-layer');
+    document.addEventListener('mousemove', (e) => {
+        if (!nebula) return;
+        const x = (e.clientX / window.innerWidth - 0.5) * 40;
+        const y = (e.clientY / window.innerHeight - 0.5) * 40;
+        nebula.style.transform = 	ranslate(px, px);
+    });
+</script>
 </body>
 </html>
+
+
+
