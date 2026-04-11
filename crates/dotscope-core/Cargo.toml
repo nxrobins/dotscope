@@ -1,6 +1,6 @@
 [package]
 name = "dotscope-core"
-version = "1.6.9"
+version = "1.6.10"
 edition = "2021"
 publish = false
 
@@ -10,7 +10,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 pyo3 = { version = "0.23.4", features = ["extension-module", "abi3-py310"] }
-git2 = "0.18.3"
+git2 = { version = "0.18.3", features = ["vendored-openssl"] }
 petgraph = "0.6.4"
 rayon = "1.10.0"
 serde = { version = "1.0", features = ["derive"] }
