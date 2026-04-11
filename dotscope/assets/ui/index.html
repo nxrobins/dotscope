@@ -515,143 +515,113 @@
       border: 1px solid rgba(16, 185, 129, 0.1);
     }
 
-    /* Mission Control Live Feed */
-    .live-activity {
-      position: absolute;
-      bottom: 40px;
-      left: 40px;
-      width: 380px;
-      pointer-events: none;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      z-index: 20;
-    }
-    
-    .feed-item {
-      background: var(--glass-bg);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(16, 185, 129, 0.2);
-      border-left: 3px solid var(--neon-green);
-      padding: 16px;
-      border-radius: 6px;
-      transform: translateX(-400px);
-      opacity: 0;
-      animation: slideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-    }
-    
-    .feed-item.pulse {
-      animation: slideIn 0.4s forwards, hologramPulse 2s infinite;
-    }
-
-    .feed-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-    }
-    
-    .tool-badge {
-      font-family: var(--font-mono);
-      font-size: 10px;
-      color: #000;
-      background: var(--neon-green);
-      padding: 2px 6px;
-      border-radius: 2px;
-      font-weight: 600;
-      box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
-      text-transform: uppercase;
-    }
-    
-    .time-badge {
-      font-family: var(--font-mono);
-      font-size: 10px;
-      color: var(--text-muted);
-    }
-    
-    .target-text {
-      font-size: 12px;
-      color: var(--text-main);
-      font-family: var(--font-mono);
-      word-break: break-all;
-    }
-
-    @keyframes slideIn {
-      100% {
-        transform: translateX(0);
-        opacity: 1;
-      }
-    }
-    
-    @keyframes hologramPulse {
-      0%, 100% { box-shadow: 0 0 5px rgba(16, 185, 129, 0.1); }
-      50% { box-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
-    }
   </style>
   <script type="module" crossorigin src="/bundle.js"></script>
 </head>
 <body>
-    <div id="nebula-layer"></div><canvas id="topo"></canvas><div id="hud-layer"><div class="live-activity" id="agent-feed"></div></div><div id="fallback" class="glass-panel"><h3>Unsupported Browser</h3></div><script type="application/json" id="__dotscope_data__">
+
+  <!-- The Loading Illusion -->
+  <div id="loader-overlay">
+    <div class="loader-text">CALCULATING GRAVITY...</div>
+  </div>
+
+  <!-- Ambient Shield -->
+  <div class="ambient-shield"></div>
+
+  <!-- Background WebGPU Canvas -->
+  <canvas id="topo"></canvas>
+
+  <!-- Global HUD Layer -->
+  <div id="hud-layer">
+    <!-- Pure Minimalist Visual Field. Live Agent HUD will be injected here. -->
+  </div> <!-- /hud-layer -->
+
+  <!-- The Zero State Fallback -->
+  <div id="zero-state">
+    <div class="zero-icon">{}</div>
+    <div class="zero-title">ARCHITECTURE UNAVAILABLE</div>
+    <div class="zero-desc">Dotscope failed to parse structural boundaries. <br/>This directory may be empty, or telemetry has not been synchronized.</div>
+    <div class="zero-cmd">dotscope refresh --repo</div>
+  </div>
+
+  
+  <!-- Headless DOM stubs for minified bundle compatibility -->
+  <div style="display:none">
+    <div id="ui-inspector"></div><div id="ui-desync"></div><div id="ui-node-depth"></div>
+    <div id="search-input"></div><div id="nav-telemetry"></div><div id="scope-list"></div>
+    <div id="ui-node-name"></div><div id="ui-edges"></div><div id="tab-history"></div>
+    <div id="tab-canvas"></div><div id="nav-sync"></div><div id="tab-nodes"></div>
+    <div id="tab-mcp"></div><div id="ui-fps"></div><div id="ui-node-in"></div>
+    <div id="ui-nodes"></div><div id="nav-structural"></div>
+  </div>
+
+  <div id="fallback" class="glass-panel">
+    <h3>Unsupported Browser</h3>
+    <p>dotscope's hardware-accelerated physics engine requires a WebGPU-enabled browser.</p>
+  </div>
+  
+  <script type="application/json" id="__dotscope_data__">
     __GRAPH_DATA_PAYLOAD__
   </script>
+
+  <div id="live-telemetry-hud" style="position: absolute; bottom: 40px; left: 40px; display: flex; flex-direction: column; gap: 12px; z-index: 1000; pointer-events: none; width: 340px;">
+  </div>
   <script>
-    const feedContainer = document.getElementById('agent-feed');
-    let knownActivity = new Set();
+    // Live Telemetry HUD Bridge
+    const hudContainer = document.getElementById('live-telemetry-hud');
     
-    async function pollAgentActivity() {
+    function createActivityNode(item) {
+      const el = document.createElement('div');
+      // Mimic UI cluster
+      el.style.display = 'flex';
+      el.style.flexDirection = 'column';
+      el.style.gap = '8px';
+      el.style.padding = '14px 18px';
+      el.style.borderRadius = '8px';
+      el.style.borderLeft = '3px solid #10b981';
+      el.style.background = 'rgba(10, 10, 20, 0.7)';
+      el.style.backdropFilter = 'blur(16px)';
+      el.style.borderTop = '1px solid rgba(255,255,255,0.05)';
+      el.style.borderRight = '1px solid rgba(255,255,255,0.05)';
+      el.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+      el.style.color = '#fff';
+      el.style.fontFamily = 'monospace';
+      el.style.fontSize = '11px';
+      el.style.boxShadow = '0 8px 30px rgba(0,0,0,0.5)';
+      
+      const msStr = new Date(item.ts).toISOString().split('T')[1].replace('Z', '');
+      el.innerHTML = 
+        <div style="display:flex; justify-content:space-between; color: #10b981; font-weight: 600; letter-spacing: 1px;">
+          <span>[]</span>
+          <span style="opacity:0.6; font-size:10px;"></span>
+        </div>
+        <div style="color: rgba(255,255,255,0.8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">
+          
+        </div>
+      ;
+      return el;
+    }
+
+    async function pollTelemetry() {
       try {
-        const resp = await fetch('/api/activity');
-        if (!resp.ok) return;
-        const activities = await resp.json();
+        const res = await fetch('/api/activity');
+        if (!res.ok) return;
+        const data = await res.json();
         
-        activities.forEach(act => {
-          const id = act.ts + '-' + act.tool;
-          if (!knownActivity.has(id)) {
-            knownActivity.add(id);
-            
-            const node = document.createElement('div');
-            node.className = 'feed-item pulse';
-            
-            const date = new Date(act.ts);
-            const timeStr = date.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit' }) + '.' + String(date.getMilliseconds()).padStart(3, '0');
-            
-            node.innerHTML = '<div class="feed-header"><div class="tool-badge">' + act.tool + '</div><div class="time-badge">' + timeStr + '</div></div><div class="target-text">' + (act.target ? act.target.replace(/</g, "&lt;").replace(/>/g, "&gt;") : '') + '</div>';
-            
-            if(feedContainer) feedContainer.prepend(node);
-          }
+        const recent = data.slice(-5); // Keep exactly last 5 calls
+        hudContainer.innerHTML = ''; 
+        recent.forEach(item => {
+          hudContainer.appendChild(createActivityNode(item));
         });
         
-        if (knownActivity.size > 100) {
-            knownActivity = new Set(Array.from(knownActivity).slice(-50));
-        }
-        
-        if(feedContainer) {
-            while (feedContainer.children.length > 5) {
-              const old = feedContainer.children[feedContainer.children.length - 1];
-              old.style.opacity = '0';
-              old.style.transition = 'opacity 0.4s ease';
-              setTimeout(() => { if(old.parentNode) old.parentNode.removeChild(old); }, 400);
-            }
-        }
-      } catch (e) {
-      }
+      } catch(e) { }
     }
-    
-    setInterval(pollAgentActivity, 1000);
+
+    // Ping mission control every 1 second
+    setInterval(pollTelemetry, 1000);
+    pollTelemetry();
   </script>
-<script>
-    const nebula = document.getElementById('nebula-layer');
-    document.addEventListener('mousemove', (e) => {
-        if (!nebula) return;
-        const x = (e.clientX / window.innerWidth - 0.5) * 40;
-        const y = (e.clientY / window.innerHeight - 0.5) * 40;
-        nebula.style.transform = 	ranslate(px, px);
-    });
-</script>
+
+
 </body>
 </html>
-
-
-

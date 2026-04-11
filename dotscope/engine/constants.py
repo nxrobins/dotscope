@@ -7,6 +7,7 @@ SKIP_DIRS = frozenset({
     # Package managers
     "node_modules",
     "vendor",
+    "lib",
     # Python
     "__pycache__",
     "venv",
@@ -25,12 +26,14 @@ SKIP_DIRS = frozenset({
     "target",
     "bin",
     "obj",
+    "artifacts",
     # JS/TS frameworks
     ".next",
     ".nuxt",
     ".output",
     ".parcel-cache",
     # Caches
+    "cache",
     ".cache",
     ".gradle",
     ".terraform",

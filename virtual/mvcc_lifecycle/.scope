@@ -1,0 +1,20 @@
+description: Virtual scope: mvcc_lifecycle (spans 2 modules, hub: dotscope/mcp/mvcc.py)
+includes:
+  - dotscope/mcp/middleware.py
+  - dotscope/mcp/mvcc.py
+  - tests/test_e2e_daemon.py
+  - tests/test_mvcc.py
+context: |
+  Cross-cutting concern detected from import graph.
+  Hub file: dotscope/mcp/mvcc.py (imported by 3 files across 2 modules)
+  
+  Directories spanned: dotscope, tests
+  Cohesion: 60%
+related:
+  - dotscope/.scope
+  - tests/.scope
+tags:
+  - virtual
+  - cross-cutting
+  - mvcc
+tokens_estimate: 2471

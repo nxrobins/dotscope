@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .models import CheckReport, CheckResult, Severity
+from .models import CheckReport, CheckResult, Severity, CheckCategory
 from ...ux.textio import read_repo_text
 from .checks.boundary import check_boundaries
 from .checks.contracts import check_contracts

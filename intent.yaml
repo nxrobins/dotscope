@@ -5,7 +5,7 @@ conventions:
       any_of:
         - has_decorator: "dataclass"
     rules:
-      prohibited_imports: [_treesitter, git_hooks, near_miss, session_manager, swarm]
+      prohibited_imports: [context, history_miner, swarm_state, textio, visibility]
       allowed_paths: [dotscope/[^/]+/.*\.py]
     description: "Discovered from 18 files sharing decorator: dataclass"
     compliance: 1.0
@@ -16,7 +16,7 @@ conventions:
         - has_decorator: "pytest\.fixture"
         - file_path: "tests/.*\.py"
     rules:
-      prohibited_imports: [_treesitter, eval, intent, session_manager, state]
+      prohibited_imports: [context, history_miner, swarm_state, textio, visibility]
       allowed_paths: [tests/.*\.py]
     description: "Discovered from 4 files sharing decorator: pytest.fixture"
     compliance: 1.0
@@ -28,10 +28,10 @@ conventions:
         - file_path: "dotscope/mcp/.*\.py"
     rules:
       required_methods: [process]
-      prohibited_imports: [_treesitter, eval, intent, session_manager, state]
+      prohibited_imports: [context, history_miner, swarm_state, textio, visibility]
       allowed_paths: [dotscope/mcp/.*\.py]
     description: "Discovered from 8 files sharing base_class: PipelineStage"
-    compliance: 1.0
+    compliance: 0.8888888888888888
   - name: "BaseAnalyzer Subclass"
     source: discovered
     match:
@@ -40,7 +40,7 @@ conventions:
         - file_path: "dotscope/passes/lang/.*\.py"
     rules:
       required_methods: [analyze]
-      prohibited_imports: [eval, git_hooks, intent, session_manager, state]
+      prohibited_imports: [context, history_miner, swarm_state, textio, visibility]
       allowed_paths: [dotscope/passes/lang/.*\.py]
     description: "Discovered from 5 files sharing base_class: BaseAnalyzer"
     compliance: 1.0
@@ -62,8 +62,8 @@ voice:
     missing_type_hints: "note"
   stats:
     type_hint_rate: 0.9
-    bare_except_rate: 0.0
+    bare_except_rate: 0.01
     early_return_rate: 0.21
-    docstring_count: 813
+    docstring_count: 824
     dominant_docstring_style: "other"
-    files_analyzed: 190
+    files_analyzed: 195

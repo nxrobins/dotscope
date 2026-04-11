@@ -94,7 +94,7 @@ dependencies = [
 
 [[package]]
 name = "dotscope-core"
-version = "1.6.3"
+version = "1.6.4"
 dependencies = [
  "git2",
  "ignore",

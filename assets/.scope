@@ -1,0 +1,13 @@
+description: assets -- JavaScript module (1 files)
+includes:
+  - assets/
+excludes:
+  - assets/__pycache__/
+  - "*.pyc"
+context: |
+  ## Recent Changes
+  - feat(ui): refine WebGPU 3D aesthetic, volumetric orbs, text masking
+  - feat: Deploy MVCC Daemon and Semantic Interceptor
+tags:
+  - assets
+tokens_estimate: 14271

@@ -80,6 +80,13 @@ def cache_ingest_data(
                     ]
             with open(dot_dir / "network_edges.json", "w", encoding="utf-8") as f:
                 json.dump(edges_data, f, indent=2)
+        else:
+            # FIX: Dynamically obliterate stale cache graphs if the current project structurally lacks Web APIs
+            import os
+            try:
+                os.remove(dot_dir / "network_edges.json")
+            except OSError:
+                pass
 
         # Network confidence scores
         if hasattr(graph, "network_confidence") and graph.network_confidence:
