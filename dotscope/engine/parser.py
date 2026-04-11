@@ -284,9 +284,12 @@ def _parse_list(lines: List[str], i: int) -> Tuple[List[str], int]:
             ):
                 item = item[1:-1]
             # Strip inline comments from list items (e.g., "payments/.scope  # shares user model")
-            comment_match = re.match(r'^([^#]*?)\s+#\s+.*$', item)
+            # EXCEPT if the comment contains the "keep" or "manual" directive
+            comment_match = re.match(r'^([^#]*?)\s+#\s+(.*)$', item)
             if comment_match:
-                item = comment_match.group(1).strip()
+                comment_text = comment_match.group(2).strip().lower()
+                if "keep" not in comment_text and "manual" not in comment_text:
+                    item = comment_match.group(1).strip()
             items.append(item)
         elif current_indent > base_indent:
             pass  # continuation line, skip

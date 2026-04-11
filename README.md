@@ -40,7 +40,10 @@ pip install dotscope
 # 2. Bind your repository and implicitly launch the tracking plane
 dotscope init
 
-# 3. Connect to your Agent
+# 3. Resync boundaries after heavy structural refactoring
+dotscope sync
+
+# 4. Connect to your Agent
 # Dotscope automatically generates the `.cursorrules` or `.windsurfrules` constraints required to orient the AI.
 ```
 

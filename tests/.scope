@@ -1,11 +1,60 @@
 description: Test suite — 266 tests across all features
 includes:
+  - dotscope/__init__.py
+  - dotscope/cli/__init__.py
+  - dotscope/cli/serve.py
+  - dotscope/engine/search.py
+  - dotscope/eval/compare.py
+  - dotscope/eval/harness.py
+  - dotscope/mcp/__init__.py
+  - dotscope/mcp/mvcc.py
+  - dotscope/models/__init__.py
+  - dotscope/models/core.py
+  - dotscope/models/eval.py
+  - dotscope/models/history.py
+  - dotscope/models/intent.py
+  - dotscope/models/state.py
+  - dotscope/passes/ast_analyzer.py
+  - dotscope/passes/backtest.py
+  - dotscope/passes/budget_allocator.py
+  - dotscope/passes/graph_builder.py
+  - dotscope/passes/history_miner.py
+  - dotscope/passes/incremental.py
+  - dotscope/passes/lang/__init__.py
+  - dotscope/passes/lang/_treesitter.py
+  - dotscope/passes/lang/go.py
+  - dotscope/passes/lang/javascript.py
+  - dotscope/passes/lang/solidity.py
+  - dotscope/passes/sentinel/acknowledge.py
+  - dotscope/passes/sentinel/checker.py
+  - dotscope/passes/sentinel/checks/antipattern.py
+  - dotscope/passes/sentinel/checks/boundary.py
+  - dotscope/passes/sentinel/checks/contracts.py
+  - dotscope/passes/sentinel/checks/direction.py
+  - dotscope/passes/sentinel/checks/intent.py
+  - dotscope/passes/sentinel/checks/stability.py
+  - dotscope/passes/sentinel/checks/voice.py
+  - dotscope/passes/sentinel/constraints.py
+  - dotscope/passes/sentinel/line_filter.py
+  - dotscope/passes/virtual.py
+  - dotscope/passes/voice.py
+  - dotscope/passes/voice_defaults.py
+  - dotscope/passes/voice_discovery.py
+  - dotscope/paths/repo.py
+  - dotscope/storage/git_hooks.py
+  - dotscope/storage/incremental_state.py
+  - dotscope/storage/mcp_config.py
+  - dotscope/storage/near_miss.py
+  - dotscope/storage/onboarding.py
+  - dotscope/storage/session_manager.py
+  - dotscope/storage/timing.py
   - tests/
 excludes:
   - tests/__pycache__/
+  - "*.pyc"
 context: |
   Seven test files covering the full system:
-
+  
   - test_dotscope.py: Core functionality (parser, resolver, composer, budget,
     context, matcher, tokens, formatter, backtest, health, utility, lessons)
   - test_ingest.py: Ingest pipeline, graph builder, history miner, absorber,
@@ -19,7 +68,7 @@ context: |
   - test_e2e.py: End-to-end loop (resolve → observe → rebuild → re-resolve)
   - test_visibility.py: Attribution hints, accuracy, health nudges, session
     tracking, near-miss detection
-
+  
   ## Conventions
   Tests import from backward-compat paths (dotscope.check.models, etc.)
   which verifies the stubs work. New tests should import from canonical

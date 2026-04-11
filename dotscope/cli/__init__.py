@@ -1,4 +1,4 @@
-from .core import _cmd_resolve, _cmd_context, _cmd_match, _cmd_init, _cmd_intent, _cmd_utility
+from .core import _cmd_resolve, _cmd_context, _cmd_match, _cmd_init, _cmd_intent, _cmd_utility, _cmd_sync
 from .observability import _cmd_stats, _cmd_tree, _cmd_health, _cmd_validate, _cmd_virtual, _cmd_lessons, _cmd_invariants, _cmd_rebuild, _cmd_test_compiler, _cmd_bench, _cmd_debug
 from .ingest import _cmd_ingest, _cmd_impact, _cmd_backtest, _cmd_conventions, _cmd_diff, _cmd_bootstrap
 from .hooks import _cmd_observe, _cmd_incremental, _cmd_hook, _cmd_refresh, _cmd_check, _cmd_check_backtest, _cmd_voice
@@ -84,6 +84,10 @@ def main(argv=None):
 
     # --- health ---
     sub.add_parser("health", help="Scope health: staleness, coverage, drift")
+
+    # --- sync ---
+    p_sync = sub.add_parser("sync", help="Structurally synchronize stale .scope boundary configurations against the real-time AST engine")
+    p_sync.add_argument("scopes", nargs="*", help="Specific scope boundaries to sync (omit for entire repo)")
 
     # --- ingest ---
     p_ingest = sub.add_parser("ingest", help="Reverse-engineer .scope files from an existing codebase")
@@ -234,6 +238,7 @@ def main(argv=None):
             "stats": _cmd_stats,
             "tree": _cmd_tree,
             "health": _cmd_health,
+            "sync": _cmd_sync,
             "ingest": _cmd_ingest,
             "bootstrap": _cmd_bootstrap,
             "impact": _cmd_impact,

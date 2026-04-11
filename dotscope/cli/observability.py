@@ -340,3 +340,14 @@ def _cmd_debug(args):
         return
 
     print(format_debug_report(result))
+def _cmd_sync(args):
+    from ..paths.repo import find_repo_root
+    from ..workflows.sync import sync_scopes
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    scopes_to_sync = args.scopes if args.scopes else None
+    sync_scopes(root, scopes_to_sync)
+

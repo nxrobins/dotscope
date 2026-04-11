@@ -212,3 +212,17 @@ def _cmd_intent(args):
 
     else:
         print("Usage: dotscope intent {add|list|remove}")
+
+def _cmd_sync(args):
+    from ..paths.repo import find_repo_root
+    from ..workflows.sync import sync_scopes
+
+    root = find_repo_root()
+    if root is None:
+        raise ValueError("Could not find repository root")
+
+    count = sync_scopes(root, getattr(args, "scopes", None))
+    if count == 0:
+        print("No scopes were modified.")
+    else:
+        print(f"\nSuccessfully synchronized {count} scope(s).")

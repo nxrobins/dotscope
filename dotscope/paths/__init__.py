@@ -52,7 +52,8 @@ def normalize_scope_ref(path: str) -> str:
 
 def normalize(base: str, rel_path: str) -> str:
     """Join and normalize a base + relative path."""
-    os_path = canonicalize_separators(rel_path).replace("/", os.sep)
+    clean_path = strip_inline_comment(rel_path)
+    os_path = canonicalize_separators(clean_path).replace("/", os.sep)
     return os.path.normpath(os.path.join(base, os_path))
 
 
