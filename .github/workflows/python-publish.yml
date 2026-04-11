@@ -22,15 +22,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
         with:
-          python-version: "3.x"
+          command: sdist
+          args: --out dist
 
-      - name: Build release distributions
-        run: |
-          # NOTE: put your own distribution build steps here.
-          python -m pip install build
-          python -m build
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --out dist
+          manylinux: auto
 
       - name: Upload distributions
         uses: actions/upload-artifact@v4
