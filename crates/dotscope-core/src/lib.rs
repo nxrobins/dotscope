@@ -1,7 +1,7 @@
 pub mod git;
 pub mod graph;
 pub mod ast;
-
+pub mod walk;
 pub mod mmap;
 pub mod ipc;
 pub mod daemon;
@@ -40,5 +40,6 @@ fn ingest_repository<'py>(
 #[pymodule]
 fn dotscope_core(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(ingest_repository, m)?)?;
+    m.add_function(wrap_pyfunction!(walk::walk_repository, m)?)?;
     Ok(())
 }

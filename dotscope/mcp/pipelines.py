@@ -160,6 +160,26 @@ class VisibilityMetadataStage(PipelineStage):
         root = state["root"]
         module = state.get("module")
         task = state.get("task")
+
+        # Retrieve the architectural gravity of the requested scope
+        gravity_score = 0
+        manifest_path = os.path.join(root, ".dotscope", "structural_manifest.json") if root else ""
+        if os.path.exists(manifest_path):
+            try:
+                import json
+                with open(manifest_path, "r", encoding="utf-8") as f:
+                    manifest = json.loads(f.read())
+                nodes = manifest.get("nodes", [])
+                scores = manifest.get("gravity_scores", [])
+                if len(nodes) == len(scores):
+                    hub_dict = dict(zip(nodes, scores))
+                    for f in state["resolved"].files:
+                        gravity_score += hub_dict.get(f, 0)
+            except Exception:
+                pass
+                
+        metadata = state.setdefault("metadata", {})
+        metadata["gravity_score"] = gravity_score
         
         # Attribution hints
         from ..ux.visibility import extract_attribution_hints

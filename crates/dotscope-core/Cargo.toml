@@ -1,6 +1,6 @@
 [package]
 name = "dotscope-core"
-version = "1.6.11"
+version = "1.7.0"
 edition = "2021"
 publish = false
 
@@ -24,6 +24,9 @@ tree-sitter-go = "=0.21.2"
 ignore = "0.4.25"
 notify = "8.2.0"
 memmap2 = "0.9.10"
+regex = "1.10"
+lazy_static = "1.4"
+bloomfilter = "3.0.1"
 
 [[bin]]
 name = "dotscope_daemon"

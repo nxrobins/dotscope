@@ -278,25 +278,26 @@ def main(argv=None):
             )
 
 def _print_counterfactual(ingest_result, backtest, violations):
-    """Format init output as a counterfactual story."""
-    scopes = ingest_result.get("scopes_written", 0) if isinstance(ingest_result, dict) else 0
-    contracts = ingest_result.get("contracts_found", 0) if isinstance(ingest_result, dict) else 0
-    conventions = ingest_result.get("conventions_found", 0) if isinstance(ingest_result, dict) else 0
+    import sys
+    
+    # STRICT ALIGNMENT: Zero placeholders.
+    total_repo_tokens = ingest_result.get("total_repo_tokens") if isinstance(ingest_result, dict) else None
+    avg_scope_tokens = ingest_result.get("avg_scope_tokens") if isinstance(ingest_result, dict) else None
+    scopes_written = ingest_result.get("scopes_written", 0) if isinstance(ingest_result, dict) else 0
 
-    recall = backtest.get("overall_recall", 0)
+    # Use native ANSI for a clean, terminal-safe UI
+    GREEN = "\033[92m" if sys.stdout.isatty() else ""
+    RESET = "\033[0m" if sys.stdout.isatty() else ""
 
-    lines = [""]
-    lines.append(f"  {scopes} scopes, {contracts} contracts, {conventions} conventions, {recall:.0%} recall")
-    lines.append("")
+    print(f"\n  ⠋ Awakening repository...")
+    if scopes_written > 0:
+        print(f"  {GREEN}✓{RESET} Mapped {scopes_written} structural boundaries.")
+    
+    # We state the token reduction ONLY if the engine successfully calculated it
+    if total_repo_tokens is not None and avg_scope_tokens is not None:
+        print(f"  {GREEN}✓{RESET} Context payload optimized: ~{int(avg_scope_tokens):,} tokens (down from ~{total_repo_tokens:,}).")
 
-    if violations > 0:
-        lines.append(f"  What dotscope would have caught in your last 50 commits:")
-        lines.append(f"    {violations} files that agents would have missed")
-    lines.append("")
-    lines.append("  Your agents are ready.")
-    lines.append("")
-
-    print("\n".join(lines), file=sys.stderr)
+    print(f"\n  {GREEN}[✓]{RESET} Dotscope is active. Your AI is now structurally aware.\n")
 
 def _write_agent_instructions(root: str, quiet: bool = False):
     """Write AGENT_INSTRUCTIONS.md to the target repo if it doesn't exist."""

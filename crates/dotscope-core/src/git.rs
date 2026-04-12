@@ -1,5 +1,20 @@
 use crate::graph::TopologicalGraph;
 use git2::{Repository, Sort, DiffOptions};
+use bloomfilter::Bloom;
+use std::hash::{Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
+
+fn hash_edge(a: &str, b: &str) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    if a < b {
+        a.hash(&mut hasher);
+        b.hash(&mut hasher);
+    } else {
+        b.hash(&mut hasher);
+        a.hash(&mut hasher);
+    }
+    hasher.finish()
+}
 
 pub fn mine_history(
     repo_path: &str,
@@ -15,6 +30,12 @@ pub fn mine_history(
     revwalk.push_head()?;
 
     let mut commit_count = 0;
+
+    // Dynamically calculate the optimal capacity for the Bloom Filter
+    // Heuristic: an average repository yields about 50 robust recurrent edges per commit.
+    // max_commits bounds the universe of possible edge creation linearly.
+    let expected_edges = std::cmp::max(10_000, max_commits * 50);
+    let mut bloom = Bloom::new_for_fp_rate(expected_edges, 0.01).expect("Failed to init bloom");
 
     for oid in revwalk.take(max_commits) {
         let oid = oid?;
@@ -45,14 +66,25 @@ pub fn mine_history(
                 }
             }
 
-            // O(C*F) Inverse Coupling Matrix calculation natively mapping $O(N^2)$ nodes dynamically
+            // O(C*F) Inverse Coupling Matrix calculation natively mapping dynamic hotspots
             if changed_files.len() <= 100 {
                 for i in 0..changed_files.len() {
                     for j in (i + 1)..changed_files.len() {
-                        let source = graph.get_or_insert(&changed_files[i]);
-                        let target = graph.get_or_insert(&changed_files[j]);
-                        // Hotspots generated natively through integer bumps
-                        graph.add_edge_weight(source, target, 1);
+                        let file_a = &changed_files[i];
+                        let file_b = &changed_files[j];
+                        
+                        let edge_hash = hash_edge(file_a, file_b);
+
+                        // BLOOM HEURISTIC GATEWAY: 
+                        // If check_and_set returns false, this is incredibly likely the VERY FIRST time 
+                        // these two files have ever appeared together in a commit. 
+                        // We set the bit, and instantly drop the edge to save CPU find_edge O(E) cycles!
+                        if bloom.check_and_set(&edge_hash) {
+                            // It WAS in the bloom filter! These files have verified recurrent structural gravity.
+                            let source = graph.get_or_insert(file_a);
+                            let target = graph.get_or_insert(file_b);
+                            graph.add_edge_weight(source, target, 1);
+                        }
                     }
                 }
             }

@@ -100,9 +100,18 @@ def ingest(
         
         # Isolate semantic strings inside JSON boundary
         import json
+        import struct
+
+        node_names = topology_raw.get("node_names", [])
+        gravity_bytes = topology_raw.get("node_gravity_scores", b"")
+        gravity_scores = [0] * len(node_names)
+        if gravity_bytes and len(gravity_bytes) == len(node_names) * 4:
+            gravity_scores = list(struct.unpack(f"{len(node_names)}I", gravity_bytes))
+
         with open(manifest_path, "w", encoding="utf-8") as f:
             json.dump({
-                "nodes": topology_raw.get("node_names", []),
+                "nodes": node_names,
+                "gravity_scores": gravity_scores,
                 "commits_analyzed": topology_raw.get("commits_analyzed", 0)
             }, f)
         

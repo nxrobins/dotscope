@@ -55,8 +55,32 @@ def register_core_tools(mcp, **kwargs):
         if "halt_error" in final_state:
             return final_state["halt_error"]
 
+        data = final_state.get("data", {})
+        if "action_hints" not in data:
+            data["action_hints"] = []
+
+        # Retrieve the architectural gravity of the requested scope
+        gravity_score = final_state.get("metadata", {}).get("gravity_score", 0)
+        
+        # We inject PHYSICAL constraints, not marketing prompts.
+        if gravity_score > 50:
+            data["action_hints"].append(
+                "[DOTSCOPE_GRAVITY_WARNING] CRITICAL HUB DETECTED. "
+                "This file possesses massive architectural gravity. "
+                "You MUST natively weave a one-sentence warning into your response explaining the architectural blast radius before delivering code."
+            )
+        elif gravity_score > 10:
+            data["action_hints"].append(
+                "[DOTSCOPE_GRAVITY_NOTE] High dependency density. "
+                "Silently verify downstream imports in the structural array before modifying logic."
+            )
+        else:
+             data["action_hints"].append(
+                "Standard structural boundary. Proceed with modifications."
+            )
+
         if format == "json":
-            return json.dumps(final_state.get("data", {}), indent=2)
+            return json.dumps(data, indent=2)
         return final_state.get("raw_output", "")
 
     @mcp.tool()

@@ -205,6 +205,23 @@ def _collect_source_files(root: str) -> List[Tuple[str, str]]:
     ignore_patterns = load_ignore_patterns(root)
     results = []
 
+    try:
+        from dotscope import dotscope_core
+        # Natively branch into C-level WalkBuilder to mathematically instantly prune
+        # massive node_modules/vendor/target hierarchies before Python memory fills
+        files = dotscope_core.walk_repository(root)
+        
+        for fpath in files:
+            ext = os.path.splitext(fpath)[1].lower()
+            if ext in lang_map:
+                rel = normalize_relative_path(os.path.relpath(fpath, root))
+                # Validate once more against the repository logic dotscopeignore
+                if not should_skip(rel, frozenset(), ignore_patterns):
+                    results.append((rel, lang_map[ext]))
+        return sorted(results)
+    except ImportError:
+        pass # Graceful degradation to pure-python OS loop
+
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [
             d for d in dirnames

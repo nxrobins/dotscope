@@ -54,6 +54,44 @@ def _detect_client() -> str:
 
 def main():
     """MCP server entry point."""
+    import os
+    import sys
+    import contextlib
+
+    # 1. Capture the virgin OS-level stdout file descriptor (the JSON pipe)
+    try:
+        virgin_stdout_fd = os.dup(1)
+
+        # 2. Violently overwrite OS-level stdout (1) with stderr (2).
+        # This physically forces all Rust/C/Python logs into the error stream.
+        os.dup2(2, 1)
+
+        # 3. Synchronize Python's high-level wrapper
+        sys.stdout = sys.stderr
+
+        # 4. Construct a completely isolated file object from the virgin FD
+        isolated_stdout = open(virgin_stdout_fd, "wb", buffering=0)
+
+        # Monkeypatch FastMCP's underlying stdio_server
+        import mcp.server.stdio
+        import anyio
+        from io import TextIOWrapper
+        
+        original_stdio_server = mcp.server.stdio.stdio_server
+
+        @contextlib.asynccontextmanager
+        async def patched_stdio_server(stdin=None, stdout=None):
+            if stdout is None:
+                # Enforce usage of the physically isolated OS pipe
+                stdout = anyio.wrap_file(TextIOWrapper(isolated_stdout, encoding="utf-8"))
+            async with original_stdio_server(stdin=stdin, stdout=stdout) as streams:
+                yield streams
+
+        # 5. Lock in the Monkeypatch
+        mcp.server.stdio.stdio_server = patched_stdio_server
+    except Exception as e:
+        print(f"dotscope warning: OS-level isolation failed: {e}", file=sys.stderr)
+
     try:
         from mcp.server.fastmcp import FastMCP
     except ImportError:

@@ -105,9 +105,19 @@ impl TopologicalGraph {
             std::slice::from_raw_parts(weights.as_ptr() as *const u8, weights.len() * 4)
         };
 
+        // Pass gravity scores directly from petgraph FFI
+        let mut gravity = Vec::with_capacity(self.graph.node_count());
+        for node_idx in self.graph.node_indices() {
+             gravity.push(self.graph.edges_directed(node_idx, petgraph::Direction::Incoming).count() as u32);
+        }
+        let gravity_bytes = unsafe {
+             std::slice::from_raw_parts(gravity.as_ptr() as *const u8, gravity.len() * 4)
+        };
+
         result.set_item("edge_sources", PyBytes::new(py, sources_bytes))?;
         result.set_item("edge_targets", PyBytes::new(py, targets_bytes))?;
         result.set_item("edge_weights", PyBytes::new(py, weights_bytes))?;
+        result.set_item("node_gravity_scores", PyBytes::new(py, gravity_bytes))?;
 
         Ok(result)
     }
