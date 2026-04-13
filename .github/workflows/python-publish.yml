@@ -72,7 +72,9 @@ jobs:
         with:
           pattern: release-wheels-*
           path: dist/
-          merge-multiple: true
+
+      - name: List dist directory
+        run: ls -la dist/
 
       - name: Publish release distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
