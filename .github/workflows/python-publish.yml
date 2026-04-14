@@ -72,6 +72,7 @@ jobs:
         with:
           pattern: release-wheels-*
           path: dist/
+          merge-multiple: true
 
       - name: List dist directory
         run: ls -la dist/
