@@ -1,3 +1,3 @@
 """dotscope — Directory-scoped context boundaries for AI coding agents."""
 
-__version__ = "1.7.1"
+__version__ = "1.7.3"

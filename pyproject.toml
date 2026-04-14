@@ -1,9 +1,10 @@
 [project]
 name = "dotscope"
-version = "1.7.2"
+version = "1.7.3"
 description = "Agents see files. You see architecture. dotscope gives agents the architecture."
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [{ name = "Supremum" }]
 keywords = ["ai", "coding", "agents", "context", "scope", "mcp"]
