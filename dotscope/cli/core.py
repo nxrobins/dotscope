@@ -101,6 +101,7 @@ def _cmd_init(args):
 
     # 4. Write AGENT_INSTRUCTIONS.md + CLAUDE.md
     try:
+        from . import _write_agent_instructions
         _write_agent_instructions(root, quiet)
     except Exception as e:
         if not quiet:
@@ -112,32 +113,16 @@ def _cmd_init(args):
         if not quiet:
             print(f"dotscope: CLAUDE.md failed: {e}", file=sys.stderr)
 
-    # 5. Backtest as counterfactual demo
+    # 5. Counterfactual summary (reuses backtest already computed by ingest())
     if not quiet:
-        try:
-            from ..passes.backtest import backtest_scopes
-            report = backtest_scopes(root, commits=50)
-            if report and report.get("results"):
-                total_violations = 0
-                for scope_result in report["results"]:
-                    total_violations += scope_result.get("missed_files", 0)
-
-                # Extract stats from IngestPlan object
-                stats = {
-                    "scopes_written": len(result.scopes) if hasattr(result, "scopes") else 0,
-                    "contracts_found": (
-                        len(result.history.implicit_contracts)
-                        if hasattr(result, "history") and result.history else 0
-                    ),
-                    "conventions_found": (
-                        len(result.discovered_conventions) if hasattr(result, "discovered_conventions") else 0
-                    ),
-                }
-                _print_counterfactual(stats, report, total_violations)
-            else:
-                _print_summary(result)
-        except Exception:
-            # Backtest may fail on repos with few commits
+        from . import _print_counterfactual, _print_summary
+        report = getattr(result, "backtest_report", None)
+        if report is not None and report.results:
+            total_violations = sum(
+                len(r.missing_includes) for r in report.results
+            )
+            _print_counterfactual(result, report, total_violations)
+        else:
             _print_summary(result)
 
 def _cmd_utility(args):

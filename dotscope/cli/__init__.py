@@ -279,11 +279,24 @@ def main(argv=None):
 
 def _print_counterfactual(ingest_result, backtest, violations):
     import sys
-    
+
     # STRICT ALIGNMENT: Zero placeholders.
-    total_repo_tokens = ingest_result.get("total_repo_tokens") if isinstance(ingest_result, dict) else None
-    avg_scope_tokens = ingest_result.get("avg_scope_tokens") if isinstance(ingest_result, dict) else None
-    scopes_written = ingest_result.get("scopes_written", 0) if isinstance(ingest_result, dict) else 0
+    if isinstance(ingest_result, dict):
+        total_repo_tokens = ingest_result.get("total_repo_tokens")
+        avg_scope_tokens = ingest_result.get("avg_scope_tokens")
+        scopes_written = ingest_result.get("scopes_written", 0)
+    else:
+        total_repo_tokens = getattr(ingest_result, "total_repo_tokens", None) or None
+        scope_list = getattr(ingest_result, "scopes", []) or []
+        real_scopes = [s for s in scope_list if not getattr(s, "directory", "").startswith("virtual/")]
+        scopes_written = len(real_scopes)
+        if total_repo_tokens and real_scopes:
+            avg_scope_tokens = sum(
+                getattr(getattr(s, "config", s), "tokens_estimate", 0) or 0
+                for s in real_scopes
+            ) / len(real_scopes) or None
+        else:
+            avg_scope_tokens = None
 
     # Use native ANSI for a clean, terminal-safe UI
     GREEN = "\033[92m" if sys.stdout.isatty() else ""

@@ -7,7 +7,6 @@ this module handles display.
 HELP_ROOT = """\
 Usage: dotscope <command>
 
-  onboard                   [NEW!] Interactive getting started guide
   init                      One command: ingest, hooks, MCP config
   resolve <scope>           Serve context to an agent
   check                     Verify routing (guards block, nudges guide)
@@ -203,7 +202,6 @@ HELP_COMMANDS = {
     "health": HELP_HEALTH,
     "hook": HELP_HOOK,
     "refresh": HELP_REFRESH,
-    "onboard": "Usage: dotscope onboard\n\nRun this command to get a friendly introduction to how dotscope works.",
 }
 
 
