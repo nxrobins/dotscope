@@ -5,7 +5,7 @@ import sys
 def _cmd_ingest(args):
     from ..workflows.ingest import ingest, format_ingest_report
 
-    root = os.path.abspath(args.dir)
+    root = os.path.abspath(args.directory or args.dir or ".")
     plan = ingest(
         root,
         mine_history=not args.no_history,

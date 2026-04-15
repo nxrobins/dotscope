@@ -91,7 +91,8 @@ def main(argv=None):
 
     # --- ingest ---
     p_ingest = sub.add_parser("ingest", help="Reverse-engineer .scope files from an existing codebase")
-    p_ingest.add_argument("--dir", default=".", help="Repository root to ingest")
+    p_ingest.add_argument("directory", nargs="?", default=None, help="Repository root to ingest (default: current directory)")
+    p_ingest.add_argument("--dir", default=None, help="Repository root to ingest (alias for positional arg)")
     p_ingest.add_argument("--no-history", action="store_true", help="Skip git history mining")
     p_ingest.add_argument("--no-docs", action="store_true", help="Skip doc absorption")
     p_ingest.add_argument("--dry-run", action="store_true", help="Plan only, don't write files")
