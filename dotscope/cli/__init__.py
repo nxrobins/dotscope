@@ -3,6 +3,7 @@ from .observability import _cmd_stats, _cmd_tree, _cmd_health, _cmd_validate, _c
 from .ingest import _cmd_ingest, _cmd_impact, _cmd_backtest, _cmd_conventions, _cmd_diff, _cmd_bootstrap
 from .hooks import _cmd_observe, _cmd_incremental, _cmd_hook, _cmd_refresh, _cmd_check, _cmd_check_backtest, _cmd_voice
 from .serve import _cmd_serve
+from .pro import _cmd_pro
 
 
 """CLI entry point for dotscope."""
@@ -222,6 +223,19 @@ def main(argv=None):
     p_serve.add_argument("--port", type=int, default=8080, help="Port to run the local server on")
     p_serve.add_argument("--headless", action="store_true", help="Launch the API server exclusively without WebGPU payload mounting")
 
+    # --- pro ---
+    p_pro = sub.add_parser("pro", help="Dotscope Pro intelligence (requires Pro connection)")
+    pro_sub = p_pro.add_subparsers(dest="pro_action")
+    pro_sub.add_parser("status", help="Check Pro connection status")
+    pro_sub.add_parser("compare", help="Compare local topology against Genesis swarm")
+    p_pro_density = pro_sub.add_parser("density", help="Check failure density for a file")
+    p_pro_density.add_argument("file", help="File path to analyze")
+    pro_sub.add_parser("baseline", help="Show global NPMI baseline from Genesis swarm")
+    p_pro_login = pro_sub.add_parser("login", help="Configure Pro credentials")
+    p_pro_login.add_argument("--url", default=None, help="Pro URL (non-interactive)")
+    p_pro_login.add_argument("--token", default=None, help="Pro token (non-interactive)")
+    pro_sub.add_parser("logout", help="Remove stored Pro credentials")
+
     args = parser.parse_args(argv)
 
     if args.command is None or getattr(args, "show_help", False):
@@ -262,6 +276,7 @@ def main(argv=None):
             "bench": _cmd_bench,
             "debug": _cmd_debug,
             "serve": _cmd_serve,
+            "pro": _cmd_pro,
         }[args.command]
         handler(args)
     except (ValueError, FileNotFoundError) as e:

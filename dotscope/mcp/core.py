@@ -79,6 +79,33 @@ def register_core_tools(mcp, **kwargs):
                 "Standard structural boundary. Proceed with modifications."
             )
 
+        # Pro enrichment: adds at most one additional action_hint when a
+        # Pro provider is configured AND the scope has meaningful gravity.
+        # Fail-silent — if anything goes wrong, the hint just isn't added.
+        if gravity_score > 10:
+            try:
+                from ..pro import get_provider
+                from ..pro._cache import cache_get, cache_set
+                pro = get_provider()
+                if pro is not None:
+                    meta = final_state.get("metadata", {}) or {}
+                    loc = int(meta.get("loc", 0) or 0)
+                    in_degree = int(meta.get("in_degree", 0) or 0)
+                    cache_key = f"fd:{gravity_score}:{loc}:{in_degree}"
+                    fd = cache_get(cache_key)
+                    if fd is None:
+                        fd = pro.get_failure_density(loc_count=loc, in_degree=in_degree)
+                        cache_set(cache_key, fd)
+                    if fd and fd.severity in ("critical", "warning"):
+                        data["action_hints"].append(
+                            f"[DOTSCOPE_PRO_INSIGHT] Genesis swarm: this structural "
+                            f"shape has {fd.density * 100:.1f}% historical failure "
+                            f"rate across {fd.matched_repos} top repos. "
+                            f"{fd.explanation}"
+                        )
+            except Exception:
+                pass
+
         if format == "json":
             return json.dumps(data, indent=2)
         return final_state.get("raw_output", "")

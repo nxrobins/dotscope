@@ -62,6 +62,36 @@ def _cmd_ingest(args):
         else:
             print("Phase 2 Plan Generated: Read .dotscope/manifest.json for telemetry paths.")
 
+        # Pro enrichment (silent no-op when Pro isn't configured).
+        _maybe_pro_compare(root)
+
+def _maybe_pro_compare(root):
+    """Ship anonymized topology to Pro and print any analog / directive lines.
+
+    Fail-silent: any exception (Pro unconfigured, network, malformed response)
+    is swallowed so OSS users see the exact same output as before.
+    """
+    try:
+        from ..pro import get_provider
+        pro = get_provider()
+        if pro is None:
+            return
+        from ..passes.graph_builder import build_graph
+        from ..pro._anonymize import anonymize_graph
+        graph = build_graph(root)
+        report = pro.compare_topology(anonymize_graph(graph))
+        if report.analog_count > 0:
+            print(f"\n  Pro: {report.analog_count} structural analogs in Genesis swarm")
+            for analog in report.analogs[:3]:
+                print(
+                    f"     -> {analog.repo_domain} "
+                    f"({analog.similarity_score:.0%}): {analog.insight}"
+                )
+        if report.directives:
+            print(f"  Pro: {len(report.directives)} architectural directives")
+    except Exception:
+        pass
+
 def _cmd_bootstrap(args):
     root = os.path.abspath(args.dir)
     manifest_path = os.path.join(root, ".dotscope", "manifest.json")
@@ -118,6 +148,33 @@ def _cmd_impact(args):
     total = 1 + len(all_dependents)
     risk = "LOW" if total <= 3 else ("MEDIUM" if total <= 10 else "HIGH")
     print(f"\nBlast radius: {total} file(s), risk: {risk}")
+
+    # Pro enrichment (silent no-op when Pro isn't configured).
+    _maybe_pro_density(node)
+
+
+def _maybe_pro_density(node):
+    """Print a one-line failure-density insight from Pro if configured."""
+    try:
+        from ..pro import get_provider
+        pro = get_provider()
+        if pro is None:
+            return
+        in_degree = len(node.imported_by) if node else 0
+        loc = int(getattr(node, "loc", 0) or 0) if node else 0
+        fd = pro.get_failure_density(loc_count=loc, in_degree=in_degree)
+        if fd.severity == "critical":
+            print(
+                f"  Pro: [CRITICAL] {fd.density * 100:.1f}% historical failure rate "
+                f"across {fd.matched_repos} repos"
+            )
+        elif fd.severity == "warning":
+            print(
+                f"  Pro: [WARNING] {fd.density * 100:.1f}% failure correlation "
+                f"({fd.matched_repos} repos)"
+            )
+    except Exception:
+        pass
 
 def _cmd_backtest(args):
     from ..passes.backtest import backtest_scopes, format_backtest_report
