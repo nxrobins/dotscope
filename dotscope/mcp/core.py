@@ -110,7 +110,7 @@ def register_core_tools(mcp, **kwargs):
 
         index = load_resolution_index(root)
         scopes = []
-        if index:
+        if index and index.scopes:
             for name, entry in index.scopes.items():
                 scopes.append((name, entry.keywords, entry.description or ""))
         else:
@@ -167,7 +167,7 @@ def register_core_tools(mcp, **kwargs):
         scopes = []
         index = load_resolution_index(root)
 
-        if index:
+        if index and index.scopes:
             for name, entry in index.scopes.items():
                 scopes.append({
                     "name": name,

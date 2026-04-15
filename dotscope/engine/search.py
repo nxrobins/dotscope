@@ -21,7 +21,7 @@ def execute_semantic_search(root: str, query: str) -> str:
             query
         ]
         # Ignore case by default to maximize recall for the agent
-        cmd.insert(2, "-i")
+        cmd.insert(3, "-i")
 
         result = subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=15)
         # 1 means no match, 0 means match. >1 is error
