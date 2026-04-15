@@ -59,17 +59,17 @@ def main():
     import contextlib
 
     # Redirect stray stdout writes (from libraries, print() calls, etc.)
-    # to stderr so that only clean JSON-RPC flows over the stdio transport.
+    # to stderr so only clean JSON-RPC flows over the stdio transport.
     #
     # How it works:
     #   1. Save the real stdout fd (the MCP pipe to the client).
     #   2. Point fd 1 and sys.stdout at stderr (captures stray output).
-    #   3. Build an isolated file object from the saved fd.
-    #   4. Patch the reference that FastMCP.run_stdio_async actually uses
-    #      — the local name imported via `from mcp.server.stdio import
-    #      stdio_server` inside mcp/server/fastmcp/server.py.  Patching
-    #      `mcp.server.stdio.stdio_server` alone has no effect because
-    #      the `from … import` already bound a direct reference.
+    #   3. Build an async file object from the saved fd.
+    #   4. Override FastMCP.run_stdio_async to pass the saved stdout
+    #      into stdio_server(stdout=...) — its public API.
+    #
+    # This avoids monkeypatching internal module references, which break
+    # when FastMCP caches them via `from … import` at load time.
     _isolated_stdout = None
     try:
         virgin_stdout_fd = os.dup(1)
@@ -97,35 +97,29 @@ def main():
     known, _remaining = parser.parse_known_args()
     _cli_root = known.root
 
-    # Patch the stdio_server reference that FastMCP.run_stdio_async actually
-    # calls.  The module does `from mcp.server.stdio import stdio_server` so
-    # we must overwrite that *local* name, not the module-level attribute.
-    if _isolated_stdout is not None:
-        try:
-            import mcp.server.stdio as _mcp_stdio
-            import mcp.server.fastmcp.server as _fastmcp_mod
-            import anyio
-            from io import TextIOWrapper
-
-            _original_stdio_server = _mcp_stdio.stdio_server
-
-            @contextlib.asynccontextmanager
-            async def _patched_stdio_server(stdin=None, stdout=None):
-                if stdout is None:
-                    stdout = anyio.wrap_file(
-                        TextIOWrapper(_isolated_stdout, encoding="utf-8")
-                    )
-                async with _original_stdio_server(stdin=stdin, stdout=stdout) as streams:
-                    yield streams
-
-            # Patch both: the module attr (for anyone else importing it) and
-            # the local name inside fastmcp.server (the one that matters).
-            _mcp_stdio.stdio_server = _patched_stdio_server
-            _fastmcp_mod.stdio_server = _patched_stdio_server
-        except Exception as e:
-            print(f"dotscope warning: stdio patch failed: {e}", file=sys.stderr)
-
     mcp = FastMCP("dotscope")
+
+    # Override run_stdio_async to pass the isolated stdout directly into
+    # stdio_server's public `stdout=` parameter.  This is stable across
+    # mcp versions — no module-level monkeypatching required.
+    if _isolated_stdout is not None:
+        from mcp.server.stdio import stdio_server
+        import anyio
+        from io import TextIOWrapper
+
+        _mcp_stdout = anyio.wrap_file(
+            TextIOWrapper(_isolated_stdout, encoding="utf-8")
+        )
+
+        async def _run_stdio_with_isolated_stdout(self_ref=mcp):
+            async with stdio_server(stdout=_mcp_stdout) as (read_stream, write_stream):
+                await self_ref._mcp_server.run(
+                    read_stream,
+                    write_stream,
+                    self_ref._mcp_server.create_initialization_options(),
+                )
+
+        mcp.run_stdio_async = _run_stdio_with_isolated_stdout
 
     # Session-level tracker (lives across tool calls in a single MCP session)
     from ..ux.visibility import SessionTracker

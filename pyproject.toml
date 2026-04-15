@@ -1,6 +1,6 @@
 [project]
 name = "dotscope"
-version = "1.7.4"
+version = "1.7.5"
 description = "Agents see files. You see architecture. dotscope gives agents the architecture."
 readme = "README.md"
 license = "MIT"
@@ -26,7 +26,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-mcp = ["mcp>=1.2.0,<3"]
+mcp = ["mcp>=1.6.0,<3"]
 tokens = ["tiktoken"]
 embeddings = ["sentence-transformers"]
 search = ["sentence-transformers", "numpy"]
