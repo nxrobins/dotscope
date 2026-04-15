@@ -86,8 +86,8 @@ def main(argv=None):
     sub.add_parser("health", help="Scope health: staleness, coverage, drift")
 
     # --- sync ---
-    p_sync = sub.add_parser("sync", help="Structurally synchronize stale .scope boundary configurations against the real-time AST engine")
-    p_sync.add_argument("scopes", nargs="*", help="Specific scope boundaries to sync (omit for entire repo)")
+    p_sync = sub.add_parser("sync", help="Re-align .scope boundaries against the current import graph")
+    p_sync.add_argument("scopes", nargs="*", help="Specific scopes to sync (omit for entire repo)")
 
     # --- ingest ---
     p_ingest = sub.add_parser("ingest", help="Reverse-engineer .scope files from an existing codebase")

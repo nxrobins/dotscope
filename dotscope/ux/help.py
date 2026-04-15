@@ -8,17 +8,25 @@ HELP_ROOT = """\
 Usage: dotscope <command>
 
   init                      One command: ingest, hooks, MCP config
-  resolve <scope>           Serve context to an agent
+  resolve <scope>           Serve files + context to an agent
+  context <scope>           Architectural context only (no files)
+  match <task>              Find matching scope for a task description
+  list                      List all scopes
   check                     Verify routing (guards block, nudges guide)
+  health                    Scope staleness and drift
+  validate                  Check .scope files for broken paths
+
+  ingest .                  Reverse-engineer .scope files from codebase
+  sync                      Re-align .scope boundaries against import graph
+  refresh                   Reload runtime cache from disk
+
   conventions               View and manage conventions
   voice                     View and manage code style
-  health                    Scope staleness and drift
-  refresh                   Runtime refresh queue and worker
-
-  ingest .                  Re-ingest (full scan)
   intent                    Declare architectural direction
-  diff --staged             Semantic diff
-  hook install              Re-install hooks
+  diff --staged             Semantic diff against conventions
+  impact <file>             Predict blast radius of changes
+
+  hook install              Install git hooks
   bench                     Performance metrics
   test-compiler             Regression suite
   debug --last              Diagnose a bad session
@@ -188,10 +196,60 @@ Usage: dotscope refresh <action> [options]
 Automatic refresh writes only to .dotscope/. Tracked .scope files stay stable
 until you run dotscope ingest."""
 
+HELP_SYNC = """\
+Usage: dotscope sync [scopes...]
+
+  dotscope sync                        Re-align all .scope boundaries
+  dotscope sync auth payments          Sync specific scopes only
+
+Scans the AST dependency graph and updates each .scope file's includes
+and excludes to match real imports. Lines marked # keep or # manual are
+preserved. Context, description, and keywords are never touched."""
+
+HELP_CONTEXT = """\
+Usage: dotscope context <scope> [options]
+
+  dotscope context auth                Full architectural context
+  dotscope context auth --section gotchas   Specific section only
+
+Options:
+  --section <name>     Filter to a named section (invariants, gotchas, etc.)"""
+
+HELP_MATCH = """\
+Usage: dotscope match <task>
+
+  dotscope match "fix the auth token refresh bug"
+  dotscope match "add retry logic to API client"
+
+Returns ranked scopes with confidence scores based on keyword overlap."""
+
+HELP_VALIDATE = """\
+Usage: dotscope validate
+
+  dotscope validate                    Check all .scope files
+
+Checks:
+  - Include paths exist on disk
+  - Related scope files exist
+  - Description is not empty
+  - Context field is present"""
+
+HELP_IMPACT = """\
+Usage: dotscope impact <file>
+
+  dotscope impact auth/tokens.py       Show blast radius
+
+Returns direct dependents, two-hop dependents, and co-change companions."""
+
 HELP_COMMANDS = {
     "ingest": HELP_INGEST,
     "resolve": HELP_RESOLVE,
+    "context": HELP_CONTEXT,
+    "match": HELP_MATCH,
     "check": HELP_CHECK,
+    "sync": HELP_SYNC,
+    "validate": HELP_VALIDATE,
+    "impact": HELP_IMPACT,
     "intent": HELP_INTENT,
     "conventions": HELP_CONVENTIONS,
     "diff": HELP_DIFF,
