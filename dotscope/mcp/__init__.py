@@ -58,39 +58,27 @@ def main():
     import sys
     import contextlib
 
-    # 1. Capture the virgin OS-level stdout file descriptor (the JSON pipe)
+    # Redirect stray stdout writes (from libraries, print() calls, etc.)
+    # to stderr so that only clean JSON-RPC flows over the stdio transport.
+    #
+    # How it works:
+    #   1. Save the real stdout fd (the MCP pipe to the client).
+    #   2. Point fd 1 and sys.stdout at stderr (captures stray output).
+    #   3. Build an isolated file object from the saved fd.
+    #   4. Patch the reference that FastMCP.run_stdio_async actually uses
+    #      — the local name imported via `from mcp.server.stdio import
+    #      stdio_server` inside mcp/server/fastmcp/server.py.  Patching
+    #      `mcp.server.stdio.stdio_server` alone has no effect because
+    #      the `from … import` already bound a direct reference.
+    _isolated_stdout = None
     try:
         virgin_stdout_fd = os.dup(1)
+        os.dup2(2, 1)                    # fd 1 → stderr
+        sys.stdout = sys.stderr           # Python-level sync
 
-        # 2. Violently overwrite OS-level stdout (1) with stderr (2).
-        # This physically forces all Rust/C/Python logs into the error stream.
-        os.dup2(2, 1)
-
-        # 3. Synchronize Python's high-level wrapper
-        sys.stdout = sys.stderr
-
-        # 4. Construct a completely isolated file object from the virgin FD
-        isolated_stdout = open(virgin_stdout_fd, "wb", buffering=0)
-
-        # Monkeypatch FastMCP's underlying stdio_server
-        import mcp.server.stdio
-        import anyio
-        from io import TextIOWrapper
-        
-        original_stdio_server = mcp.server.stdio.stdio_server
-
-        @contextlib.asynccontextmanager
-        async def patched_stdio_server(stdin=None, stdout=None):
-            if stdout is None:
-                # Enforce usage of the physically isolated OS pipe
-                stdout = anyio.wrap_file(TextIOWrapper(isolated_stdout, encoding="utf-8"))
-            async with original_stdio_server(stdin=stdin, stdout=stdout) as streams:
-                yield streams
-
-        # 5. Lock in the Monkeypatch
-        mcp.server.stdio.stdio_server = patched_stdio_server
+        _isolated_stdout = open(virgin_stdout_fd, "wb", buffering=0)
     except Exception as e:
-        print(f"dotscope warning: OS-level isolation failed: {e}", file=sys.stderr)
+        print(f"dotscope warning: stdout isolation failed: {e}", file=sys.stderr)
 
     try:
         from mcp.server.fastmcp import FastMCP
@@ -108,6 +96,34 @@ def main():
     parser.add_argument("--root", default=None, help="Repository root path")
     known, _remaining = parser.parse_known_args()
     _cli_root = known.root
+
+    # Patch the stdio_server reference that FastMCP.run_stdio_async actually
+    # calls.  The module does `from mcp.server.stdio import stdio_server` so
+    # we must overwrite that *local* name, not the module-level attribute.
+    if _isolated_stdout is not None:
+        try:
+            import mcp.server.stdio as _mcp_stdio
+            import mcp.server.fastmcp.server as _fastmcp_mod
+            import anyio
+            from io import TextIOWrapper
+
+            _original_stdio_server = _mcp_stdio.stdio_server
+
+            @contextlib.asynccontextmanager
+            async def _patched_stdio_server(stdin=None, stdout=None):
+                if stdout is None:
+                    stdout = anyio.wrap_file(
+                        TextIOWrapper(_isolated_stdout, encoding="utf-8")
+                    )
+                async with _original_stdio_server(stdin=stdin, stdout=stdout) as streams:
+                    yield streams
+
+            # Patch both: the module attr (for anyone else importing it) and
+            # the local name inside fastmcp.server (the one that matters).
+            _mcp_stdio.stdio_server = _patched_stdio_server
+            _fastmcp_mod.stdio_server = _patched_stdio_server
+        except Exception as e:
+            print(f"dotscope warning: stdio patch failed: {e}", file=sys.stderr)
 
     mcp = FastMCP("dotscope")
 
