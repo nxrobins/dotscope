@@ -48,6 +48,7 @@ includes:
   - dotscope/storage/onboarding.py
   - dotscope/storage/session_manager.py
   - dotscope/storage/timing.py
+  - dotscope/workflows/sync.py
   - tests/
 excludes:
   - tests/__pycache__/

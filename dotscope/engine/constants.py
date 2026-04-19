@@ -7,7 +7,6 @@ SKIP_DIRS = frozenset({
     # Package managers
     "node_modules",
     "vendor",
-    "lib",
     # Python
     "__pycache__",
     "venv",

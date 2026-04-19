@@ -19,6 +19,11 @@ from ..models import (
 from ..engine.resolver import resolve
 
 
+def _normalize_fs_path(path: str) -> str:
+    """Normalize a filesystem path for stable cross-platform comparisons."""
+    return os.path.normcase(os.path.normpath(path))
+
+
 def backtest_scopes(
     root: str,
     scopes: List[ScopeConfig],
@@ -40,7 +45,7 @@ def backtest_scopes(
     for scope in scopes:
         resolved = resolve(scope, follow_related=False, root=root)
         rel_dir = os.path.relpath(scope.directory, root)
-        scope_file_sets[rel_dir] = set(resolved.files)
+        scope_file_sets[rel_dir] = {_normalize_fs_path(path) for path in resolved.files}
         scope_dirs[rel_dir] = scope
 
     # Track per-scope results
@@ -58,7 +63,7 @@ def backtest_scopes(
 
             all_covered = True
             for changed_file in commit_files:
-                abs_changed = os.path.join(root, changed_file)
+                abs_changed = _normalize_fs_path(os.path.join(root, changed_file))
                 if abs_changed not in file_set:
                     all_covered = False
                     scope_misses[scope_dir][changed_file] += 1

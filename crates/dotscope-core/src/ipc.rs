@@ -11,7 +11,7 @@ pub fn start_ipc_server(port: u16, control: Arc<ControlPlane>) {
 
     for stream in listener.incoming() {
         if let Ok(mut stream) = stream {
-            let mut control_ref = control.clone();
+            let control_ref = control.clone();
             
             // Simple blocking thread per connection
             thread::spawn(move || {

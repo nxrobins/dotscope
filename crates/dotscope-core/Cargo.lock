@@ -110,7 +110,7 @@ dependencies = [
 
 [[package]]
 name = "dotscope-core"
-version = "1.6.11"
+version = "1.7.7"
 dependencies = [
  "bloomfilter",
  "git2",

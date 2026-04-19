@@ -3,9 +3,9 @@ use ignore::WalkBuilder;
 use rayon::prelude::*;
 use std::collections::HashSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
-use tree_sitter::{Parser, Query, QueryCursor, Language};
+use tree_sitter::{Parser, Query, QueryCursor};
 use regex::Regex;
 use lazy_static::lazy_static;
 

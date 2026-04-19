@@ -668,7 +668,9 @@ def ensure_resolution_freshness(
     state_value = "fresh"
     if healed and job_kind:
         state_value = "self_healed"
-    elif needs_repo or stale_scope_targets:
+    elif needs_repo:
+        state_value = "stale_fallback"
+    elif stale_scope_targets:
         state_value = "stale_git_drift"
 
     last_refreshed = ""

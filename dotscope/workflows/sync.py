@@ -5,10 +5,16 @@ import sys
 from typing import List, Optional
 
 from ..engine.discovery import find_all_scopes
-from ..engine.parser import parse_scope_file, serialize_scope, ScopeConfig
-from ..passes.graph_builder import build_graph, DependencyGraph
-from ..paths import normalize_directory_include
+from ..engine.parser import parse_scope_file, serialize_scope
+from ..passes.graph_builder import build_graph
+from ..paths import normalize_directory_include, normalize_relative_path
 from .ingest import _find_cross_module_imports, _default_excludes
+
+
+def _scope_directory(root: str, scope_path: str) -> str:
+    """Return a canonical repo-relative directory for a scope file."""
+    directory = os.path.relpath(os.path.dirname(scope_path), root)
+    return normalize_relative_path(directory).rstrip("/")
 
 def sync_scopes(root: str, scopes: Optional[List[str]] = None) -> int:
     """
@@ -31,32 +37,39 @@ def sync_scopes(root: str, scopes: Optional[List[str]] = None) -> int:
 
     print(f"Building full AST topology for {len(all_scope_paths)} scope boundary target(s)...")
     graph = build_graph(root)
-    
+
+    module_map = {
+        normalize_relative_path(mod.directory).rstrip("/"): mod
+        for mod in graph.modules
+    }
+    syncable_scope_paths = []
+    skipped_scope_dirs = []
+    for scope_path in all_scope_paths:
+        scope_dir = _scope_directory(root, scope_path)
+        target_module = module_map.get(scope_dir)
+        if target_module is not None:
+            syncable_scope_paths.append((scope_path, scope_dir, target_module))
+        else:
+            skipped_scope_dirs.append(scope_dir or ".")
+
+    if skipped_scope_dirs:
+        preview = ", ".join(skipped_scope_dirs[:5])
+        suffix = " ..." if len(skipped_scope_dirs) > 5 else ""
+        print(
+            f"Skipping {len(skipped_scope_dirs)} non-graph-backed scope(s): {preview}{suffix}",
+            file=sys.stderr,
+        )
+
     modified_count = 0
 
-    for scope_path in all_scope_paths:
+    for scope_path, module_directory, target_module in syncable_scope_paths:
         try:
             config = parse_scope_file(scope_path)
         except Exception as e:
             print(f"ERROR: Failed to parse {scope_path}: {e}", file=sys.stderr)
             continue
 
-        module_directory = os.path.relpath(os.path.dirname(scope_path), root)
-        if module_directory == ".":
-            module_directory = ""
-            
         directory_prefix = normalize_directory_include(module_directory) if module_directory else "./"
-
-        # Find our module boundary in the graph
-        target_module = None
-        for mod in graph.modules:
-            if mod.directory == module_directory or mod.directory == module_directory.rstrip("/\\"):
-                target_module = mod
-                break
-
-        if not target_module:
-            print(f"WARN: Could not locate graph cluster for {module_directory}", file=sys.stderr)
-            continue
 
         # --- Recompute AST Includes ---
         new_includes = []

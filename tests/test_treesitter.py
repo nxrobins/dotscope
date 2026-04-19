@@ -296,8 +296,10 @@ class TestRegistry:
         assert go is not None
 
     def test_unknown_returns_none(self):
-        assert get_analyzer("rust") is None
         assert get_analyzer("unknown") is None
+
+    def test_rust_returns_callable(self):
+        assert get_analyzer("rust") is not None
 
     def test_python_returns_none(self):
         """Python uses stdlib ast, not tree-sitter."""
