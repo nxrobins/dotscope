@@ -227,6 +227,15 @@ def _cmd_doctor(args):
         print(json.dumps(report, indent=2))
     else:
         print(f"Repository root: {report['repo_root']}")
+        managed = report.get("managed_runtime", {})
+        if managed:
+            print("Managed runtime:")
+            print(f"  status: {managed.get('status')}")
+            print(f"  root: {managed.get('runtime_root')}")
+            if managed.get("launcher_path"):
+                print(f"  launcher: {managed.get('launcher_path')}")
+            if managed.get("package_source"):
+                print(f"  source: {managed.get('package_source')}")
         launcher = report["launcher"]
         if launcher["ok"]:
             argv = " ".join(

@@ -102,10 +102,11 @@ class TestCLITree:
 
 
 class TestCLIInit:
-    def test_init_runs_without_crash(self, tmp_path):
+    def test_init_runs_without_crash(self, tmp_path, monkeypatch):
         """Init should not crash on an empty directory."""
         # Create a minimal git repo so ingest has something to work with
         import subprocess
+        monkeypatch.setattr("dotscope.storage.mcp_config.configure_mcp", lambda _root: [])
         subprocess.run(["git", "init", str(tmp_path)], capture_output=True)
         (tmp_path / "module.py").write_text("def foo(): pass\n")
         subprocess.run(["git", "-C", str(tmp_path), "add", "."], capture_output=True)
@@ -134,6 +135,12 @@ class TestCLIDoctor:
                     "args": [],
                     "source": "path-script",
                 },
+                "managed_runtime": {
+                    "status": "ok",
+                    "runtime_root": str(tmp_path / "runtime"),
+                    "launcher_path": "/abs/path/dotscope-mcp",
+                    "package_source": "local-source",
+                },
                 "candidates": [{"ok": True, "command": "/abs/path/dotscope-mcp", "args": [], "source": "path-script"}],
                 "targets": [{"label": "Claude Code (.mcp.json)", "path": str(tmp_path / ".mcp.json"), "status": "ok"}],
                 "notes": ["note"],
@@ -152,6 +159,7 @@ class TestCLIDoctor:
             lambda _root: {
                 "repo_root": str(tmp_path),
                 "launcher": {"ok": False, "command": None, "args": [], "source": None},
+                "managed_runtime": {"status": "missing", "runtime_root": str(tmp_path / "runtime")},
                 "candidates": [],
                 "targets": [],
                 "notes": [],

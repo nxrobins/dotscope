@@ -24,7 +24,7 @@ dotscope init
 dotscope doctor mcp
 ```
 
-`dotscope init` now resolves a working launcher, writes absolute-command MCP entries, and pins every generated config to the repository with `--root`.
+`dotscope init` now installs a dotscope-owned MCP runtime, resolves a working launcher from that runtime, writes absolute-command MCP entries, and pins every generated config to the repository with `--root`.
 
 ## Manual Configuration
 
@@ -123,6 +123,7 @@ Most activation failures came from one of these conditions:
 
 The current startup path addresses those cases by:
 
+- installing a dotscope-owned runtime instead of depending on ambient Python state
 - validating launcher candidates before writing configs
 - emitting absolute command paths instead of bare `dotscope-mcp`
 - forcing `--root` in every generated client config

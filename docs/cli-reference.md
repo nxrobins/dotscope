@@ -8,7 +8,7 @@ dotscope init
 dotscope doctor mcp
 ```
 
-`dotscope init` does everything: ingest, hook install, and MCP config repair for detected IDEs. `dotscope doctor mcp` verifies the launcher and client configs afterward.
+`dotscope init` does everything: ingest, hook install, managed MCP runtime install, and MCP config repair for detected IDEs. `dotscope doctor mcp` verifies the owned runtime and client configs afterward.
 
 For manual setup or re-runs:
 
@@ -95,7 +95,7 @@ dotscope hook uninstall                # Remove hooks
 dotscope debug --last                  # Bisect the last bad session
 dotscope debug <session_id>            # Bisect a specific session
 dotscope debug --list                  # List recent sessions
-dotscope doctor mcp                    # Probe the MCP launcher and inspect client configs
+dotscope doctor mcp                    # Probe the managed MCP runtime and inspect client configs
 ```
 
 ## MCP Server
@@ -113,4 +113,4 @@ For agents, add the MCP server to your project's `.mcp.json`:
 }
 ```
 
-`dotscope init` configures this automatically for Claude Desktop, Claude Code, Cursor, VS Code, Windsurf, and Codex workspace configs. Use `dotscope doctor mcp` any time you want to confirm the launcher still resolves cleanly. See [MCP Integration Guide](mcp-integration.md) for the full tools reference.
+`dotscope init` configures this automatically for Claude Desktop, Claude Code, Cursor, VS Code, Windsurf, and Codex workspace configs. Use `dotscope doctor mcp` any time you want to confirm the owned runtime and launcher still resolve cleanly. See [MCP Integration Guide](mcp-integration.md) for the full tools reference.

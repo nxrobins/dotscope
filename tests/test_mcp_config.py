@@ -169,8 +169,8 @@ class TestConfigureMcp:
         windsurf = tmp_path / "global" / "windsurf.json"
 
         monkeypatch.setattr(
-            "dotscope.storage.mcp_config.collect_mcp_launch_diagnostics",
-            lambda _repo_root: (launch_spec, [{"ok": True, "source": "test"}]),
+            "dotscope.storage.mcp_config.ensure_managed_mcp_runtime",
+            lambda _repo_root, probe_func: (launch_spec, {"status": "ok"}),
         )
         monkeypatch.setattr(
             "dotscope.storage.mcp_config._claude_desktop_config_path",

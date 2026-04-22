@@ -11,42 +11,35 @@ import sys
 import sysconfig
 import threading
 import time
-from dataclasses import dataclass
 from pathlib import Path
 
 from .atomic import atomic_write_json, atomic_write_text
+from .mcp_runtime import (
+    McpLaunchSpec,
+    diagnose_managed_mcp_runtime,
+    ensure_managed_mcp_runtime,
+)
 
 _DOTSCOPE_SERVER_NAME = "dotscope"
-_MCP_PROTOCOL_VERSIONS = ("2025-03-26", "2024-11-05", "2024-08-19")
+_MCP_PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
 _DEFAULT_PROBE_TIMEOUT_SECONDS = 5.0
 _CODEX_SECTION_RE = re.compile(
     r"(?ms)^\[mcp_servers\.dotscope\]\n.*?(?=^\[|\Z)"
 )
 
 
-@dataclass(frozen=True)
-class McpLaunchSpec:
-    """A concrete launcher that can start the dotscope MCP server."""
-
-    command: str
-    args: tuple[str, ...]
-    source: str
-
-    def argv(self, repo_root: str) -> list[str]:
-        return [
-            self.command,
-            *self.args,
-            "--root",
-            os.path.abspath(repo_root),
-        ]
-
-
 def configure_mcp(repo_root: str) -> list[str]:
     """Detect IDEs and repair/write dotscope MCP config entries."""
     repo_root = os.path.abspath(repo_root)
-    launcher, _diagnostics = collect_mcp_launch_diagnostics(repo_root)
-    if launcher is None:
-        raise RuntimeError(_format_launch_failure(_diagnostics))
+    try:
+        launcher, _managed = ensure_managed_mcp_runtime(
+            repo_root,
+            probe_func=probe_mcp_launch,
+        )
+    except RuntimeError as exc:
+        _launcher, diagnostics = collect_mcp_launch_diagnostics(repo_root)
+        message = f"{exc}\n{_format_launch_failure(diagnostics)}"
+        raise RuntimeError(message) from exc
 
     entry = _build_json_entry(launcher, repo_root)
     configured: list[str] = []
@@ -111,8 +104,16 @@ def configure_mcp(repo_root: str) -> list[str]:
 def diagnose_mcp(repo_root: str) -> dict:
     """Inspect MCP launcher health and expected client config state."""
     repo_root = os.path.abspath(repo_root)
-    launcher, candidates = collect_mcp_launch_diagnostics(repo_root)
+    managed = diagnose_managed_mcp_runtime(repo_root, probe_func=probe_mcp_launch)
+    launcher = None
+    if managed["status"] == "ok":
+        launcher = McpLaunchSpec(
+            command=managed["launcher_path"],
+            args=(),
+            source="managed-runtime",
+        )
     entry = _build_json_entry(launcher, repo_root) if launcher else None
+    _ambient_launcher, candidates = collect_mcp_launch_diagnostics(repo_root)
 
     targets = []
     path = _claude_desktop_config_path()
@@ -168,11 +169,12 @@ def diagnose_mcp(repo_root: str) -> dict:
             "args": list(launcher.args) if launcher else [],
             "source": launcher.source if launcher else None,
         },
+        "managed_runtime": managed,
         "candidates": candidates,
         "targets": targets,
         "notes": [
             "Some clients still require an explicit trust or approval prompt before they start a configured server.",
-            "Use `dotscope init` to repair workspace and global configs after launcher drift.",
+            "Use `dotscope init` to install or repair the managed MCP runtime and rewrite configs to point at it.",
         ],
     }
 
@@ -557,11 +559,22 @@ def _probe_with_protocol(
 
         tools = tools_response.get("result", {}).get("tools", [])
         names = [tool.get("name") for tool in tools if isinstance(tool, dict) and tool.get("name")]
+        scope_probe = _probe_scope_resolution(proc, timeout_seconds=timeout_seconds)
+        if not scope_probe.get("ok"):
+            return {
+                "ok": False,
+                "error": scope_probe.get("error", "scope probe failed"),
+                "stderr": _safe_stderr(proc),
+                "protocol_version": protocol_version,
+                "tool_count": len(names),
+                "tools": names[:8],
+            }
         return {
             "ok": True,
             "protocol_version": protocol_version,
             "tool_count": len(names),
             "tools": names[:8],
+            "scope_probe": scope_probe,
             "stderr": _safe_stderr(proc),
         }
     except Exception as exc:
@@ -598,6 +611,81 @@ def _read_mcp_response(
         if message.get("id") == expected_id:
             return message
     return None
+
+
+def _probe_scope_resolution(
+    proc: subprocess.Popen[bytes],
+    *,
+    timeout_seconds: float,
+) -> dict:
+    _write_mcp_message(
+        proc.stdin,
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": "list_scopes", "arguments": {}},
+        },
+    )
+    list_response = _read_mcp_response(proc, expected_id=3, timeout_seconds=timeout_seconds)
+    if list_response is None:
+        return {"ok": False, "error": _early_exit_error(proc, "tools/call list_scopes")}
+    if "error" in list_response:
+        return {"ok": False, "error": list_response["error"].get("message", "list_scopes failed")}
+
+    scopes = _extract_scopes_from_tool_response(list_response.get("result", {}))
+    if not scopes:
+        return {"ok": True, "status": "no-scopes"}
+
+    _write_mcp_message(
+        proc.stdin,
+        {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "resolve_scope",
+                "arguments": {"scope": scopes[0], "follow_related": False},
+            },
+        },
+    )
+    resolve_response = _read_mcp_response(proc, expected_id=4, timeout_seconds=timeout_seconds)
+    if resolve_response is None:
+        return {"ok": False, "error": _early_exit_error(proc, "tools/call resolve_scope")}
+    if "error" in resolve_response:
+        return {"ok": False, "error": resolve_response["error"].get("message", "resolve_scope failed")}
+    return {"ok": True, "status": "resolved", "scope": scopes[0]}
+
+
+def _extract_scopes_from_tool_response(result: dict) -> list[str]:
+    payload = None
+    structured = result.get("structuredContent")
+    if isinstance(structured, dict):
+        payload = structured.get("result")
+
+    if payload is None:
+        content = result.get("content")
+        if isinstance(content, list) and content:
+            first = content[0]
+            if isinstance(first, dict):
+                payload = first.get("text")
+
+    if not isinstance(payload, str):
+        return []
+
+    try:
+        decoded = json.loads(payload)
+    except json.JSONDecodeError:
+        return []
+
+    scopes = decoded.get("scopes")
+    if not isinstance(scopes, list):
+        return []
+    return [
+        scope.get("name")
+        for scope in scopes
+        if isinstance(scope, dict) and isinstance(scope.get("name"), str)
+    ]
 
 
 def _read_mcp_message(stream, *, timeout_seconds: float) -> dict | None:
