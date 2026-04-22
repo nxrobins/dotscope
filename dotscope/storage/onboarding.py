@@ -11,6 +11,8 @@ import os
 import time
 from typing import Optional
 
+from .atomic import atomic_write_json
+
 
 def load_onboarding(repo_root: str) -> dict:
     """Load onboarding state, creating default if missing."""
@@ -29,8 +31,7 @@ def save_onboarding(repo_root: str, state: dict) -> None:
     dot_dir = os.path.join(repo_root, ".dotscope")
     os.makedirs(dot_dir, exist_ok=True)
     path = _onboarding_path(repo_root)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(state, f, indent=2)
+    atomic_write_json(path, state)
 
 
 def mark_milestone(repo_root: str, milestone: str) -> dict:

@@ -1,4 +1,4 @@
-from .core import _cmd_resolve, _cmd_context, _cmd_match, _cmd_init, _cmd_intent, _cmd_utility, _cmd_sync
+from .core import _cmd_resolve, _cmd_context, _cmd_match, _cmd_init, _cmd_intent, _cmd_utility, _cmd_sync, _cmd_doctor
 from .observability import _cmd_stats, _cmd_tree, _cmd_health, _cmd_validate, _cmd_virtual, _cmd_lessons, _cmd_invariants, _cmd_rebuild, _cmd_test_compiler, _cmd_bench, _cmd_debug
 from .ingest import _cmd_ingest, _cmd_impact, _cmd_backtest, _cmd_conventions, _cmd_diff, _cmd_bootstrap
 from .hooks import _cmd_observe, _cmd_incremental, _cmd_hook, _cmd_refresh, _cmd_check, _cmd_check_backtest, _cmd_voice
@@ -217,6 +217,13 @@ def main(argv=None):
     p_debug.add_argument("--last", action="store_true", help="Debug most recent bad session")
     p_debug.add_argument("--list", dest="list_bad", action="store_true", help="List bad sessions")
 
+    # --- doctor ---
+    p_doctor = sub.add_parser("doctor", help="Diagnose runtime integrations and startup paths")
+    doctor_sub = p_doctor.add_subparsers(dest="doctor_target")
+    p_doctor_mcp = doctor_sub.add_parser("mcp", help="Verify MCP launcher selection and client config health")
+    p_doctor_mcp.add_argument("path", nargs="?", default=".", help="Repository root")
+    p_doctor_mcp.add_argument("--json", action="store_true", help="Output as JSON")
+
     # --- serve ---
     p_serve = sub.add_parser("serve", help="Launch interactive 3D topography dashboard")
     p_serve.add_argument("--port", type=int, default=8080, help="Port to run the local server on")
@@ -261,6 +268,7 @@ def main(argv=None):
             "test-compiler": _cmd_test_compiler,
             "bench": _cmd_bench,
             "debug": _cmd_debug,
+            "doctor": _cmd_doctor,
             "serve": _cmd_serve,
         }[args.command]
         handler(args)

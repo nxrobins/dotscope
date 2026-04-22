@@ -120,3 +120,44 @@ class TestCLIInit:
             main(["init", "--quiet", str(tmp_path)])
         except SystemExit:
             pass  # May exit 0 or 1 depending on ingest result
+
+
+class TestCLIDoctor:
+    def test_doctor_mcp_json(self, monkeypatch, tmp_path, capsys):
+        monkeypatch.setattr(
+            "dotscope.storage.mcp_config.diagnose_mcp",
+            lambda _root: {
+                "repo_root": str(tmp_path),
+                "launcher": {
+                    "ok": True,
+                    "command": "/abs/path/dotscope-mcp",
+                    "args": [],
+                    "source": "path-script",
+                },
+                "candidates": [{"ok": True, "command": "/abs/path/dotscope-mcp", "args": [], "source": "path-script"}],
+                "targets": [{"label": "Claude Code (.mcp.json)", "path": str(tmp_path / ".mcp.json"), "status": "ok"}],
+                "notes": ["note"],
+            },
+        )
+
+        main(["doctor", "mcp", str(tmp_path), "--json"])
+        output = capsys.readouterr().out
+        data = json.loads(output)
+        assert data["launcher"]["ok"] is True
+        assert data["targets"][0]["status"] == "ok"
+
+    def test_doctor_mcp_exits_nonzero_when_launcher_fails(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(
+            "dotscope.storage.mcp_config.diagnose_mcp",
+            lambda _root: {
+                "repo_root": str(tmp_path),
+                "launcher": {"ok": False, "command": None, "args": [], "source": None},
+                "candidates": [],
+                "targets": [],
+                "notes": [],
+            },
+        )
+
+        with pytest.raises(SystemExit) as exc:
+            main(["doctor", "mcp", str(tmp_path)])
+        assert exc.value.code == 1

@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import sys
 
@@ -211,3 +212,57 @@ def _cmd_sync(args):
         print("No scopes were modified.")
     else:
         print(f"\nSuccessfully synchronized {count} scope(s).")
+
+
+def _cmd_doctor(args):
+    if args.doctor_target != "mcp":
+        raise ValueError("Usage: dotscope doctor mcp [path] [--json]")
+
+    from ..storage.mcp_config import diagnose_mcp
+
+    root = os.path.abspath(getattr(args, "path", None) or ".")
+    report = diagnose_mcp(root)
+
+    if getattr(args, "json", False):
+        print(json.dumps(report, indent=2))
+    else:
+        print(f"Repository root: {report['repo_root']}")
+        launcher = report["launcher"]
+        if launcher["ok"]:
+            argv = " ".join(
+                [
+                    launcher["command"],
+                    *launcher["args"],
+                    "--root",
+                    report["repo_root"],
+                ]
+            ).strip()
+            print(f"Launcher: OK ({launcher['source']})")
+            print(f"  {argv}")
+        else:
+            print("Launcher: FAILED")
+
+        print("\nCandidates:")
+        for candidate in report["candidates"]:
+            status = "ok" if candidate.get("ok") else "fail"
+            argv = " ".join([candidate["command"], *candidate.get("args", [])]).strip()
+            print(f"  [{status}] {candidate['source']}: {argv}")
+            if candidate.get("error"):
+                print(f"      {candidate['error']}")
+
+        print("\nConfigs:")
+        for target in report["targets"]:
+            line = f"  [{target['status']}] {target['label']}: {target['path']}"
+            print(line)
+            if target.get("error"):
+                print(f"      {target['error']}")
+
+        print("\nNotes:")
+        for note in report["notes"]:
+            print(f"  - {note}")
+
+    failing_target_states = {"stale", "error"}
+    if not report["launcher"]["ok"] or any(
+        target.get("status") in failing_target_states for target in report["targets"]
+    ):
+        raise SystemExit(1)

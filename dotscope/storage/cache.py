@@ -14,6 +14,7 @@ from ..models.core import DependencyGraph, FileNode, ModuleBoundary
 from ..models.history import (
     HistoryAnalysis, FileHistory, ChangeCoupling, ImplicitContract,
 )
+from .atomic import atomic_write_json
 
 
 def cache_ingest_data(
@@ -45,8 +46,7 @@ def cache_ingest_data(
                 if fh.stability
             },
         }
-        with open(dot_dir / "history.json", "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        atomic_write_json(dot_dir / "history.json", data)
 
     if graph and graph.files:
         # Only cache what attribution hints need: imported_by fan-in
@@ -61,8 +61,7 @@ def cache_ingest_data(
                     )),
                 }
         if hubs:
-            with open(dot_dir / "graph_hubs.json", "w", encoding="utf-8") as f:
-                json.dump(hubs, f, indent=2)
+            atomic_write_json(dot_dir / "graph_hubs.json", hubs)
 
         # Network contract edges (polyglot context)
         if hasattr(graph, "network_edges") and graph.network_edges:
@@ -78,8 +77,7 @@ def cache_ingest_data(
                         }
                         for ep in endpoints
                     ]
-            with open(dot_dir / "network_edges.json", "w", encoding="utf-8") as f:
-                json.dump(edges_data, f, indent=2)
+            atomic_write_json(dot_dir / "network_edges.json", edges_data)
         else:
             # FIX: Dynamically obliterate stale cache graphs if the current project structurally lacks Web APIs
             import os
@@ -94,8 +92,7 @@ def cache_ingest_data(
                 f"{p}|{c}": score
                 for (p, c), score in graph.network_confidence.items()
             }
-            with open(dot_dir / "network_confidence.json", "w", encoding="utf-8") as f:
-                json.dump(conf_data, f, indent=2)
+            atomic_write_json(dot_dir / "network_confidence.json", conf_data)
 
 
 def load_cached_history(root: str) -> Optional[HistoryAnalysis]:

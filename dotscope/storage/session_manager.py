@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from ..models import ObservationLog, SessionLog
+from .atomic import atomic_write_json
 
 
 class SessionManager:
@@ -63,14 +64,14 @@ class SessionManager:
         )
 
         path = self.sessions_dir / f"{session_id}.json"
-        path.write_text(json.dumps({
+        atomic_write_json(path, {
             "session_id": session.session_id,
             "timestamp": session.timestamp,
             "scope_expr": session.scope_expr,
             "task": session.task,
             "predicted_files": session.predicted_files,
             "context_hash": session.context_hash,
-        }, indent=2), encoding="utf-8")
+        })
 
         return session_id
 
@@ -108,7 +109,7 @@ class SessionManager:
         )
 
         path = self.obs_dir / f"{commit_hash[:8]}.json"
-        path.write_text(json.dumps({
+        atomic_write_json(path, {
             "commit_hash": obs.commit_hash,
             "session_id": obs.session_id,
             "actual_files_modified": obs.actual_files_modified,
@@ -117,7 +118,7 @@ class SessionManager:
             "recall": obs.recall,
             "precision": obs.precision,
             "timestamp": obs.timestamp,
-        }, indent=2), encoding="utf-8")
+        })
 
         return obs
 

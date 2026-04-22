@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Dict, Iterable, Optional
 
 from ..paths import scope_storage_key
+from .atomic import atomic_write_json
 
 
 @dataclass
@@ -49,14 +50,13 @@ def save_incremental_state(root: str, state: IncrementalState) -> None:
     dot_dir = os.path.join(root, ".dotscope")
     os.makedirs(dot_dir, exist_ok=True)
     path = os.path.join(dot_dir, "incremental.json")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump({
-            "commits_since_last_full_ingest": state.commits_since_last_full_ingest,
-            "last_full_ingest_timestamp": state.last_full_ingest_timestamp,
-            "last_incremental_commit": state.last_incremental_commit,
-            "uncovered_new_files": state.uncovered_new_files,
-            "scope_refresh_timestamps": state.scope_refresh_timestamps,
-        }, f, indent=2)
+    atomic_write_json(path, {
+        "commits_since_last_full_ingest": state.commits_since_last_full_ingest,
+        "last_full_ingest_timestamp": state.last_full_ingest_timestamp,
+        "last_incremental_commit": state.last_incremental_commit,
+        "uncovered_new_files": state.uncovered_new_files,
+        "scope_refresh_timestamps": state.scope_refresh_timestamps,
+    })
 
 
 def utc_now_iso() -> str:

@@ -21,6 +21,7 @@ from ..storage.incremental_state import (
     save_incremental_state,
     utc_now_iso,
 )
+from ..storage.atomic import atomic_write_json
 
 
 REFRESH_WAIT_SECONDS = 1.0
@@ -72,8 +73,7 @@ def load_refresh_queue(root: str) -> List[Dict[str, object]]:
 
 def save_refresh_queue(root: str, jobs: Iterable[Dict[str, object]]) -> None:
     _ensure_dot_dir(root)
-    with open(refresh_queue_path(root), "w", encoding="utf-8") as f:
-        json.dump({"jobs": list(jobs)}, f, indent=2)
+    atomic_write_json(refresh_queue_path(root), {"jobs": list(jobs)})
 
 
 def load_refresh_status(root: str) -> Dict[str, object]:
@@ -94,8 +94,7 @@ def load_refresh_status(root: str) -> Dict[str, object]:
 
 def save_refresh_status(root: str, status: Dict[str, object]) -> None:
     _ensure_dot_dir(root)
-    with open(refresh_status_path(root), "w", encoding="utf-8") as f:
-        json.dump(status, f, indent=2)
+    atomic_write_json(refresh_status_path(root), status)
 
 
 def _normalize_targets(targets: Iterable[str]) -> List[str]:

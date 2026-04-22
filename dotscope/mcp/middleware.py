@@ -1,5 +1,6 @@
 import json
 import functools
+import os
 from typing import Callable, Any
 from .logger import get_mcp_logger
 from ..paths.repo import find_repo_root
@@ -19,7 +20,10 @@ def mcp_tool_route(func: Callable[..., Any]) -> Callable[..., str]:
         logger.debug(f"Executing MCP Tool: {func.__name__} {args} {kwargs}")
 
         # Respect an explicit root from the caller before falling back to discovery.
-        root = kwargs.get("root") or find_repo_root()
+        root_hint = kwargs.get("root") or os.environ.get("DOTSCOPE_ROOT")
+        root = find_repo_root(root_hint) if root_hint else None
+        if root is None:
+            root = find_repo_root()
         if not root:
             err_msg = "Could not find repository root"
             logger.warning(f"Aborted MCP execution for '{func.__name__}': {err_msg}")

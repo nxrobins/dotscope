@@ -1,7 +1,7 @@
 import os
 import struct
 import pytest
-from dotscope.mcp.mvcc import MvccReaderContext
+from dotscope.mcp.mvcc import MvccReaderContext, _strong_wait_timeout
 
 def test_active_readers_crash_safety(tmp_path):
     """
@@ -36,3 +36,11 @@ def test_active_readers_crash_safety(tmp_path):
         final_f.seek(8)
         readers = struct.unpack('<i', final_f.read(4))[0]
         assert readers == 0, "FATAL: ACTIVE_READERS context manager leaked after crash!"
+
+
+def test_strong_wait_timeout_env(monkeypatch):
+    monkeypatch.setenv("DOTSCOPE_MCP_STRONG_WAIT_SECONDS", "1.25")
+    assert _strong_wait_timeout() == 1.25
+
+    monkeypatch.setenv("DOTSCOPE_MCP_STRONG_WAIT_SECONDS", "bad")
+    assert _strong_wait_timeout() == 5.0

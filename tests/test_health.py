@@ -137,6 +137,25 @@ class TestHealth:
         assert encoding_issues[0].severity == "warning"
         assert encoding_issues[0].scope_path.endswith(os.path.join("docs", "README.md"))
 
+    def test_large_text_files_are_skipped_by_encoding_budget(self, tmp_path):
+        (tmp_path / ".git").mkdir()
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        (docs / "bomb.js").write_bytes(b"\xff" * 512)
+
+        report = full_health_report(
+            str(tmp_path),
+            encoding_max_file_bytes=128,
+            encoding_max_total_bytes=1024,
+        )
+
+        encoding_issues = [i for i in report.issues if i.category == "encoding"]
+        performance_issues = [i for i in report.issues if i.category == "performance"]
+        assert encoding_issues == []
+        assert len(performance_issues) == 1
+        assert "skipped 1 large file" in performance_issues[0].message
+        assert "docs/bomb.js" in performance_issues[0].message
+
     def test_scoped_dirs_counted(self, tmp_project):
         report = full_health_report(str(tmp_project))
         assert report.directories_covered >= 2  # auth + payments have scopes

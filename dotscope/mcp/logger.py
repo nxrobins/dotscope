@@ -26,7 +26,10 @@ def get_mcp_logger(name: str = "dotscope.mcp") -> logging.Logger:
 
     # We only inject the FileHandler once.
     if not logger.handlers:
-        root = find_repo_root()
+        root_hint = os.environ.get("DOTSCOPE_ROOT")
+        root = find_repo_root(root_hint) if root_hint else None
+        if root is None:
+            root = find_repo_root()
         if root:
             # Safely create .dotscope directory if missing. 
             # Note: During normal operations dotscope initialization secures this.

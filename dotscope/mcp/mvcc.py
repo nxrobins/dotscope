@@ -5,6 +5,8 @@ import socket
 import struct
 from typing import Dict, Any
 
+_DEFAULT_STRONG_WAIT_SECONDS = 5.0
+
 class MvccReaderContext:
     def __init__(self, root: str):
         self.control_path = os.path.join(root, ".dotscope", "control.mmap")
@@ -63,8 +65,9 @@ def check_mvcc_state(root: str, consistency: str = "snapshot", port: int = 28491
             return {"status": "fallback"}
         # TCP Blocking call to Wait for write-plane
         try:
+            wait_seconds = _strong_wait_timeout()
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.settimeout(60.0) # Wait up to 60 seconds if Titan is actively compiling
+                s.settimeout(wait_seconds)
                 s.connect(("127.0.0.1", port))
                 s.sendall(b'{"cmd": "consistency", "type": "strong"}')
                 data = s.recv(1024)
@@ -90,3 +93,14 @@ def apply_mvcc_to_kwargs(root: str, kwargs: dict) -> None:
             
     if consistency == "strong":
         check_mvcc_state(root, consistency="strong")
+
+
+def _strong_wait_timeout() -> float:
+    raw = os.environ.get("DOTSCOPE_MCP_STRONG_WAIT_SECONDS")
+    if raw is None:
+        return _DEFAULT_STRONG_WAIT_SECONDS
+    try:
+        value = float(raw)
+    except ValueError:
+        return _DEFAULT_STRONG_WAIT_SECONDS
+    return max(0.1, value)

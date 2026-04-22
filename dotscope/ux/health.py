@@ -15,9 +15,16 @@ from ..ux.textio import iter_repo_text_files, read_repo_text
 
 STALE_TOLERANCE_SECONDS = 2.0
 REFRESH_GRACE_SECONDS = 5.0
+ENCODING_SCAN_MAX_FILE_BYTES = 256 * 1024
+ENCODING_SCAN_MAX_TOTAL_BYTES = 2 * 1024 * 1024
 
 
-def full_health_report(root: str, use_runtime: bool = True) -> HealthReport:
+def full_health_report(
+    root: str,
+    use_runtime: bool = True,
+    encoding_max_file_bytes: Optional[int] = ENCODING_SCAN_MAX_FILE_BYTES,
+    encoding_max_total_bytes: Optional[int] = ENCODING_SCAN_MAX_TOTAL_BYTES,
+) -> HealthReport:
     """Run all health checks and return a combined report."""
     from ..engine.discovery import find_all_scopes, load_resolution_scopes
     from ..engine.parser import parse_scope_file
@@ -55,7 +62,11 @@ def full_health_report(root: str, use_runtime: bool = True) -> HealthReport:
     uncovered = all_dirs - scoped_dirs
     coverage_issues = check_coverage(uncovered, root)
     issues.extend(coverage_issues)
-    issues.extend(check_encoding(root))
+    issues.extend(check_encoding(
+        root,
+        max_file_bytes=encoding_max_file_bytes,
+        max_total_bytes=encoding_max_total_bytes,
+    ))
 
     return HealthReport(
         issues=issues,
@@ -254,14 +265,38 @@ def check_coverage(uncovered: Set[str], root: str) -> List[HealthIssue]:
     return issues
 
 
-def check_encoding(root: str) -> List[HealthIssue]:
+def check_encoding(
+    root: str,
+    max_file_bytes: Optional[int] = ENCODING_SCAN_MAX_FILE_BYTES,
+    max_total_bytes: Optional[int] = ENCODING_SCAN_MAX_TOTAL_BYTES,
+) -> List[HealthIssue]:
     """Report repo-authored text files that required lossy decode fallback."""
     issues = []
+    skipped_large = []
+    scanned_files = 0
+    scanned_bytes = 0
+    truncated = False
+
     for path in iter_repo_text_files(root):
+        try:
+            size = os.path.getsize(path)
+        except OSError:
+            continue
+
+        rel_path = make_relative(path, root)
+        if max_file_bytes is not None and size > max_file_bytes:
+            skipped_large.append(rel_path)
+            continue
+        if max_total_bytes is not None and scanned_bytes + size > max_total_bytes:
+            truncated = True
+            break
+
         try:
             decoded = read_repo_text(path)
         except OSError:
             continue
+        scanned_files += 1
+        scanned_bytes += size
         if decoded.used_replacement:
             issues.append(HealthIssue(
                 scope_path=path,
@@ -269,6 +304,32 @@ def check_encoding(root: str) -> List[HealthIssue]:
                 category="encoding",
                 message="decoded with replacement characters; file is not valid UTF-8",
             ))
+
+    if skipped_large or truncated:
+        details = []
+        if skipped_large and max_file_bytes is not None:
+            sample = ", ".join(skipped_large[:3])
+            msg = (
+                f"encoding scan skipped {len(skipped_large)} large file(s) "
+                f"over {max_file_bytes} bytes"
+            )
+            if sample:
+                msg += f": {sample}"
+            if len(skipped_large) > 3:
+                msg += f" (+{len(skipped_large) - 3} more)"
+            details.append(msg)
+        if truncated and max_total_bytes is not None:
+            details.append(
+                f"encoding scan stopped after {scanned_files} file(s) and "
+                f"{scanned_bytes} bytes to stay within the health budget of "
+                f"{max_total_bytes} bytes"
+            )
+        issues.append(HealthIssue(
+            scope_path="",
+            severity="info",
+            category="performance",
+            message="; ".join(details),
+        ))
     return issues
 
 

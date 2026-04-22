@@ -1,18 +1,46 @@
-# Setting Up Dotscope for MCP Environments
+# Setting Up Dotscope for MCP Clients
 
-Despite executing a rigidly isolated zero-copy Multi-Version Concurrency Control (MVCC) daemon architecture, deploying Dotscope locally remains fully frictionless, explicitly requiring absolutely zero configuration files or external orchestration containers. 
+## Install
 
-It is the **Invisible Supremum**. 
+```bash
+pip install dotscope[mcp]
+```
 
-## Agent Integration
+This installs the `dotscope-mcp` launcher that serves MCP over stdio.
 
-Whether deploying on **Cursor**, **Windsurf**, or **Claude Desktop**, integrating the Model Context Protocol requires merely aiming the AI interface natively to your local installation directory explicitly via standard standard CLI execution targets:
+## Recommended Setup
 
-`command: python -m dotscope`
+From your repository root:
 
-### Zero-Configuration Networking
-You do not need to boot Docker. You do not install WASM runtimes, and you actively do not configure open proxy routing addresses natively. 
+```bash
+dotscope ingest .
+dotscope init
+dotscope doctor mcp
+```
 
-When your IDE pings Dotscope for the first time, it implicitly spawns the `dotscope_daemon.exe` fully completely encapsulated in the background natively. To securely maintain concurrency limits across Python read boundaries, the daemon executes absolutely statically behind an invisible internal binding mapped entirely to `127.0.0.1`. 
+`dotscope init` now resolves a working launcher, writes absolute-command MCP configs for supported clients, and pins every generated entry to the repository with `--root`.
 
-Because Dotscope forces rigid `.cursorrules` parameters directly into the operational root via `dotscope init`, your IDE fundamentally syncs its execution behaviors automatically aligning completely uniformly across physical project changes gracefully!
+`dotscope doctor mcp` verifies the same launcher with a real MCP initialize and `tools/list` handshake, then reports whether the generated client configs are current or stale.
+
+## Manual Setup
+
+If you configure a client by hand, do not rely on bare `dotscope-mcp` being on `PATH`. Use the full launcher path reported by:
+
+```bash
+dotscope doctor mcp
+```
+
+Each stdio client entry should point at that absolute command and include:
+
+```text
+--root /absolute/path/to/your/repo
+```
+
+## Why This Matters
+
+Most MCP activation failures were caused by one of two conditions:
+
+- the client launched a different Python environment than the one that actually had `mcp` installed
+- the server started outside the repository root and could not discover `.scopes`, `.git`, or `.scope`
+
+Using an absolute launcher plus `--root` removes both failure modes.
