@@ -310,19 +310,22 @@ def _print_counterfactual(ingest_result, backtest, violations):
         else:
             avg_scope_tokens = None
 
-    # Use native ANSI for a clean, terminal-safe UI
+    # Keep this summary ASCII-safe so Windows CI can't fail on console encoding.
     GREEN = "\033[92m" if sys.stdout.isatty() else ""
     RESET = "\033[0m" if sys.stdout.isatty() else ""
 
-    print(f"\n  ⠋ Awakening repository...")
+    _safe_print("\n  * Awakening repository...")
     if scopes_written > 0:
-        print(f"  {GREEN}✓{RESET} Mapped {scopes_written} structural boundaries.")
-    
+        _safe_print(f"  {GREEN}OK{RESET} Mapped {scopes_written} structural boundaries.")
+
     # We state the token reduction ONLY if the engine successfully calculated it
     if total_repo_tokens is not None and avg_scope_tokens is not None:
-        print(f"  {GREEN}✓{RESET} Context payload optimized: ~{int(avg_scope_tokens):,} tokens (down from ~{total_repo_tokens:,}).")
+        _safe_print(
+            f"  {GREEN}OK{RESET} Context payload optimized: "
+            f"~{int(avg_scope_tokens):,} tokens (down from ~{total_repo_tokens:,})."
+        )
 
-    print(f"\n  {GREEN}[✓]{RESET} Dotscope is active. Your AI is now structurally aware.\n")
+    _safe_print(f"\n  {GREEN}[OK]{RESET} Dotscope is active. Your AI is now structurally aware.\n")
 
 def _write_agent_instructions(root: str, quiet: bool = False):
     """Write AGENT_INSTRUCTIONS.md to the target repo if it doesn't exist."""

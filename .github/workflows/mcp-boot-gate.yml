@@ -9,6 +9,10 @@ permissions:
 jobs:
   boot-gate:
     runs-on: ${{ matrix.os }}
+    env:
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: "1"
+      PYTHONUNBUFFERED: "1"
     strategy:
       fail-fast: false
       matrix:
@@ -32,11 +36,11 @@ jobs:
 
       - name: Ingest Repository
         shell: pwsh
-        run: uv run dotscope ingest .
+        run: uv run dotscope ingest . --quiet
 
       - name: Repair MCP Boot Contract
         shell: pwsh
-        run: uv run dotscope init --repair
+        run: uv run dotscope init --repair --quiet
 
       - name: Check MCP Boot Contract
         shell: pwsh

@@ -1,8 +1,10 @@
 """Tests for CLI commands."""
 
+import io
 import os
 import json
 import pytest
+import dotscope.cli as cli
 from dotscope.cli import main
 
 
@@ -224,6 +226,34 @@ class TestCLIInit:
         assert "BOOT CONTRACT FAILED" in captured.err
         assert ".dotscope/mcp_last_failure.json" in captured.err
         assert "dotscope init --repair /repo" in captured.err
+
+    def test_init_counterfactual_summary_is_ascii_safe_on_cp1252_stdout(self, monkeypatch):
+        class FakeStdout(io.StringIO):
+            @property
+            def encoding(self):
+                return "cp1252"
+
+            def isatty(self):
+                return False
+
+        stream = FakeStdout()
+        monkeypatch.setattr(cli.sys, "stdout", stream)
+
+        cli._print_counterfactual(
+            {
+                "total_repo_tokens": 1200,
+                "avg_scope_tokens": 300,
+                "scopes_written": 4,
+            },
+            None,
+            0,
+        )
+
+        output = stream.getvalue()
+        assert "* Awakening repository..." in output
+        assert "[OK]" in output
+        assert "⠋" not in output
+        assert "✓" not in output
 
 
 class TestCLIDoctor:

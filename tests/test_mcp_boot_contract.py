@@ -23,7 +23,7 @@ def _managed_ok_report(repo_root: str, launch_spec: McpLaunchSpec) -> dict:
         "runtime_root": f"{repo_root}/runtime",
         "launcher_path": launch_spec.command,
         "python_executable": f"{repo_root}/runtime/python",
-        "package_spec": "dotscope[mcp]==1.7.8",
+        "package_spec": "dotscope[mcp]==1.7.9",
         "package_source": "published",
         "source_fingerprint": "fingerprint-123",
         "installed_at": "2026-04-22T00:00:00+00:00",
