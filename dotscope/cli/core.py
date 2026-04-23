@@ -93,12 +93,25 @@ def _cmd_init(args):
 
     # 3. Auto-configure MCP for detected IDEs
     try:
-        from ..storage.mcp_config import configure_mcp
-        configured = configure_mcp(root)
+        from ..storage.mcp_config import (
+            McpBootContractError,
+            configure_mcp,
+            format_mcp_failure_footer,
+        )
+        configured = configure_mcp(
+            root,
+            quiet=quiet,
+            force_repair=getattr(args, "repair", False),
+        )
         if configured and not quiet:
             print(f"dotscope: MCP configured for {', '.join(configured)}", file=sys.stderr)
+    except McpBootContractError as exc:
+        print(f"dotscope: MCP config failed: {exc}", file=sys.stderr)
+        print(format_mcp_failure_footer(exc.report), file=sys.stderr)
+        raise SystemExit(1)
     except Exception as e:
-        print(f"dotscope: MCP config failed: {e}", file=sys.stderr)
+        if not quiet:
+            print(f"dotscope: MCP config failed: {e}", file=sys.stderr)
 
     # 4. Write AGENT_INSTRUCTIONS.md + CLAUDE.md
     try:
@@ -216,17 +229,25 @@ def _cmd_sync(args):
 
 def _cmd_doctor(args):
     if args.doctor_target != "mcp":
-        raise ValueError("Usage: dotscope doctor mcp [path] [--json]")
+        raise ValueError("Usage: dotscope doctor mcp [path] [--check] [--repair-global] [--json]")
 
-    from ..storage.mcp_config import diagnose_mcp
+    from ..storage.mcp_config import diagnose_mcp, format_mcp_failure_footer
 
     root = os.path.abspath(getattr(args, "path", None) or ".")
-    report = diagnose_mcp(root)
+    report = diagnose_mcp(
+        root,
+        check_only=getattr(args, "check", False),
+        repair_global=getattr(args, "repair_global", False),
+    )
 
     if getattr(args, "json", False):
         print(json.dumps(report, indent=2))
     else:
         print(f"Repository root: {report['repo_root']}")
+        print(f"Boot contract: {'OK' if report.get('boot_contract_ok') else 'FAILED'}")
+        print(f"Repair mode: {report.get('repair_mode')}")
+        if report.get("auto_repaired"):
+            print("Auto-repaired: yes")
         managed = report.get("managed_runtime", {})
         if managed:
             print("Managed runtime:")
@@ -253,25 +274,48 @@ def _cmd_doctor(args):
 
         print("\nCandidates:")
         for candidate in report["candidates"]:
-            status = "ok" if candidate.get("ok") else "fail"
+            if candidate.get("ok") is True:
+                status = "ok"
+            elif candidate.get("ok") is False:
+                status = "fail"
+            else:
+                status = "skip"
             argv = " ".join([candidate["command"], *candidate.get("args", [])]).strip()
             print(f"  [{status}] {candidate['source']}: {argv}")
             if candidate.get("error"):
                 print(f"      {candidate['error']}")
 
-        print("\nConfigs:")
-        for target in report["targets"]:
+        print("\nRepo-local targets:")
+        for target in report.get("repo_local_targets", []):
             line = f"  [{target['status']}] {target['label']}: {target['path']}"
             print(line)
             if target.get("error"):
                 print(f"      {target['error']}")
 
+        print("\nGlobal targets:")
+        for target in report.get("global_targets", []):
+            line = f"  [{target['status']}] {target['label']}: {target['path']}"
+            print(line)
+            if target.get("error"):
+                print(f"      {target['error']}")
+
+        issues = report.get("remaining_issues", [])
+        if issues:
+            print("\nIssues:")
+            for issue in issues:
+                prefix = "block" if issue.get("blocking") else "note"
+                print(f"  [{prefix}] {issue['message']}")
+
+        timings = report.get("timings_ms", {})
+        if timings:
+            print("\nTimings (ms):")
+            for key in sorted(timings):
+                print(f"  {key}: {timings[key]}")
+
         print("\nNotes:")
         for note in report["notes"]:
             print(f"  - {note}")
 
-    failing_target_states = {"stale", "error"}
-    if not report["launcher"]["ok"] or any(
-        target.get("status") in failing_target_states for target in report["targets"]
-    ):
+    if not report.get("boot_contract_ok", False):
+        print(format_mcp_failure_footer(report), file=sys.stderr)
         raise SystemExit(1)

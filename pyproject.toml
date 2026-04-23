@@ -1,6 +1,6 @@
 [project]
 name = "dotscope"
-version = "1.7.7"
+version = "1.7.9"
 description = "Agents see files. You see architecture. dotscope gives agents the architecture."
 readme = "README.md"
 license = "MIT"
@@ -30,7 +30,7 @@ mcp = ["mcp>=1.6.0,<2"]
 tokens = ["tiktoken"]
 embeddings = ["sentence-transformers"]
 search = ["sentence-transformers", "numpy"]
-dev = ["pytest", "ruff"]
+dev = ["pytest", "ruff", "mcp>=1.6.0,<2"]
 all = ["dotscope[mcp,tokens,search]"]
 
 [project.scripts]

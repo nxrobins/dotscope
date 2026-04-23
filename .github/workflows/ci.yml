@@ -1,0 +1,12 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  mcp-boot-gate:
+    uses: ./.github/workflows/mcp-boot-gate.yml

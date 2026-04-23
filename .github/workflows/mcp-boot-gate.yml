@@ -1,0 +1,78 @@
+name: MCP Boot Gate
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  boot-gate:
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: "1"
+      PYTHONUNBUFFERED: "1"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-13, macos-14]
+        python-version: ["3.10", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install Dotscope With MCP + Dev Extras
+        shell: pwsh
+        run: uv sync --extra mcp --extra dev
+
+      - name: Ingest Repository
+        shell: pwsh
+        run: uv run dotscope ingest . --quiet
+
+      - name: Repair MCP Boot Contract
+        shell: pwsh
+        run: uv run dotscope init --repair --quiet
+
+      - name: Check MCP Boot Contract
+        shell: pwsh
+        run: |
+          $start = Get-Date
+          uv run dotscope doctor mcp --check --json | Tee-Object -FilePath mcp-doctor.json
+          $exitCode = $LASTEXITCODE
+          $elapsed = [int]((Get-Date) - $start).TotalMilliseconds
+          @'
+          import json
+          import pathlib
+          import sys
+
+          elapsed_ms = int(sys.argv[1])
+          exit_code = int(sys.argv[2])
+          path = pathlib.Path("mcp-doctor.json")
+          report = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+          timings = report.get("timings_ms", {})
+          print(f"probe_total_ms={timings.get('probe_total')}")
+          print(f"contract_total_ms={timings.get('contract_total')}")
+          print(f"external_check_ms={elapsed_ms}")
+
+          if timings.get("probe_total", 0) > 5000:
+              raise SystemExit("launcher probe exceeded 5000ms")
+          if elapsed_ms > 10000:
+              raise SystemExit("doctor check exceeded 10000ms")
+          if exit_code != 0:
+              raise SystemExit(exit_code)
+          if not report.get("boot_contract_ok"):
+              raise SystemExit("boot contract check reported failure")
+          '@ | python - $elapsed $exitCode
+
+      - name: MCP Smoke And Boot Tests
+        shell: pwsh
+        run: uv run python -m pytest tests/test_mcp_smoke.py tests/test_mcp_boot_contract.py -q

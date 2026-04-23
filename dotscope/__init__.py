@@ -2,7 +2,7 @@
 
 import importlib
 
-__version__ = "1.7.7"
+__version__ = "1.7.9"
 
 
 _LEGACY_SUBMODULES = frozenset({
