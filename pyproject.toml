@@ -30,7 +30,7 @@ mcp = ["mcp>=1.6.0,<2"]
 tokens = ["tiktoken"]
 embeddings = ["sentence-transformers"]
 search = ["sentence-transformers", "numpy"]
-dev = ["pytest", "ruff"]
+dev = ["pytest", "ruff", "mcp>=1.6.0,<2"]
 all = ["dotscope[mcp,tokens,search]"]
 
 [project.scripts]

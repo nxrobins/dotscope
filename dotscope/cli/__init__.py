@@ -72,6 +72,7 @@ def main(argv=None):
     p_init = sub.add_parser("init", help="One command: ingest, install hooks, configure agents")
     p_init.add_argument("path", nargs="?", default=".", help="Repository root")
     p_init.add_argument("--quiet", action="store_true", help="Suppress progress (for CI)")
+    p_init.add_argument("--repair", action="store_true", help="Force MCP runtime reprovisioning and config rewrites")
 
     # --- validate ---
     sub.add_parser("validate", help="Check all .scope files for broken paths")
@@ -222,6 +223,8 @@ def main(argv=None):
     doctor_sub = p_doctor.add_subparsers(dest="doctor_target")
     p_doctor_mcp = doctor_sub.add_parser("mcp", help="Verify MCP launcher selection and client config health")
     p_doctor_mcp.add_argument("path", nargs="?", default=".", help="Repository root")
+    p_doctor_mcp.add_argument("--check", action="store_true", help="Read-only boot-contract verification")
+    p_doctor_mcp.add_argument("--repair-global", action="store_true", help="Repair supported global client configs too")
     p_doctor_mcp.add_argument("--json", action="store_true", help="Output as JSON")
 
     # --- serve ---

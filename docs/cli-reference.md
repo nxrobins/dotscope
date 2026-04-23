@@ -3,12 +3,19 @@
 ## Setup
 
 ```bash
-pip install dotscope
-dotscope init
-dotscope doctor mcp
+pip install dotscope[mcp]
+dotscope init --repair
+dotscope doctor mcp --check --json
 ```
 
-`dotscope init` does everything: ingest, hook install, managed MCP runtime install, and MCP config repair for detected IDEs. `dotscope doctor mcp` verifies the owned runtime and client configs afterward.
+`dotscope init` does everything: ingest, hook install, managed MCP runtime repair, repo-local MCP config repair, and optional supported global config rewrites.
+
+`dotscope doctor mcp` uses the same boot contract with narrower defaults:
+
+- repairs the managed runtime plus repo-local MCP configs
+- reports global config drift without failing on it by default
+- supports `--repair-global` when you explicitly want global rewrites
+- supports `--check` for read-only CI/diagnostics verification
 
 For manual setup or re-runs:
 
@@ -95,7 +102,9 @@ dotscope hook uninstall                # Remove hooks
 dotscope debug --last                  # Bisect the last bad session
 dotscope debug <session_id>            # Bisect a specific session
 dotscope debug --list                  # List recent sessions
-dotscope doctor mcp                    # Probe the managed MCP runtime and inspect client configs
+dotscope doctor mcp                    # Repair runtime + repo-local MCP targets
+dotscope doctor mcp --check --json     # Read-only verification with timings and target state
+dotscope doctor mcp --repair-global    # Also rewrite supported global client configs
 ```
 
 ## MCP Server
@@ -113,4 +122,4 @@ For agents, add the MCP server to your project's `.mcp.json`:
 }
 ```
 
-`dotscope init` configures this automatically for Claude Desktop, Claude Code, Cursor, VS Code, Windsurf, and Codex workspace configs. Use `dotscope doctor mcp` any time you want to confirm the owned runtime and launcher still resolve cleanly. See [MCP Integration Guide](mcp-integration.md) for the full tools reference.
+`dotscope init` configures repo-local targets automatically and may also rewrite detected supported global targets. Durable diagnostics live in `.dotscope/mcp_install.json` and `.dotscope/mcp_last_failure.json`. Use `dotscope doctor mcp` any time you want to confirm the owned runtime and launcher still resolve cleanly. See [MCP Integration Guide](mcp-integration.md) for the full tools reference.

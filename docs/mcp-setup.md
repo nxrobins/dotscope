@@ -14,14 +14,19 @@ From your repository root:
 
 ```bash
 dotscope ingest .
-dotscope init
-dotscope doctor mcp
+dotscope init --repair
+dotscope doctor mcp --check --json
 ```
 
-`dotscope init` now resolves a working launcher, writes absolute-command MCP configs for supported clients, and pins every generated entry to the repository with `--root`.
-It also installs a dotscope-owned MCP runtime in a deterministic per-user location, so clients no longer depend on whichever Python environment happens to be first on `PATH`.
+`dotscope init` now enforces an MCP boot contract: managed runtime repair, a real stdio self-test, repo-local config rewrites, and durable diagnostics in `.dotscope/mcp_install.json` and `.dotscope/mcp_last_failure.json`.
 
-`dotscope doctor mcp` verifies the same launcher with a real MCP initialize and `tools/list` handshake, then reports whether the generated client configs are current or stale.
+`dotscope doctor mcp` uses the same pipeline, but its default repair scope is narrower:
+
+- Managed runtime: repaired by default
+- Repo-local configs: repaired by default
+- Global configs: advisory by default, repaired only with `--repair-global`
+
+`dotscope doctor mcp --check` is the read-only variant for CI and diagnostics.
 
 ## Manual Setup
 
@@ -46,3 +51,30 @@ Most MCP activation failures were caused by one of two conditions:
 
 Using an absolute launcher plus `--root` removes both failure modes.
 Using a managed dotscope-owned runtime removes the first one almost entirely: the launcher and dependency set are now provisioned and verified by dotscope itself.
+
+## Repo-Local vs Global Targets
+
+Repo-local targets enforced by the boot contract:
+
+- `.mcp.json`
+- `.claude/settings.json`
+- `.vscode/mcp.json`
+- `.cursor/mcp.json`
+- `.codex/config.toml`
+
+Supported global targets in cycles 1-2:
+
+- Claude Desktop config
+- Windsurf config
+
+JetBrains and Zed remain documented/manual targets in cycles 1-2.
+
+## Failure Guidance
+
+When an MCP setup or doctor command exits nonzero, dotscope writes:
+
+```text
+.dotscope/mcp_last_failure.json
+```
+
+The command also prints a stderr footer with that path and the exact next command to run.

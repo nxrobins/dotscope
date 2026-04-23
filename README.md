@@ -14,14 +14,16 @@ We recently overhauled our distribution pipeline. `pip install dotscope` automat
 
 ```bash
 # 1. Install the core toolkit
-pip install dotscope
+pip install dotscope[mcp]
 
 # 2. Bind your repository and trigger the bare-metal physics engine
 dotscope init
 
-# 3. Connect to your Agent
-# Dotscope automatically generates the structural boundaries and routes them through MCP.
+# 3. Verify the MCP boot contract
+dotscope doctor mcp --check --json
 ```
+
+`dotscope init` now enforces a repository boot contract for MCP startup: a working managed runtime, a passing stdio self-test, current repo-local MCP configs, and durable diagnostics in `.dotscope/mcp_install.json` and `.dotscope/mcp_last_failure.json`.
 
 ---
 

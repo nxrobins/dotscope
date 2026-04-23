@@ -7,6 +7,7 @@ import json
 import pytest
 
 from dotscope.storage.mcp_config import (
+    McpBootContractError,
     McpLaunchSpec,
     _write_codex_toml,
     _write_cursor_config,
@@ -163,6 +164,43 @@ class TestLauncherDiagnostics:
 
 
 class TestConfigureMcp:
+    def test_preserves_launcher_args_returned_by_runtime(self, monkeypatch, tmp_path):
+        repo_root = str(tmp_path)
+        launch_spec = McpLaunchSpec(
+            command="/abs/path/python",
+            args=("-m", "dotscope.mcp"),
+            source="managed-runtime",
+        )
+
+        monkeypatch.setattr(
+            "dotscope.storage.mcp_config.ensure_managed_mcp_runtime",
+            lambda _repo_root, probe_func, force_rebuild=False: (
+                launch_spec,
+                {
+                    "status": "ok",
+                    "action": "reused",
+                    "launcher_path": launch_spec.command,
+                    "runtime_root": str(tmp_path / "runtime"),
+                    "probe": {"ok": True, "tool_count": 14, "tools": ["resolve_scope"]},
+                    "timings_ms": {"total": 5},
+                },
+            ),
+        )
+        monkeypatch.setattr("dotscope.storage.mcp_config._claude_desktop_config_path", lambda: "")
+        monkeypatch.setattr("dotscope.storage.mcp_config._windsurf_config_path", lambda: "")
+
+        configure_mcp(repo_root)
+
+        with open(tmp_path / ".mcp.json", encoding="utf-8") as handle:
+            claude_code = json.load(handle)
+        assert claude_code["mcpServers"]["dotscope"]["command"] == "/abs/path/python"
+        assert claude_code["mcpServers"]["dotscope"]["args"] == ["-m", "dotscope.mcp", "--root", repo_root]
+
+        codex = (tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8")
+        assert 'command = "/abs/path/python"' in codex
+        assert '"-m"' in codex
+        assert '"dotscope.mcp"' in codex
+
     def test_writes_absolute_launcher_everywhere(self, monkeypatch, tmp_path, launch_spec):
         repo_root = str(tmp_path)
         desktop = tmp_path / "global" / "claude_desktop_config.json"
@@ -170,7 +208,17 @@ class TestConfigureMcp:
 
         monkeypatch.setattr(
             "dotscope.storage.mcp_config.ensure_managed_mcp_runtime",
-            lambda _repo_root, probe_func: (launch_spec, {"status": "ok"}),
+            lambda _repo_root, probe_func, force_rebuild=False: (
+                launch_spec,
+                {
+                    "status": "ok",
+                    "action": "reused",
+                    "launcher_path": launch_spec.command,
+                    "runtime_root": str(tmp_path / "runtime"),
+                    "probe": {"ok": True, "tool_count": 14, "tools": ["resolve_scope"]},
+                    "timings_ms": {"total": 5},
+                },
+            ),
         )
         monkeypatch.setattr(
             "dotscope.storage.mcp_config._claude_desktop_config_path",
@@ -199,3 +247,58 @@ class TestConfigureMcp:
         codex = (tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8")
         assert 'command = "/abs/path/dotscope-mcp"' in codex
         assert json.dumps(repo_root) in codex
+
+    def test_quiet_suppresses_manual_instructions(self, monkeypatch, tmp_path, launch_spec, capsys):
+        repo_root = str(tmp_path)
+
+        monkeypatch.setattr(
+            "dotscope.storage.mcp_config.ensure_managed_mcp_runtime",
+            lambda _repo_root, probe_func, force_rebuild=False: (
+                launch_spec,
+                {
+                    "status": "ok",
+                    "action": "reused",
+                    "launcher_path": launch_spec.command,
+                    "runtime_root": str(tmp_path / "runtime"),
+                    "probe": {"ok": True, "tool_count": 14, "tools": ["resolve_scope"]},
+                    "timings_ms": {"total": 5},
+                },
+            ),
+        )
+        monkeypatch.setattr("dotscope.storage.mcp_config._claude_desktop_config_path", lambda: "")
+        monkeypatch.setattr("dotscope.storage.mcp_config._windsurf_config_path", lambda: "")
+
+        configure_mcp(repo_root, quiet=True)
+
+        captured = capsys.readouterr()
+        assert captured.err == ""
+
+    def test_quiet_suppresses_config_write_errors(self, monkeypatch, tmp_path, launch_spec, capsys):
+        repo_root = str(tmp_path)
+
+        monkeypatch.setattr(
+            "dotscope.storage.mcp_config.ensure_managed_mcp_runtime",
+            lambda _repo_root, probe_func, force_rebuild=False: (
+                launch_spec,
+                {
+                    "status": "ok",
+                    "action": "reused",
+                    "launcher_path": launch_spec.command,
+                    "runtime_root": str(tmp_path / "runtime"),
+                    "probe": {"ok": True, "tool_count": 14, "tools": ["resolve_scope"]},
+                    "timings_ms": {"total": 5},
+                },
+            ),
+        )
+        monkeypatch.setattr(
+            "dotscope.storage.mcp_config._write_json_config",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+        monkeypatch.setattr("dotscope.storage.mcp_config._windsurf_config_path", lambda: "")
+        monkeypatch.setattr("dotscope.storage.mcp_config._claude_desktop_config_path", lambda: "")
+
+        with pytest.raises(McpBootContractError):
+            configure_mcp(repo_root, quiet=True)
+
+        captured = capsys.readouterr()
+        assert captured.err == ""
