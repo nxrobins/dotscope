@@ -1,6 +1,6 @@
-"""Benchmarking: prove dotscope works with numbers.
+"""Benchmarking: report locally observed dotscope diagnostics.
 
-Three metrics: token efficiency, hold rate, compilation speed.
+Three metrics: file usage, hold rate, compilation speed.
 Plus scope health aggregation.
 """
 
@@ -21,22 +21,22 @@ def run_bench(repo_root: str) -> BenchReport:
     sessions = mgr.get_sessions(limit=500)
     observations = mgr.get_observations(limit=500)
 
-    # Token efficiency
-    tokens_resolved = []
-    tokens_used = []
+    # File usage diagnostics. These are not token-spend claims.
+    files_returned = []
+    files_used = []
     for obs in observations:
         predicted = set(getattr(obs, "predicted_not_touched", []) or [])
         actual = set(getattr(obs, "actual_files_modified", []) or [])
         all_predicted = set(getattr(obs, "predicted_not_touched", []) or []) | actual
         if all_predicted:
-            tokens_resolved.append(len(all_predicted))
-            tokens_used.append(len(actual))
+            files_returned.append(len(all_predicted))
+            files_used.append(len(actual))
 
-    if tokens_resolved:
-        report.avg_tokens_resolved = int(sum(tokens_resolved) / len(tokens_resolved))
-        report.avg_tokens_used = int(sum(tokens_used) / len(tokens_used))
-        report.efficiency_ratio = round(
-            sum(tokens_used) / max(sum(tokens_resolved), 1), 3
+    if files_returned:
+        report.avg_files_returned = int(sum(files_returned) / len(files_returned))
+        report.avg_files_used = int(sum(files_used) / len(files_used))
+        report.file_usage_ratio = round(
+            sum(files_used) / max(sum(files_returned), 1), 3
         )
 
     # Hold rate (from acknowledgments)
@@ -92,11 +92,11 @@ def format_bench_report(report: BenchReport) -> str:
 
     lines.append("dotscope bench\n")
 
-    lines.append("  Token Efficiency")
-    if report.efficiency_ratio > 0:
-        lines.append(f"    Average files resolved: {report.avg_tokens_resolved}")
-        lines.append(f"    Average files agent used: {report.avg_tokens_used}")
-        lines.append(f"    Efficiency ratio: {report.efficiency_ratio:.1%}")
+    lines.append("  File Usage Diagnostics")
+    if report.file_usage_ratio > 0:
+        lines.append(f"    Average files returned: {report.avg_files_returned}")
+        lines.append(f"    Average files agent used: {report.avg_files_used}")
+        lines.append(f"    File usage ratio: {report.file_usage_ratio:.1%}")
     else:
         lines.append("    No observation data yet")
     lines.append("")

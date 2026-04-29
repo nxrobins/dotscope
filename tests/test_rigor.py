@@ -204,9 +204,9 @@ class TestDebug:
 class TestBench:
     def test_format_bench_report(self):
         report = BenchReport(
-            avg_tokens_resolved=100,
-            avg_tokens_used=73,
-            efficiency_ratio=0.73,
+            avg_files_returned=100,
+            avg_files_used=73,
+            file_usage_ratio=0.73,
             total_commits=47,
             resolve_median_ms=12.0,
             resolve_p95_ms=34.0,
@@ -214,7 +214,8 @@ class TestBench:
             scopes_above_80_recall=9,
         )
         output = format_bench_report(report)
-        assert "Token Efficiency" in output
+        assert "File Usage Diagnostics" in output
+        assert "Token Efficiency" not in output
         assert "73" in output
 
     def test_empty_report(self):

@@ -20,6 +20,17 @@ def _cmd_resolve(args):
     if args.budget:
         resolved = apply_budget(resolved, args.budget, task=args.task)
 
+    if root is not None:
+        from ..trial import record_active_dotscope_resolve
+        record_active_dotscope_resolve(
+            root,
+            args.scope,
+            resolved.files,
+            resolved.context,
+            "cli.resolve",
+            payload_tokens=resolved.token_estimate,
+        )
+
     fmt = "json" if args.json else ("cursor" if args.cursor else "plain")
     print(format_resolved(resolved, fmt=fmt, root=root, show_tokens=args.tokens))
 

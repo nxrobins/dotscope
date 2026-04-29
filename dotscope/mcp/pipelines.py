@@ -336,6 +336,21 @@ class FinalTelemetryStage(PipelineStage):
             data.pop("_repo_tokens", None)
 
         try:
+            from ..trial import record_active_dotscope_resolve
+            event = record_active_dotscope_resolve(
+                root,
+                state["scope"],
+                state["resolved"].files,
+                state["resolved"].context,
+                "mcp.resolve_scope",
+                payload_tokens=state["resolved"].token_estimate,
+            )
+            if event and data is not None:
+                data["trial_id"] = event.get("trial_id")
+        except Exception:
+            logger.debug("Trial resolve telemetry failed", exc_info=True)
+
+        try:
             from ..storage.timing import record_timing
             elapsed_ms = (_time.perf_counter() - state["_resolve_start"]) * 1000
             if root:

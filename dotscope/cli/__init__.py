@@ -3,6 +3,7 @@ from .observability import _cmd_stats, _cmd_tree, _cmd_health, _cmd_validate, _c
 from .ingest import _cmd_ingest, _cmd_impact, _cmd_backtest, _cmd_conventions, _cmd_diff, _cmd_bootstrap
 from .hooks import _cmd_observe, _cmd_incremental, _cmd_hook, _cmd_refresh, _cmd_check, _cmd_check_backtest, _cmd_voice
 from .serve import _cmd_serve
+from .trial import _cmd_trial
 
 
 """CLI entry point for dotscope."""
@@ -212,6 +213,68 @@ def main(argv=None):
     p_bench = sub.add_parser("bench", help="Performance and accuracy benchmarks")
     p_bench.add_argument("--json", dest="json_output", action="store_true", help="JSON output")
 
+    # --- trial ---
+    p_trial = sub.add_parser("trial", help="Live paired trials for public claims")
+    trial_sub = p_trial.add_subparsers(dest="trial_action")
+
+    p_trial_pair = trial_sub.add_parser("pair", help="Manage trial pairs")
+    trial_pair_sub = p_trial_pair.add_subparsers(dest="trial_pair_action")
+    p_trial_pair_new = trial_pair_sub.add_parser("new", help="Create a same-task paired trial")
+    p_trial_pair_new.add_argument("--task", required=True, help="Task text shared by both arms")
+    p_trial_pair_new.add_argument("--model", required=True, help="Model identifier shared by both arms")
+    p_trial_pair_new.add_argument("--client", required=True, help="Agent/client identifier")
+    p_trial_pair_new.add_argument("--project", default=None, help="Auditable project grouping id")
+    p_trial_pair_new.add_argument("--base-ref", default="HEAD", help="Git ref both arms start from")
+    p_trial_pair_new.add_argument("--pair-id", default=None, help="User-supplied unique pair id")
+    p_trial_pair_new.add_argument("--order-policy", choices=["random", "alternating"], default="random")
+    p_trial_pair_new.add_argument("--json", action="store_true", help="Machine-readable output")
+
+    p_trial_start = trial_sub.add_parser("start", help="Start one arm of a paired trial")
+    p_trial_start.add_argument("--pair-id", required=True, help="Pair id from trial pair new")
+    p_trial_start.add_argument("--arm", required=True, choices=["dotscope", "baseline"])
+    p_trial_start.add_argument("--worktree", default=None, help="Worktree path used for repo-state hashing")
+    p_trial_start.add_argument("--token-boundary", choices=["agent", "dotscope"], default="agent")
+    p_trial_start.add_argument("--token-fidelity", choices=["A", "B", "C"], default="C")
+    p_trial_start.add_argument("--capture-method", default="", help="Provider or hook name for token accounting")
+    p_trial_start.add_argument("--tokenizer-encoding", default="", help="Tokenizer/model encoding id for Tier B")
+    p_trial_start.add_argument("--timeout-hours", type=float, default=4.0)
+    p_trial_start.add_argument("--json", action="store_true", help="Machine-readable output")
+
+    p_trial_finish = trial_sub.add_parser("finish", help="Finish the active trial arm")
+    p_trial_finish.add_argument("--trial-id", default=None, help="Finish a specific trial instead of active")
+    p_trial_finish.add_argument("--commits", nargs="*", default=[], help="Linked commit SHAs or ranges")
+    p_trial_finish.add_argument("--validation", action="append", default=[], help="Validation command")
+    p_trial_finish.add_argument("--validation-runs", type=int, default=2)
+    p_trial_finish.add_argument("--json", action="store_true", help="Machine-readable output")
+
+    p_trial_status = trial_sub.add_parser("status", help="Show active trial status")
+    p_trial_status.add_argument("--json", action="store_true", help="Machine-readable output")
+
+    p_trial_cancel = trial_sub.add_parser("cancel", help="Cancel active or named trial")
+    p_trial_cancel.add_argument("--trial-id", default=None)
+    p_trial_cancel.add_argument("--json", action="store_true", help="Machine-readable output")
+
+    p_trial_compare = trial_sub.add_parser("compare", help="Compare one pair")
+    p_trial_compare.add_argument("pair_id")
+    p_trial_compare.add_argument("--json", action="store_true", help="Machine-readable output")
+
+    p_trial_report = trial_sub.add_parser("report", help="Report trial evidence")
+    p_trial_report.add_argument("--public", action="store_true", help="Apply public-claim gates")
+    p_trial_report.add_argument("--json", action="store_true", help="Machine-readable output")
+
+    p_trial_record = trial_sub.add_parser("record", help="Record adapter-captured trial events")
+    trial_record_sub = p_trial_record.add_subparsers(dest="trial_record_action")
+    p_trial_record_tokens = trial_record_sub.add_parser("tokens", help="Record model input token usage")
+    p_trial_record_tokens.add_argument("--trial-id", default=None, help="Record against a specific trial")
+    p_trial_record_tokens.add_argument("--input-tokens", type=int, required=True)
+    p_trial_record_tokens.add_argument("--token-boundary", choices=["agent", "dotscope"], required=True)
+    p_trial_record_tokens.add_argument("--token-fidelity", choices=["A", "B", "C"], required=True)
+    p_trial_record_tokens.add_argument("--capture-method", default="")
+    p_trial_record_tokens.add_argument("--tokenizer-encoding", default="")
+    p_trial_record_tokens.add_argument("--source", default="agent")
+    p_trial_record_tokens.add_argument("--turn-id", default=None)
+    p_trial_record_tokens.add_argument("--json", action="store_true", help="Machine-readable output")
+
     # --- debug ---
     p_debug = sub.add_parser("debug", help="Bisect a bad session to find root cause")
     p_debug.add_argument("session_id", nargs="?", default=None, help="Session ID to debug")
@@ -270,6 +333,7 @@ def main(argv=None):
             "voice": _cmd_voice,
             "test-compiler": _cmd_test_compiler,
             "bench": _cmd_bench,
+            "trial": _cmd_trial,
             "debug": _cmd_debug,
             "doctor": _cmd_doctor,
             "serve": _cmd_serve,

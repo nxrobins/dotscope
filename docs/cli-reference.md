@@ -85,7 +85,22 @@ dotscope health                        # Staleness, coverage gaps, drift
 dotscope validate                      # Check .scope files for broken paths
 dotscope impact auth/tokens.py         # Predict blast radius of changes
 dotscope utility auth                  # Show utility scores for a scope
+dotscope bench                         # Local file-usage, hold-rate, and latency diagnostics
 ```
+
+## Trials & Public Claims
+
+```bash
+dotscope trial pair new --task "fix auth" --model gpt-5 --client codex
+dotscope trial start --pair-id <id> --arm dotscope --token-fidelity A
+dotscope trial record tokens --input-tokens 4200 --token-boundary agent --token-fidelity A
+dotscope trial finish --commits HEAD --validation "pytest" --validation-runs 2
+dotscope trial report --public
+```
+
+Public token claims require same-task pairs, clean starts, symmetric agent-boundary measurement, machine validation, at least 30 valid pairs, and pinned confidence-interval gates. Dotscope-boundary payload counts are recorded only as diagnostics.
+
+Trial event logs are schema-frozen at v1. Every events file starts with `{"type": "schema", "version": 1}`; any future field change must write version 2 and keep readers for both v1 and v2 so long-lived trial stores remain readable.
 
 ## Hooks
 

@@ -28,6 +28,7 @@ Usage: dotscope <command>
 
   hook install              Install git hooks
   bench                     Performance metrics
+  trial                     Live paired evidence for public claims
   test-compiler             Regression suite
   debug --last              Diagnose a bad session
 
@@ -142,6 +143,18 @@ Usage: dotscope bench [options]
 Options:
   --json               Machine-readable output"""
 
+HELP_TRIAL = """\
+Usage: dotscope trial <action> [options]
+
+  dotscope trial pair new --task "fix auth" --model gpt-5 --client codex
+  dotscope trial start --pair-id <id> --arm dotscope --token-fidelity A
+  dotscope trial record tokens --input-tokens 4200 --token-boundary agent --token-fidelity A
+  dotscope trial finish --commits HEAD --validation "pytest" --validation-runs 2
+  dotscope trial report --public
+
+Public claims require same-task pairs, clean starts, symmetric agent-boundary
+token measurement, machine validation, N>=30 pairs, and pinned CI gates."""
+
 HELP_TEST_COMPILER = """\
 Usage: dotscope test-compiler [options]
 
@@ -255,6 +268,7 @@ HELP_COMMANDS = {
     "diff": HELP_DIFF,
     "voice": HELP_VOICE,
     "bench": HELP_BENCH,
+    "trial": HELP_TRIAL,
     "test-compiler": HELP_TEST_COMPILER,
     "debug": HELP_DEBUG,
     "health": HELP_HEALTH,

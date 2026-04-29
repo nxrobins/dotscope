@@ -105,10 +105,10 @@ class BacktestReport:
 
 @dataclass
 class BenchReport:
-    # Token efficiency
-    avg_tokens_resolved: int = 0
-    avg_tokens_used: int = 0
-    efficiency_ratio: float = 0.0
+    # File usage diagnostics. These are file counts, not token claims.
+    avg_files_returned: int = 0
+    avg_files_used: int = 0
+    file_usage_ratio: float = 0.0
 
     # Hold rate
     total_commits: int = 0
