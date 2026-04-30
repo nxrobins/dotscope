@@ -4,6 +4,7 @@ from .ingest import _cmd_ingest, _cmd_impact, _cmd_backtest, _cmd_conventions, _
 from .hooks import _cmd_observe, _cmd_incremental, _cmd_hook, _cmd_refresh, _cmd_check, _cmd_check_backtest, _cmd_voice
 from .serve import _cmd_serve
 from .trial import _cmd_trial
+from .cut_score import _cmd_cut_score
 
 
 """CLI entry point for dotscope."""
@@ -275,6 +276,45 @@ def main(argv=None):
     p_trial_record_tokens.add_argument("--turn-id", default=None)
     p_trial_record_tokens.add_argument("--json", action="store_true", help="Machine-readable output")
 
+    # --- cut-score ---
+    p_cut = sub.add_parser(
+        "cut-score",
+        help="Score closed bug-fix PRs against live-trial within-repo task criteria",
+    )
+    p_cut.add_argument(
+        "--repo", action="append", default=[], required=False,
+        help="Owner/repo to score (repeatable). At least one required.",
+    )
+    p_cut.add_argument(
+        "--n", type=int, default=30,
+        help="PRs to examine per repo (default 30, matches pre-reg)",
+    )
+    p_cut.add_argument(
+        "--token-env", default="GITHUB_TOKEN",
+        help="Env var holding a GitHub token (default GITHUB_TOKEN; empty disables auth)",
+    )
+    p_cut.add_argument(
+        "--label-override", action="append", default=[],
+        help="REPO=LABEL to override default 'bug' for a specific repo",
+    )
+    p_cut.add_argument(
+        "--module-style", default="top-pkg",
+        choices=["top-pkg", "depth-2", "depth-3", "leaf-dir"],
+        help="Default module-extraction style (per-repo recommended styles override)",
+    )
+    p_cut.add_argument(
+        "--module-style-override", action="append", default=[],
+        help="REPO=STYLE to override module-style for a specific repo",
+    )
+    p_cut.add_argument(
+        "--out", default=None,
+        help="Optional path to write the JSON report (atomic write)",
+    )
+    p_cut.add_argument(
+        "--json", action="store_true",
+        help="Print full JSON to stdout (default: human summary)",
+    )
+
     # --- debug ---
     p_debug = sub.add_parser("debug", help="Bisect a bad session to find root cause")
     p_debug.add_argument("session_id", nargs="?", default=None, help="Session ID to debug")
@@ -334,6 +374,7 @@ def main(argv=None):
             "test-compiler": _cmd_test_compiler,
             "bench": _cmd_bench,
             "trial": _cmd_trial,
+            "cut-score": _cmd_cut_score,
             "debug": _cmd_debug,
             "doctor": _cmd_doctor,
             "serve": _cmd_serve,
