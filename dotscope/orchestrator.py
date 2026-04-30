@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 import subprocess
+import warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -41,6 +42,12 @@ MCP_CONFIG_FILENAMES = (
 CLAUDE_DIR_NAME = ".claude"
 DOTSCOPE_TOOL_PREFIX = "dotscope"
 CAPTURE_METHOD = "agent_sdk_stream_billed_input_sum"
+# Per Anthropic docs, claude-opus-4-7 requires Agent SDK v0.2.111+. PyPI's
+# latest at the time of writing is 0.1.71; build_sdk_options warns when a
+# Opus 4.7 trial is configured against an older installed SDK so the
+# operator sees the docs claim before the trial silently downgrades.
+OPUS_4_7_MIN_SDK_VERSION: Tuple[int, ...] = (0, 2, 111)
+OPUS_4_7_MODEL_ID = "claude-opus-4-7"
 
 
 class OrchestratorError(RuntimeError):
@@ -231,6 +238,51 @@ class SdkOptionSpec:
         return kwargs
 
 
+def _parse_installed_sdk_version() -> Optional[Tuple[int, ...]]:
+    """Best-effort parse of installed claude-agent-sdk's version. Returns
+    None if the SDK isn't installed or its version string is unparseable."""
+    try:
+        import claude_agent_sdk  # type: ignore[import-not-found]
+    except ImportError:
+        return None
+    raw = getattr(claude_agent_sdk, "__version__", None)
+    if not isinstance(raw, str):
+        return None
+    parts: List[int] = []
+    for chunk in raw.split("."):
+        digits = ""
+        for c in chunk:
+            if c.isdigit():
+                digits += c
+            else:
+                break
+        if not digits:
+            return None
+        parts.append(int(digits))
+    return tuple(parts) if parts else None
+
+
+def warn_if_model_unsupported(model: str) -> None:
+    """Emit a UserWarning if the configured model needs an SDK newer than
+    what's installed. No-op if claude-agent-sdk isn't available (test path)."""
+    if model != OPUS_4_7_MODEL_ID:
+        return
+    version = _parse_installed_sdk_version()
+    if version is None:
+        return
+    if version < OPUS_4_7_MIN_SDK_VERSION:
+        installed = ".".join(str(p) for p in version)
+        required = ".".join(str(p) for p in OPUS_4_7_MIN_SDK_VERSION)
+        warnings.warn(
+            f"claude-agent-sdk {installed} is installed; per Anthropic docs, "
+            f"{OPUS_4_7_MODEL_ID} requires {required}+. The trial may fail "
+            f"or silently downgrade to a different model. Upgrade with: "
+            f"pip install -U 'claude-agent-sdk>={required}'",
+            UserWarning,
+            stacklevel=3,
+        )
+
+
 def build_sdk_options(
     arm: str,
     worktree_path: str | os.PathLike[str],
@@ -260,6 +312,8 @@ def build_sdk_options(
         mcp_servers = {}
     else:
         raise OrchestratorError(f"unknown arm: {arm!r}")
+
+    warn_if_model_unsupported(model)
 
     return SdkOptionSpec(
         arm=arm,

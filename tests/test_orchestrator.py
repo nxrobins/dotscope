@@ -231,6 +231,38 @@ class TestBuildSdkOptions:
         assert kwargs["system_prompt"] == "hello"
         assert kwargs["model"] == "claude-opus-4-7"
 
+    def test_warns_when_opus_47_with_old_sdk(self, tmp_path, monkeypatch):
+        """If claude-agent-sdk is installed and older than 0.2.111, building
+        options for claude-opus-4-7 should emit a UserWarning."""
+        from dotscope import orchestrator as orch
+
+        monkeypatch.setattr(orch, "_parse_installed_sdk_version", lambda: (0, 1, 71))
+        with pytest.warns(UserWarning, match="claude-opus-4-7 requires"):
+            build_sdk_options("dotscope", tmp_path, "claude-opus-4-7")
+
+    def test_no_warn_when_sdk_meets_minimum(self, tmp_path, monkeypatch, recwarn):
+        from dotscope import orchestrator as orch
+        monkeypatch.setattr(orch, "_parse_installed_sdk_version", lambda: (0, 2, 200))
+        build_sdk_options("dotscope", tmp_path, "claude-opus-4-7")
+        # Filter out any unrelated warnings
+        opus = [w for w in recwarn.list if "claude-opus-4-7" in str(w.message)]
+        assert opus == []
+
+    def test_no_warn_for_other_models(self, tmp_path, monkeypatch, recwarn):
+        from dotscope import orchestrator as orch
+        monkeypatch.setattr(orch, "_parse_installed_sdk_version", lambda: (0, 1, 71))
+        build_sdk_options("dotscope", tmp_path, "claude-sonnet-4-6")
+        opus = [w for w in recwarn.list if "claude-opus-4-7" in str(w.message)]
+        assert opus == []
+
+    def test_no_warn_when_sdk_absent(self, tmp_path, monkeypatch, recwarn):
+        """If the SDK isn't importable (test environments without it
+        installed), warn_if_model_unsupported is a no-op."""
+        from dotscope import orchestrator as orch
+        monkeypatch.setattr(orch, "_parse_installed_sdk_version", lambda: None)
+        build_sdk_options("dotscope", tmp_path, "claude-opus-4-7")
+        assert recwarn.list == []
+
 
 # ---------------------------------------------------------------------------
 # regression_cache_key + verify_regression
