@@ -239,6 +239,17 @@ def main(argv=None):
     p_trial_start.add_argument("--capture-method", default="", help="Provider or hook name for token accounting")
     p_trial_start.add_argument("--tokenizer-encoding", default="", help="Tokenizer/model encoding id for Tier B")
     p_trial_start.add_argument("--timeout-hours", type=float, default=4.0)
+    p_trial_start.add_argument(
+        "--token-accounting-policy",
+        choices=["billed_input_sum", "input_only"],
+        default="billed_input_sum",
+        help=(
+            "Per-turn token accounting policy. billed_input_sum (default) "
+            "sums input_tokens + cache_creation_input_tokens + "
+            "cache_read_input_tokens to defeat cache-asymmetry contamination. "
+            "input_only records raw input_tokens (legacy)."
+        ),
+    )
     p_trial_start.add_argument("--json", action="store_true", help="Machine-readable output")
 
     p_trial_finish = trial_sub.add_parser("finish", help="Finish the active trial arm")
@@ -274,6 +285,14 @@ def main(argv=None):
     p_trial_record_tokens.add_argument("--tokenizer-encoding", default="")
     p_trial_record_tokens.add_argument("--source", default="agent")
     p_trial_record_tokens.add_argument("--turn-id", default=None)
+    p_trial_record_tokens.add_argument(
+        "--cache-creation", type=int, default=None,
+        help="cache_creation_input_tokens for the turn (diagnostic; orchestrator should already include in --input-tokens under billed_input_sum policy)",
+    )
+    p_trial_record_tokens.add_argument(
+        "--cache-read", type=int, default=None,
+        help="cache_read_input_tokens for the turn (diagnostic; orchestrator should already include in --input-tokens under billed_input_sum policy)",
+    )
     p_trial_record_tokens.add_argument("--json", action="store_true", help="Machine-readable output")
 
     # --- cut-score ---

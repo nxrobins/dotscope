@@ -31,6 +31,7 @@ PUBLIC_TIMEOUT_HOURS = 8.0
 ARMS = {"dotscope", "baseline"}
 TOKEN_BOUNDARIES = {"agent", "dotscope"}
 TOKEN_FIDELITIES = {"A", "B", "C"}
+TOKEN_ACCOUNTING_POLICIES = {"billed_input_sum", "input_only"}
 
 
 class TrialError(ValueError):
@@ -122,6 +123,7 @@ class TrialStore:
         capture_method: str = "",
         tokenizer_encoding: str = "",
         timeout_hours: float = 4.0,
+        token_accounting_policy: str = "billed_input_sum",
     ) -> Dict[str, Any]:
         self.ensure_initialized()
         if arm not in ARMS:
@@ -132,6 +134,11 @@ class TrialStore:
             raise TrialError("token fidelity must be A, B, or C")
         if timeout_hours <= 0:
             raise TrialError("timeout must be positive")
+        if token_accounting_policy not in TOKEN_ACCOUNTING_POLICIES:
+            raise TrialError(
+                f"token_accounting_policy must be one of "
+                f"{sorted(TOKEN_ACCOUNTING_POLICIES)}"
+            )
 
         pair = self.load_pair(pair_id)
         existing_active = self.get_active_trial()
@@ -174,6 +181,7 @@ class TrialStore:
             "token_fidelity": token_fidelity,
             "capture_method": capture_method,
             "tokenizer_encoding": tokenizer_encoding,
+            "token_accounting_policy": token_accounting_policy,
             "timeout_hours": timeout_hours,
             "public_timeout_ok": public_timeout_ok,
             "started_at": isoformat(now),
@@ -278,6 +286,8 @@ class TrialStore:
         source: str = "agent",
         turn_id: Optional[str] = None,
         trial_id: Optional[str] = None,
+        cache_creation_input_tokens: Optional[int] = None,
+        cache_read_input_tokens: Optional[int] = None,
     ) -> Dict[str, Any]:
         self.ensure_initialized()
         if input_tokens < 0:
@@ -286,8 +296,25 @@ class TrialStore:
             raise TrialError("token boundary must be 'agent' or 'dotscope'")
         if token_fidelity not in TOKEN_FIDELITIES:
             raise TrialError("token fidelity must be A, B, or C")
+        if cache_creation_input_tokens is not None and cache_creation_input_tokens < 0:
+            raise TrialError("cache_creation_input_tokens must be non-negative")
+        if cache_read_input_tokens is not None and cache_read_input_tokens < 0:
+            raise TrialError("cache_read_input_tokens must be non-negative")
 
         trial = self._resolve_trial(trial_id)
+
+        if turn_id is not None:
+            existing = self.load_events(trial["trial_id"])
+            for prior in existing:
+                if (
+                    prior.get("type") == "token_usage"
+                    and prior.get("turn_id") == turn_id
+                ):
+                    raise TrialError(
+                        f"duplicate turn_id {turn_id!r} for trial "
+                        f"{trial['trial_id']}; one record per turn_id"
+                    )
+
         event = {
             "type": "token_usage",
             "source": source,
@@ -298,6 +325,10 @@ class TrialStore:
             "tokenizer_encoding": tokenizer_encoding,
             "turn_id": turn_id,
         }
+        if cache_creation_input_tokens is not None:
+            event["cache_creation_input_tokens"] = int(cache_creation_input_tokens)
+        if cache_read_input_tokens is not None:
+            event["cache_read_input_tokens"] = int(cache_read_input_tokens)
         return self.append_event(trial["trial_id"], event)
 
     def record_dotscope_resolve(
@@ -766,6 +797,7 @@ def analyze_pair(
         "repo_state_hash",
         "token_boundary",
         "token_fidelity",
+        "token_accounting_policy",
     ]
     if len(active_trials) == 2:
         for key in agreement_keys:

@@ -342,3 +342,126 @@ class TestTrialPreRegistration:
         report = store.report(public=False)
         assert report["pre_registration"] is None
         assert report["deviations"] == []
+
+
+class TestTrialTokenAccounting:
+    def test_default_token_accounting_policy_recorded(self, tmp_path):
+        repo = _init_repo(tmp_path)
+        store = TrialStore(str(repo))
+        pair = store.create_pair(task="acct", model="m", client="c")
+        trial = store.start_trial(pair["pair_id"], "dotscope", token_fidelity="A")
+        assert trial["token_accounting_policy"] == "billed_input_sum"
+
+    def test_custom_token_accounting_policy_recorded(self, tmp_path):
+        repo = _init_repo(tmp_path)
+        store = TrialStore(str(repo))
+        pair = store.create_pair(task="acct", model="m", client="c")
+        trial = store.start_trial(
+            pair["pair_id"], "dotscope", token_fidelity="A",
+            token_accounting_policy="input_only",
+        )
+        assert trial["token_accounting_policy"] == "input_only"
+
+    def test_unknown_token_accounting_policy_rejected(self, tmp_path):
+        repo = _init_repo(tmp_path)
+        store = TrialStore(str(repo))
+        pair = store.create_pair(task="acct", model="m", client="c")
+        with pytest.raises(TrialError):
+            store.start_trial(
+                pair["pair_id"], "dotscope", token_fidelity="A",
+                token_accounting_policy="banana",
+            )
+
+    def test_record_tokens_persists_cache_components(self, tmp_path):
+        repo = _init_repo(tmp_path)
+        store = TrialStore(str(repo))
+        pair = store.create_pair(task="cache", model="m", client="c")
+        trial = store.start_trial(pair["pair_id"], "dotscope", token_fidelity="A")
+        store.record_tokens(
+            input_tokens=1500,
+            token_boundary="agent",
+            token_fidelity="A",
+            cache_creation_input_tokens=200,
+            cache_read_input_tokens=800,
+            turn_id="turn-1",
+            trial_id=trial["trial_id"],
+        )
+        events = store.load_events(trial["trial_id"])
+        token_event = next(e for e in events if e.get("type") == "token_usage")
+        assert token_event["input_tokens"] == 1500
+        assert token_event["cache_creation_input_tokens"] == 200
+        assert token_event["cache_read_input_tokens"] == 800
+        assert token_event["turn_id"] == "turn-1"
+
+    def test_record_tokens_rejects_negative_cache(self, tmp_path):
+        repo = _init_repo(tmp_path)
+        store = TrialStore(str(repo))
+        pair = store.create_pair(task="neg", model="m", client="c")
+        trial = store.start_trial(pair["pair_id"], "dotscope", token_fidelity="A")
+        with pytest.raises(TrialError):
+            store.record_tokens(
+                input_tokens=10,
+                token_boundary="agent",
+                token_fidelity="A",
+                cache_creation_input_tokens=-1,
+                trial_id=trial["trial_id"],
+            )
+
+    def test_record_tokens_rejects_duplicate_turn_id(self, tmp_path):
+        repo = _init_repo(tmp_path)
+        store = TrialStore(str(repo))
+        pair = store.create_pair(task="dup", model="m", client="c")
+        trial = store.start_trial(pair["pair_id"], "dotscope", token_fidelity="A")
+        store.record_tokens(
+            input_tokens=100,
+            token_boundary="agent",
+            token_fidelity="A",
+            turn_id="turn-1",
+            trial_id=trial["trial_id"],
+        )
+        with pytest.raises(TrialError) as exc:
+            store.record_tokens(
+                input_tokens=200,
+                token_boundary="agent",
+                token_fidelity="A",
+                turn_id="turn-1",
+                trial_id=trial["trial_id"],
+            )
+        assert "duplicate turn_id" in str(exc.value)
+
+    def test_record_tokens_allows_multiple_none_turn_id(self, tmp_path):
+        repo = _init_repo(tmp_path)
+        store = TrialStore(str(repo))
+        pair = store.create_pair(task="none-tid", model="m", client="c")
+        trial = store.start_trial(pair["pair_id"], "dotscope", token_fidelity="A")
+        store.record_tokens(
+            input_tokens=100,
+            token_boundary="agent",
+            token_fidelity="A",
+            trial_id=trial["trial_id"],
+        )
+        # second call with no turn_id should not raise — None turn_id means
+        # untracked-turn, multiple are OK
+        store.record_tokens(
+            input_tokens=200,
+            token_boundary="agent",
+            token_fidelity="A",
+            trial_id=trial["trial_id"],
+        )
+        events = store.load_events(trial["trial_id"])
+        token_events = [e for e in events if e.get("type") == "token_usage"]
+        assert len(token_events) == 2
+
+    def test_pair_invalid_when_arms_disagree_on_accounting_policy(self, tmp_path):
+        repo = _init_repo(tmp_path)
+        store = TrialStore(str(repo))
+        _make_public_pair(store, 1)
+        for arm, policy in (("dotscope", "billed_input_sum"), ("baseline", "input_only")):
+            trial = store.load_trial(f"trial_1_{arm}")
+            trial["token_accounting_policy"] = policy
+            store._save_trial(trial)
+        comparison = store.compare_pair("pair_1")
+        assert comparison["public_valid"] is False
+        assert any(
+            "token_accounting_policy" in reason for reason in comparison["reasons"]
+        )
