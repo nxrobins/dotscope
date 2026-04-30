@@ -37,6 +37,9 @@ def _cmd_trial(args):
             capture_method=args.capture_method or "",
             tokenizer_encoding=args.tokenizer_encoding or "",
             timeout_hours=args.timeout_hours,
+            token_accounting_policy=getattr(
+                args, "token_accounting_policy", "billed_input_sum"
+            ),
         )
         if args.json:
             print(json.dumps(trial, indent=2))
@@ -116,6 +119,8 @@ def _cmd_trial(args):
             tokenizer_encoding=args.tokenizer_encoding or "",
             source=args.source,
             turn_id=args.turn_id,
+            cache_creation_input_tokens=getattr(args, "cache_creation", None),
+            cache_read_input_tokens=getattr(args, "cache_read", None),
         )
         print(json.dumps(event, indent=2) if args.json else f"recorded event {event['event_id']}")
         return
