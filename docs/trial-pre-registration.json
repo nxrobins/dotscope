@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "doc_path": "docs/trial-pre-registration.md",
+  "doc_sha256": "1d5420b9d170752329ed764d024cf9f997f1d36b61ea4e35a24ccfd67aaad70d",
+  "registered_commit": "",
+  "tag": "trial-pre-registration-v1",
+  "harness_tag": "trial-schema-v1",
+  "harness_commit": "57383e4a3981b4eebd97df443510530b9f5c60c6",
+  "deviations": [
+    {
+      "id": "regression_test_modified_only",
+      "from": "pre-reg line 53 (added or modified)",
+      "to": "modified only",
+      "reason": "pre-flight verification cannot soundly handle added-test PRs without unbounded test-cherry-pick"
+    },
+    {
+      "id": "token_fidelity_tier_a",
+      "from": "pre-reg line 77 (Tier B)",
+      "to": "Tier A (SDK provider-reported)",
+      "reason": "no public Claude offline tokenizer available"
+    }
+  ]
+}
