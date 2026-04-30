@@ -5,6 +5,7 @@ from .hooks import _cmd_observe, _cmd_incremental, _cmd_hook, _cmd_refresh, _cmd
 from .serve import _cmd_serve
 from .trial import _cmd_trial
 from .cut_score import _cmd_cut_score
+from .orchestrator import _cmd_orchestrator
 
 
 """CLI entry point for dotscope."""
@@ -334,6 +335,45 @@ def main(argv=None):
         help="Print full JSON to stdout (default: human summary)",
     )
 
+    # --- orchestrator ---
+    p_orch = sub.add_parser(
+        "orchestrator",
+        help="Live trial orchestrator (operator infrastructure for paired runs)",
+    )
+    orch_sub = p_orch.add_subparsers(dest="orchestrator_action")
+
+    p_orch_contam = orch_sub.add_parser(
+        "contamination-check",
+        help="Walk a worktree's ancestry for MCP/Claude configs",
+    )
+    p_orch_contam.add_argument("--worktree", default=None,
+                                help="Worktree to check (default: cwd)")
+    p_orch_contam.add_argument("--fail-loud", action="store_true",
+                                help="Exit 1 if any config is found")
+    p_orch_contam.add_argument("--json", action="store_true")
+
+    p_orch_verify = orch_sub.add_parser(
+        "verify-regression",
+        help="Pre-flight regression verification on parent SHA",
+    )
+    p_orch_verify.add_argument("--repo", required=True)
+    p_orch_verify.add_argument("--pr", type=int, required=True)
+    p_orch_verify.add_argument("--parent-sha", required=True)
+    p_orch_verify.add_argument("--test-path", required=True,
+                                help="pytest path that should fail on parent")
+    p_orch_verify.add_argument("--worktree-root", required=True,
+                                help="Directory under which scratch worktrees are created")
+    p_orch_verify.add_argument("--cut-score-version", default="1.0")
+    p_orch_verify.add_argument("--validation-runs", type=int, default=2)
+    p_orch_verify.add_argument("--cache-dir", default=None)
+    p_orch_verify.add_argument("--json", action="store_true")
+
+    p_orch_run = orch_sub.add_parser(
+        "run", help="Run paired trials against the harness (requires claude-agent-sdk)",
+    )
+    p_orch_run.add_argument("--placeholder", action="store_true",
+                             help="Run path is currently library-only; see module docstring")
+
     # --- debug ---
     p_debug = sub.add_parser("debug", help="Bisect a bad session to find root cause")
     p_debug.add_argument("session_id", nargs="?", default=None, help="Session ID to debug")
@@ -394,6 +434,7 @@ def main(argv=None):
             "bench": _cmd_bench,
             "trial": _cmd_trial,
             "cut-score": _cmd_cut_score,
+            "orchestrator": _cmd_orchestrator,
             "debug": _cmd_debug,
             "doctor": _cmd_doctor,
             "serve": _cmd_serve,
