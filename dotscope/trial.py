@@ -152,6 +152,7 @@ class TrialStore:
         trial_id = f"trial_{uuid.uuid4().hex[:12]}"
         expires_at = now + timedelta(hours=timeout_hours)
         public_timeout_ok = timeout_hours <= PUBLIC_TIMEOUT_HOURS
+        pre_registration = load_pre_registration(str(self.root))
 
         trial = {
             "schema_version": SCHEMA_VERSION,
@@ -183,6 +184,7 @@ class TrialStore:
             "commits": [],
             "committed_files": [],
             "integrity": {"checked": False, "passed": None, "issues": []},
+            "pre_registration": pre_registration,
         }
         atomic_write_json(self.trials_dir / f"{trial_id}.json", trial)
         self._initialize_events(trial_id)
@@ -356,6 +358,8 @@ class TrialStore:
         valid = [item for item in analyses if item["public_valid"]]
         metrics = build_public_metrics(valid)
         gates = build_public_gates(valid, metrics) if public else []
+        pre_registration = load_pre_registration(str(self.root))
+        deviations = (pre_registration or {}).get("deviations") or []
 
         report = {
             "schema_version": SCHEMA_VERSION,
@@ -382,6 +386,8 @@ class TrialStore:
                 "max_ci_half_width_pp": PUBLIC_MAX_CI_HALF_WIDTH_PP,
             },
             "projects": build_project_groups(valid),
+            "pre_registration": pre_registration,
+            "deviations": deviations,
         }
         if public and not all(gate["passed"] for gate in gates):
             raise PublicReportError(report)
@@ -593,6 +599,54 @@ def compute_repo_state(repo_root: str) -> RepoState:
     )
 
 
+PRE_REGISTRATION_SIDECAR = "docs/trial-pre-registration.json"
+PRE_REGISTRATION_DOC = "docs/trial-pre-registration.md"
+
+
+def load_pre_registration(repo_root: str) -> Optional[Dict[str, Any]]:
+    """Load the pre-registration sidecar and verify the doc hash.
+
+    Returns the parsed sidecar dict if present and the doc hash matches.
+    Returns None if the sidecar is absent (allowing trials to run in
+    repos without a registration, e.g. test fixtures).
+    Raises TrialError if the sidecar exists but the doc is missing or
+    its hash does not match doc_sha256 in the sidecar.
+    """
+    root = Path(repo_root).resolve()
+    sidecar_path = root / PRE_REGISTRATION_SIDECAR
+    doc_path = root / PRE_REGISTRATION_DOC
+    if not sidecar_path.exists():
+        return None
+
+    try:
+        sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        raise TrialError(f"pre-registration sidecar is unreadable: {exc}")
+
+    expected_hash = sidecar.get("doc_sha256")
+    if not expected_hash:
+        raise TrialError("pre-registration sidecar missing doc_sha256")
+    if not doc_path.exists():
+        raise TrialError(
+            f"pre-registration sidecar present but doc missing: {PRE_REGISTRATION_DOC}"
+        )
+
+    actual_hash = hashlib.sha256(doc_path.read_bytes()).hexdigest()
+    if actual_hash != expected_hash:
+        raise TrialError(
+            f"pre-registration doc hash mismatch: expected {expected_hash}, got {actual_hash}"
+        )
+
+    return {
+        "commit": sidecar.get("registered_commit") or "",
+        "tag": sidecar.get("tag") or "",
+        "doc_sha256": expected_hash,
+        "harness_tag": sidecar.get("harness_tag") or "",
+        "harness_commit": sidecar.get("harness_commit") or "",
+        "deviations": sidecar.get("deviations") or [],
+    }
+
+
 def default_project_id(repo_root: str) -> str:
     try:
         remote = run_git(["config", "--get", "remote.origin.url"], repo_root).strip()
@@ -718,6 +772,12 @@ def analyze_pair(
             values = {trial.get(key) for trial in active_trials}
             if len(values) != 1:
                 reasons.append(f"agreement mismatch: {key}")
+        pre_reg_hashes = {
+            (trial.get("pre_registration") or {}).get("doc_sha256")
+            for trial in active_trials
+        }
+        if len(pre_reg_hashes) != 1:
+            reasons.append("agreement mismatch: pre_registration.doc_sha256")
         for key in ("task", "model", "client", "project_id"):
             if pair.get(key) is not None:
                 for trial in active_trials:

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "doc_path": "docs/trial-pre-registration.md",
   "doc_sha256": "1d5420b9d170752329ed764d024cf9f997f1d36b61ea4e35a24ccfd67aaad70d",
-  "registered_commit": "",
+  "registered_commit": "7c8c6c528365c190ced99da837a30838d9147cd8",
   "tag": "trial-pre-registration-v1",
   "harness_tag": "trial-schema-v1",
   "harness_commit": "57383e4a3981b4eebd97df443510530b9f5c60c6",
