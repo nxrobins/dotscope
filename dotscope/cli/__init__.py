@@ -4,6 +4,8 @@ from .ingest import _cmd_ingest, _cmd_impact, _cmd_backtest, _cmd_conventions, _
 from .hooks import _cmd_observe, _cmd_incremental, _cmd_hook, _cmd_refresh, _cmd_check, _cmd_check_backtest, _cmd_voice
 from .serve import _cmd_serve
 from .trial import _cmd_trial
+from .cut_score import _cmd_cut_score
+from .orchestrator import _cmd_orchestrator
 
 
 """CLI entry point for dotscope."""
@@ -238,6 +240,17 @@ def main(argv=None):
     p_trial_start.add_argument("--capture-method", default="", help="Provider or hook name for token accounting")
     p_trial_start.add_argument("--tokenizer-encoding", default="", help="Tokenizer/model encoding id for Tier B")
     p_trial_start.add_argument("--timeout-hours", type=float, default=4.0)
+    p_trial_start.add_argument(
+        "--token-accounting-policy",
+        choices=["billed_input_sum", "input_only"],
+        default="billed_input_sum",
+        help=(
+            "Per-turn token accounting policy. billed_input_sum (default) "
+            "sums input_tokens + cache_creation_input_tokens + "
+            "cache_read_input_tokens to defeat cache-asymmetry contamination. "
+            "input_only records raw input_tokens (legacy)."
+        ),
+    )
     p_trial_start.add_argument("--json", action="store_true", help="Machine-readable output")
 
     p_trial_finish = trial_sub.add_parser("finish", help="Finish the active trial arm")
@@ -273,7 +286,93 @@ def main(argv=None):
     p_trial_record_tokens.add_argument("--tokenizer-encoding", default="")
     p_trial_record_tokens.add_argument("--source", default="agent")
     p_trial_record_tokens.add_argument("--turn-id", default=None)
+    p_trial_record_tokens.add_argument(
+        "--cache-creation", type=int, default=None,
+        help="cache_creation_input_tokens for the turn (diagnostic; orchestrator should already include in --input-tokens under billed_input_sum policy)",
+    )
+    p_trial_record_tokens.add_argument(
+        "--cache-read", type=int, default=None,
+        help="cache_read_input_tokens for the turn (diagnostic; orchestrator should already include in --input-tokens under billed_input_sum policy)",
+    )
     p_trial_record_tokens.add_argument("--json", action="store_true", help="Machine-readable output")
+
+    # --- cut-score ---
+    p_cut = sub.add_parser(
+        "cut-score",
+        help="Score closed bug-fix PRs against live-trial within-repo task criteria",
+    )
+    p_cut.add_argument(
+        "--repo", action="append", default=[], required=False,
+        help="Owner/repo to score (repeatable). At least one required.",
+    )
+    p_cut.add_argument(
+        "--n", type=int, default=30,
+        help="PRs to examine per repo (default 30, matches pre-reg)",
+    )
+    p_cut.add_argument(
+        "--token-env", default="GITHUB_TOKEN",
+        help="Env var holding a GitHub token (default GITHUB_TOKEN; empty disables auth)",
+    )
+    p_cut.add_argument(
+        "--label-override", action="append", default=[],
+        help="REPO=LABEL to override default 'bug' for a specific repo",
+    )
+    p_cut.add_argument(
+        "--module-style", default="top-pkg",
+        choices=["top-pkg", "depth-2", "depth-3", "leaf-dir"],
+        help="Default module-extraction style (per-repo recommended styles override)",
+    )
+    p_cut.add_argument(
+        "--module-style-override", action="append", default=[],
+        help="REPO=STYLE to override module-style for a specific repo",
+    )
+    p_cut.add_argument(
+        "--out", default=None,
+        help="Optional path to write the JSON report (atomic write)",
+    )
+    p_cut.add_argument(
+        "--json", action="store_true",
+        help="Print full JSON to stdout (default: human summary)",
+    )
+
+    # --- orchestrator ---
+    p_orch = sub.add_parser(
+        "orchestrator",
+        help="Live trial orchestrator (operator infrastructure for paired runs)",
+    )
+    orch_sub = p_orch.add_subparsers(dest="orchestrator_action")
+
+    p_orch_contam = orch_sub.add_parser(
+        "contamination-check",
+        help="Walk a worktree's ancestry for MCP/Claude configs",
+    )
+    p_orch_contam.add_argument("--worktree", default=None,
+                                help="Worktree to check (default: cwd)")
+    p_orch_contam.add_argument("--fail-loud", action="store_true",
+                                help="Exit 1 if any config is found")
+    p_orch_contam.add_argument("--json", action="store_true")
+
+    p_orch_verify = orch_sub.add_parser(
+        "verify-regression",
+        help="Pre-flight regression verification on parent SHA",
+    )
+    p_orch_verify.add_argument("--repo", required=True)
+    p_orch_verify.add_argument("--pr", type=int, required=True)
+    p_orch_verify.add_argument("--parent-sha", required=True)
+    p_orch_verify.add_argument("--test-path", required=True,
+                                help="pytest path that should fail on parent")
+    p_orch_verify.add_argument("--worktree-root", required=True,
+                                help="Directory under which scratch worktrees are created")
+    p_orch_verify.add_argument("--cut-score-version", default="1.0")
+    p_orch_verify.add_argument("--validation-runs", type=int, default=2)
+    p_orch_verify.add_argument("--cache-dir", default=None)
+    p_orch_verify.add_argument("--json", action="store_true")
+
+    p_orch_run = orch_sub.add_parser(
+        "run", help="Run paired trials against the harness (requires claude-agent-sdk)",
+    )
+    p_orch_run.add_argument("--placeholder", action="store_true",
+                             help="Run path is currently library-only; see module docstring")
 
     # --- debug ---
     p_debug = sub.add_parser("debug", help="Bisect a bad session to find root cause")
@@ -334,6 +433,8 @@ def main(argv=None):
             "test-compiler": _cmd_test_compiler,
             "bench": _cmd_bench,
             "trial": _cmd_trial,
+            "cut-score": _cmd_cut_score,
+            "orchestrator": _cmd_orchestrator,
             "debug": _cmd_debug,
             "doctor": _cmd_doctor,
             "serve": _cmd_serve,

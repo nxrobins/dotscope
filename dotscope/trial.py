@@ -31,6 +31,7 @@ PUBLIC_TIMEOUT_HOURS = 8.0
 ARMS = {"dotscope", "baseline"}
 TOKEN_BOUNDARIES = {"agent", "dotscope"}
 TOKEN_FIDELITIES = {"A", "B", "C"}
+TOKEN_ACCOUNTING_POLICIES = {"billed_input_sum", "input_only"}
 
 
 class TrialError(ValueError):
@@ -122,6 +123,7 @@ class TrialStore:
         capture_method: str = "",
         tokenizer_encoding: str = "",
         timeout_hours: float = 4.0,
+        token_accounting_policy: str = "billed_input_sum",
     ) -> Dict[str, Any]:
         self.ensure_initialized()
         if arm not in ARMS:
@@ -132,6 +134,11 @@ class TrialStore:
             raise TrialError("token fidelity must be A, B, or C")
         if timeout_hours <= 0:
             raise TrialError("timeout must be positive")
+        if token_accounting_policy not in TOKEN_ACCOUNTING_POLICIES:
+            raise TrialError(
+                f"token_accounting_policy must be one of "
+                f"{sorted(TOKEN_ACCOUNTING_POLICIES)}"
+            )
 
         pair = self.load_pair(pair_id)
         existing_active = self.get_active_trial()
@@ -152,6 +159,7 @@ class TrialStore:
         trial_id = f"trial_{uuid.uuid4().hex[:12]}"
         expires_at = now + timedelta(hours=timeout_hours)
         public_timeout_ok = timeout_hours <= PUBLIC_TIMEOUT_HOURS
+        pre_registration = load_pre_registration(str(self.root))
 
         trial = {
             "schema_version": SCHEMA_VERSION,
@@ -173,6 +181,7 @@ class TrialStore:
             "token_fidelity": token_fidelity,
             "capture_method": capture_method,
             "tokenizer_encoding": tokenizer_encoding,
+            "token_accounting_policy": token_accounting_policy,
             "timeout_hours": timeout_hours,
             "public_timeout_ok": public_timeout_ok,
             "started_at": isoformat(now),
@@ -183,6 +192,7 @@ class TrialStore:
             "commits": [],
             "committed_files": [],
             "integrity": {"checked": False, "passed": None, "issues": []},
+            "pre_registration": pre_registration,
         }
         atomic_write_json(self.trials_dir / f"{trial_id}.json", trial)
         self._initialize_events(trial_id)
@@ -276,6 +286,8 @@ class TrialStore:
         source: str = "agent",
         turn_id: Optional[str] = None,
         trial_id: Optional[str] = None,
+        cache_creation_input_tokens: Optional[int] = None,
+        cache_read_input_tokens: Optional[int] = None,
     ) -> Dict[str, Any]:
         self.ensure_initialized()
         if input_tokens < 0:
@@ -284,8 +296,25 @@ class TrialStore:
             raise TrialError("token boundary must be 'agent' or 'dotscope'")
         if token_fidelity not in TOKEN_FIDELITIES:
             raise TrialError("token fidelity must be A, B, or C")
+        if cache_creation_input_tokens is not None and cache_creation_input_tokens < 0:
+            raise TrialError("cache_creation_input_tokens must be non-negative")
+        if cache_read_input_tokens is not None and cache_read_input_tokens < 0:
+            raise TrialError("cache_read_input_tokens must be non-negative")
 
         trial = self._resolve_trial(trial_id)
+
+        if turn_id is not None:
+            existing = self.load_events(trial["trial_id"])
+            for prior in existing:
+                if (
+                    prior.get("type") == "token_usage"
+                    and prior.get("turn_id") == turn_id
+                ):
+                    raise TrialError(
+                        f"duplicate turn_id {turn_id!r} for trial "
+                        f"{trial['trial_id']}; one record per turn_id"
+                    )
+
         event = {
             "type": "token_usage",
             "source": source,
@@ -296,6 +325,10 @@ class TrialStore:
             "tokenizer_encoding": tokenizer_encoding,
             "turn_id": turn_id,
         }
+        if cache_creation_input_tokens is not None:
+            event["cache_creation_input_tokens"] = int(cache_creation_input_tokens)
+        if cache_read_input_tokens is not None:
+            event["cache_read_input_tokens"] = int(cache_read_input_tokens)
         return self.append_event(trial["trial_id"], event)
 
     def record_dotscope_resolve(
@@ -356,6 +389,8 @@ class TrialStore:
         valid = [item for item in analyses if item["public_valid"]]
         metrics = build_public_metrics(valid)
         gates = build_public_gates(valid, metrics) if public else []
+        pre_registration = load_pre_registration(str(self.root))
+        deviations = (pre_registration or {}).get("deviations") or []
 
         report = {
             "schema_version": SCHEMA_VERSION,
@@ -382,6 +417,8 @@ class TrialStore:
                 "max_ci_half_width_pp": PUBLIC_MAX_CI_HALF_WIDTH_PP,
             },
             "projects": build_project_groups(valid),
+            "pre_registration": pre_registration,
+            "deviations": deviations,
         }
         if public and not all(gate["passed"] for gate in gates):
             raise PublicReportError(report)
@@ -593,6 +630,54 @@ def compute_repo_state(repo_root: str) -> RepoState:
     )
 
 
+PRE_REGISTRATION_SIDECAR = "docs/trial-pre-registration.json"
+PRE_REGISTRATION_DOC = "docs/trial-pre-registration.md"
+
+
+def load_pre_registration(repo_root: str) -> Optional[Dict[str, Any]]:
+    """Load the pre-registration sidecar and verify the doc hash.
+
+    Returns the parsed sidecar dict if present and the doc hash matches.
+    Returns None if the sidecar is absent (allowing trials to run in
+    repos without a registration, e.g. test fixtures).
+    Raises TrialError if the sidecar exists but the doc is missing or
+    its hash does not match doc_sha256 in the sidecar.
+    """
+    root = Path(repo_root).resolve()
+    sidecar_path = root / PRE_REGISTRATION_SIDECAR
+    doc_path = root / PRE_REGISTRATION_DOC
+    if not sidecar_path.exists():
+        return None
+
+    try:
+        sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        raise TrialError(f"pre-registration sidecar is unreadable: {exc}")
+
+    expected_hash = sidecar.get("doc_sha256")
+    if not expected_hash:
+        raise TrialError("pre-registration sidecar missing doc_sha256")
+    if not doc_path.exists():
+        raise TrialError(
+            f"pre-registration sidecar present but doc missing: {PRE_REGISTRATION_DOC}"
+        )
+
+    actual_hash = hashlib.sha256(doc_path.read_bytes()).hexdigest()
+    if actual_hash != expected_hash:
+        raise TrialError(
+            f"pre-registration doc hash mismatch: expected {expected_hash}, got {actual_hash}"
+        )
+
+    return {
+        "commit": sidecar.get("registered_commit") or "",
+        "tag": sidecar.get("tag") or "",
+        "doc_sha256": expected_hash,
+        "harness_tag": sidecar.get("harness_tag") or "",
+        "harness_commit": sidecar.get("harness_commit") or "",
+        "deviations": sidecar.get("deviations") or [],
+    }
+
+
 def default_project_id(repo_root: str) -> str:
     try:
         remote = run_git(["config", "--get", "remote.origin.url"], repo_root).strip()
@@ -712,12 +797,19 @@ def analyze_pair(
         "repo_state_hash",
         "token_boundary",
         "token_fidelity",
+        "token_accounting_policy",
     ]
     if len(active_trials) == 2:
         for key in agreement_keys:
             values = {trial.get(key) for trial in active_trials}
             if len(values) != 1:
                 reasons.append(f"agreement mismatch: {key}")
+        pre_reg_hashes = {
+            (trial.get("pre_registration") or {}).get("doc_sha256")
+            for trial in active_trials
+        }
+        if len(pre_reg_hashes) != 1:
+            reasons.append("agreement mismatch: pre_registration.doc_sha256")
         for key in ("task", "model", "client", "project_id"):
             if pair.get(key) is not None:
                 for trial in active_trials:
