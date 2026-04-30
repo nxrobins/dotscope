@@ -16,6 +16,7 @@ import pytest
 
 from dotscope.orchestrator import (
     BaselineContaminationError,
+    CorpusResult,
     OrchestratorError,
     REGRESSION_CACHE_DIR,
     TurnTokenBuffer,
@@ -23,8 +24,10 @@ from dotscope.orchestrator import (
     assert_no_inherited_mcp_config,
     baseline_tool_inventory_check,
     build_sdk_options,
+    compose_default_prompt,
     regression_cache_key,
     run_arm,
+    run_corpus,
     run_pair,
     stream_assistant_usage,
     verify_regression,
@@ -64,16 +67,22 @@ class FakeAssistantMessage:
 
 class FakeQuery:
     """Async-iterable fake of claude_agent_sdk.query(). Returns a canned
-    sequence of messages and records the last options it was called with."""
+    sequence of messages keyed by prompt; falls back to `default_messages`
+    for prompts not in the script (useful when prompts are dynamically
+    composed and exact-match scripting is impractical)."""
 
-    def __init__(self, scripts: Dict[str, List[FakeAssistantMessage]]):
-        # scripts: prompt -> messages to yield
-        self._scripts = scripts
+    def __init__(
+        self,
+        scripts: Optional[Dict[str, List[FakeAssistantMessage]]] = None,
+        default_messages: Optional[List[FakeAssistantMessage]] = None,
+    ):
+        self._scripts = scripts or {}
+        self._default = default_messages or []
         self.calls: List[Dict[str, Any]] = []
 
     def __call__(self, *, prompt: str, options: Dict[str, Any]):
         self.calls.append({"prompt": prompt, "options": options})
-        messages = self._scripts.get(prompt, [])
+        messages = self._scripts.get(prompt, self._default)
 
         async def _gen():
             for m in messages:
@@ -623,3 +632,202 @@ class TestRunPair:
         # accounting policy, so the pair should be public-valid.
         cmp = store.compare_pair(result.pair_id)
         assert result.public_valid is True, f"reasons: {cmp.get('reasons')}"
+
+
+# ---------------------------------------------------------------------------
+# compose_default_prompt
+# ---------------------------------------------------------------------------
+
+class TestComposeDefaultPrompt:
+    def test_includes_repo_pr_title_test_paths(self):
+        prompt = compose_default_prompt({
+            "repo": "pytest-dev/pytest",
+            "pr": 12345,
+            "title": "fix bug in plugin loader",
+            "candidate_test_paths": ["testing/test_plugin.py"],
+        }, worktree="/tmp/wt")
+        assert "pytest-dev/pytest" in prompt
+        assert "12345" in prompt
+        assert "fix bug in plugin loader" in prompt
+        assert "testing/test_plugin.py" in prompt
+        assert "/tmp/wt" in prompt
+
+    def test_truncates_long_titles(self):
+        long_title = "x" * 500
+        prompt = compose_default_prompt({
+            "repo": "x/y", "pr": 1, "title": long_title,
+            "candidate_test_paths": [],
+        })
+        assert len(prompt) < 2000  # bounded
+        assert "xxx" in prompt  # title fragment present
+
+    def test_handles_missing_test_paths(self):
+        prompt = compose_default_prompt({
+            "repo": "x/y", "pr": 1, "title": "t",
+            "candidate_test_paths": [],
+        })
+        assert "<no test path>" in prompt
+
+
+# ---------------------------------------------------------------------------
+# run_corpus
+# ---------------------------------------------------------------------------
+
+class TestRunCorpus:
+    def _build_cut_score_payload(self, *, public_count: int, repo: str = "x/y"):
+        rows = []
+        for i in range(public_count):
+            rows.append({
+                "repo": repo,
+                "pr": 100 + i,
+                "title": f"fix #{i}",
+                "qualifies_public": True,
+                "candidate_test_paths": [f"tests/test_{i}.py"],
+            })
+        # Add a non-public row that should be filtered out.
+        rows.append({
+            "repo": repo,
+            "pr": 999,
+            "title": "added-test PR",
+            "qualifies_public": False,
+            "candidate_test_paths": ["tests/test_new.py"],
+        })
+        return {
+            "schema_version": 1,
+            "cut_score_version": "1.0",
+            "n_per_repo": public_count + 1,
+            "any_repo_failed_gate": False,
+            "repos": [{
+                "summary": {"repo": repo, "qualifying_rate_public": 1.0,
+                            "n_examined": public_count + 1, "gate_passed": True},
+                "rows": rows,
+                "label_used": "bug",
+                "module_style_used": "top-pkg",
+                "module_style_source": "default",
+            }],
+        }
+
+    def _build_fake_git(self, repo, *, parent_sha="abc1234"):
+        import shutil
+
+        def fake_git(args, cwd):
+            if args[:2] == ["worktree", "add"]:
+                target = Path(args[2])
+                if target.exists():
+                    shutil.rmtree(target, ignore_errors=True)
+                shutil.copytree(repo, target)
+                return ""
+            if args[:2] == ["worktree", "remove"]:
+                target = Path(args[-1])
+                if target.exists():
+                    shutil.rmtree(target, ignore_errors=True)
+                return ""
+            if args == ["rev-parse", "HEAD"] or args == ["rev-parse", "origin/main"]:
+                return parent_sha
+            return ""
+        return fake_git
+
+    def _build_fake_pytest(self, *, regression: bool):
+        def fake_pytest(commands, cwd, runs):
+            return [
+                {"run": i + 1, "passed": (not regression), "command": commands[0]}
+                for i in range(runs)
+            ]
+        return fake_pytest
+
+    def test_drives_qualifying_public_rows_only(self, tmp_path, monkeypatch):
+        repo_path = _init_repo(tmp_path / "repo")
+        store = TrialStore(str(repo_path))
+        worktrees_root = tmp_path / "wts"
+        worktrees_root.mkdir()
+        cache_dir = tmp_path / "cache"
+
+        payload = self._build_cut_score_payload(public_count=2)
+
+        # Each agent run yields one assistant turn. Both arms get unique
+        # message_ids so the buffer flushes a non-zero token total.
+        sdk = FakeQuery(
+            default_messages=[FakeAssistantMessage("msg-corpus", {"input_tokens": 50})],
+        )
+
+        from dotscope import orchestrator as orch
+        monkeypatch.setattr(orch, "REGRESSION_CACHE_DIR", cache_dir)
+
+        fake_git = self._build_fake_git(repo_path)
+
+        result = asyncio.run(run_corpus(
+            store=store,
+            cut_score_payload=payload,
+            pairs_per_repo=2,
+            base_ref="HEAD",
+            model="claude-opus-4-7",
+            client="claude-agent-sdk",
+            worktrees_root=worktrees_root,
+            sdk_query=sdk,
+            is_assistant_message=_is_assistant,
+            extract_message_id_and_usage=_extract_id_and_usage,
+            extract_text_content=_extract_text,
+            git_runner=fake_git,
+            validation_runs=2,
+            timeout_hours=0.1,
+            cut_score_version="1.0",
+            regression_cache_dir=cache_dir,
+            pre_flight=False,  # simpler in this test; covered separately
+            contamination_stop_at=tmp_path,
+        ))
+
+        assert result.aggregate_attempted == 2
+        # Both pairs should be public_valid because identical repo state hash + matching policy
+        assert result.aggregate_public_valid == 2
+        assert result.per_repo_summary["x/y"]["attempted"] == 2
+        # Only qualifies_public rows are picked; pr 999 (qualifies_public=False) is excluded
+        completed_prs = [c["pr"] for c in result.completed_pairs]
+        assert 999 not in completed_prs
+
+    def test_skips_when_preflight_says_not_a_regression(self, tmp_path, monkeypatch):
+        repo_path = _init_repo(tmp_path / "repo")
+        store = TrialStore(str(repo_path))
+        worktrees_root = tmp_path / "wts"
+        worktrees_root.mkdir()
+        cache_dir = tmp_path / "cache"
+        payload = self._build_cut_score_payload(public_count=1)
+
+        sdk = FakeQuery({})
+
+        # Pre-flight says runs all pass → not_a_regression.
+        from dotscope import orchestrator as orch
+        original_verify = orch.verify_regression
+
+        def patched_verify(**kwargs):
+            kwargs["pytest_runner"] = self._build_fake_pytest(regression=False)
+            kwargs["git_runner"] = lambda args, cwd: ""
+            return original_verify(**kwargs)
+
+        monkeypatch.setattr(orch, "verify_regression", patched_verify)
+
+        fake_git = self._build_fake_git(repo_path)
+
+        result = asyncio.run(run_corpus(
+            store=store,
+            cut_score_payload=payload,
+            pairs_per_repo=1,
+            base_ref="HEAD",
+            model="claude-opus-4-7",
+            client="claude-agent-sdk",
+            worktrees_root=worktrees_root,
+            sdk_query=sdk,
+            is_assistant_message=_is_assistant,
+            extract_message_id_and_usage=_extract_id_and_usage,
+            extract_text_content=_extract_text,
+            git_runner=fake_git,
+            validation_runs=2,
+            timeout_hours=0.1,
+            cut_score_version="1.0",
+            regression_cache_dir=cache_dir,
+            pre_flight=True,
+            contamination_stop_at=tmp_path,
+        ))
+
+        assert result.aggregate_attempted == 0
+        assert len(result.skipped_tasks) == 1
+        assert result.skipped_tasks[0]["reason"] == "not_a_regression"

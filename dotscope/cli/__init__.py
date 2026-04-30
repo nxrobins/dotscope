@@ -371,8 +371,54 @@ def main(argv=None):
     p_orch_run = orch_sub.add_parser(
         "run", help="Run paired trials against the harness (requires claude-agent-sdk)",
     )
-    p_orch_run.add_argument("--placeholder", action="store_true",
-                             help="Run path is currently library-only; see module docstring")
+    p_orch_run.add_argument(
+        "--tasks", required=True,
+        help="Path to a cut-score JSON output (qualifying_public rows are picked)",
+    )
+    p_orch_run.add_argument(
+        "--pairs-per-repo", type=int, default=10,
+        help="How many qualifying_public PRs to drive per repo (default 10)",
+    )
+    p_orch_run.add_argument(
+        "--base-ref", default="HEAD",
+        help="Git ref both arms start from (resolved with rev-parse for the regression cache key)",
+    )
+    p_orch_run.add_argument(
+        "--model", default="claude-opus-4-7",
+        help="Model id passed to the SDK (default claude-opus-4-7)",
+    )
+    p_orch_run.add_argument(
+        "--client", default="claude-agent-sdk",
+        help="Client identifier recorded on each trial",
+    )
+    p_orch_run.add_argument(
+        "--worktrees-root", required=True,
+        help="Directory under which scratch worktrees are created and torn down",
+    )
+    p_orch_run.add_argument(
+        "--max-arm-hours", type=float, default=4.0,
+        help="Per-arm timeout (default 4h; harness independently caps public eligibility at 8h)",
+    )
+    p_orch_run.add_argument(
+        "--validation-runs", type=int, default=2,
+        help="Validation runs per command (default 2; harness's all-must-pass semantics)",
+    )
+    p_orch_run.add_argument(
+        "--audit-dir", default=None,
+        help="Directory for per-trial token audit JSONL (optional)",
+    )
+    p_orch_run.add_argument(
+        "--skip-pre-flight", action="store_true",
+        help="Skip the regression-test verification gate (NOT recommended for public corpus)",
+    )
+    p_orch_run.add_argument(
+        "--out", default=None,
+        help="Path to write the run result JSON (atomic write)",
+    )
+    p_orch_run.add_argument(
+        "--json", action="store_true",
+        help="Print full JSON to stdout (default: human summary)",
+    )
 
     # --- debug ---
     p_debug = sub.add_parser("debug", help="Bisect a bad session to find root cause")

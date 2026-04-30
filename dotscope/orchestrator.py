@@ -851,6 +851,221 @@ async def run_pair(
 
 
 # ---------------------------------------------------------------------------
+# Prompt composition + corpus driver
+# ---------------------------------------------------------------------------
+
+DEFAULT_PROMPT_TEMPLATE = """\
+You are working in a fresh git worktree at {worktree}, checked out at the \
+parent of {repo}#{pr} (the bug-fix PR titled: "{title}").
+
+Your task: identify and fix the bug. When you believe the fix is correct, \
+the validation gate `pytest {test_paths}` must pass. Make a git commit \
+containing your changes.
+
+Do not look up the original PR's diff. Reason from the test failure forward \
+to the fix.
+
+You may use any tools available to you to read files, search the codebase, \
+run shell commands, and edit code.
+"""
+
+
+def compose_default_prompt(
+    row: Dict[str, Any],
+    *,
+    worktree: str | os.PathLike[str] = "<worktree>",
+    template: str = DEFAULT_PROMPT_TEMPLATE,
+) -> str:
+    """Render a neutral fix-the-bug prompt from a cut-score row."""
+    test_paths = row.get("candidate_test_paths") or []
+    return template.format(
+        worktree=str(worktree),
+        repo=row.get("repo", "<unknown>"),
+        pr=row.get("pr", "?"),
+        title=(row.get("title") or "").replace("\n", " ").strip()[:200],
+        test_paths=" ".join(test_paths) if test_paths else "<no test path>",
+    )
+
+
+@dataclass
+class CorpusResult:
+    completed_pairs: List[Dict[str, Any]]
+    skipped_tasks: List[Dict[str, Any]]
+    per_repo_summary: Dict[str, Dict[str, int]]
+    aggregate_attempted: int
+    aggregate_public_valid: int
+
+
+def _select_tasks_per_repo(
+    cut_score_payload: Dict[str, Any], pairs_per_repo: int
+) -> List[Tuple[str, Dict[str, Any]]]:
+    """Yield (repo, row) for the first N qualifying_public rows per repo."""
+    selected: List[Tuple[str, Dict[str, Any]]] = []
+    for entry in cut_score_payload.get("repos", []):
+        repo = entry.get("summary", {}).get("repo") or entry.get("repo")
+        if not repo:
+            continue
+        rows = entry.get("rows") or []
+        public_rows = [r for r in rows if r.get("qualifies_public") is True]
+        for row in public_rows[:pairs_per_repo]:
+            selected.append((repo, row))
+    return selected
+
+
+async def run_corpus(
+    *,
+    store: TrialStore,
+    cut_score_payload: Dict[str, Any],
+    pairs_per_repo: int,
+    base_ref: str,
+    model: str,
+    client: str,
+    worktrees_root: Path,
+    sdk_query: "SdkQueryFunc",
+    is_assistant_message: Callable[[Any], bool],
+    extract_message_id_and_usage: Callable[[Any], Tuple[Optional[str], Dict[str, Any]]],
+    extract_text_content: Callable[[Any], str],
+    git_runner: Callable[[List[str], str], str] = _default_git_runner,
+    validation_runs: int = 2,
+    timeout_hours: float = 4.0,
+    audit_dir: Optional[Path] = None,
+    cut_score_version: str = "1.0",
+    regression_cache_dir: Path = REGRESSION_CACHE_DIR,
+    pre_flight: bool = True,
+    contamination_stop_at: Optional[Path] = None,
+    prompt_composer: Callable[[Dict[str, Any], Path], str] = None,
+    on_progress: Optional[Callable[[str], None]] = None,
+) -> CorpusResult:
+    """Drive paired trials over the cut-score JSON queue.
+
+    For each repo in the cut-score payload, take qualifying_public PRs in
+    order up to pairs_per_repo. For each task: optional pre-flight regression
+    verify (skip on not_a_regression / flaky_on_parent / collection_error),
+    then run_pair. Returns a CorpusResult with per-repo + aggregate counts.
+
+    Methodological constraint: this driver is sequential. Parallel execution
+    of multiple pairs would change the model's load profile and contaminate
+    the comparison. Operators wanting throughput should run multiple
+    orchestrator processes against disjoint task slices.
+    """
+    prompt_composer = prompt_composer or (
+        lambda row, wt: compose_default_prompt(row, worktree=wt)
+    )
+    log = on_progress or (lambda _msg: None)
+
+    selected = _select_tasks_per_repo(cut_score_payload, pairs_per_repo)
+    log(f"selected {len(selected)} tasks across {len({r for r, _ in selected})} repos")
+
+    completed: List[Dict[str, Any]] = []
+    skipped: List[Dict[str, Any]] = []
+    per_repo: Dict[str, Dict[str, int]] = {}
+
+    for repo, row in selected:
+        repo_stats = per_repo.setdefault(
+            repo,
+            {"attempted": 0, "completed": 0, "skipped": 0, "public_valid": 0},
+        )
+        pr_num = int(row.get("pr") or 0)
+        test_paths = row.get("candidate_test_paths") or []
+        primary_test = test_paths[0] if test_paths else None
+        log(f"[{repo}#{pr_num}] start")
+
+        if pre_flight:
+            if primary_test is None:
+                skipped.append({
+                    "repo": repo, "pr": pr_num,
+                    "reason": "no_candidate_test_path",
+                })
+                repo_stats["skipped"] += 1
+                log(f"[{repo}#{pr_num}] skip: no candidate test path")
+                continue
+            try:
+                parent_sha = git_runner(
+                    ["rev-parse", base_ref], str(worktrees_root)
+                ).strip()
+            except OrchestratorError as exc:
+                skipped.append({
+                    "repo": repo, "pr": pr_num,
+                    "reason": f"parent_sha_resolve_error: {exc}",
+                })
+                repo_stats["skipped"] += 1
+                continue
+
+            status = verify_regression(
+                repo=repo, pr=pr_num, parent_sha=parent_sha,
+                test_path=primary_test,
+                worktree_root=worktrees_root,
+                cut_score_version=cut_score_version,
+                validation_runs=validation_runs,
+                cache_dir=regression_cache_dir,
+                git_runner=git_runner,
+            )
+            if not status.is_regression:
+                skipped.append({
+                    "repo": repo, "pr": pr_num,
+                    "reason": status.reason,
+                    "cache_hit": status.cache_hit,
+                })
+                repo_stats["skipped"] += 1
+                log(f"[{repo}#{pr_num}] skip: {status.reason}")
+                continue
+
+        repo_stats["attempted"] += 1
+        try:
+            result = await run_pair(
+                store=store,
+                task=f"{repo}#{pr_num}",
+                model=model,
+                client=client,
+                project=repo,
+                base_ref=base_ref,
+                prompt=prompt_composer(row, worktrees_root),
+                worktrees_root=worktrees_root,
+                sdk_query=sdk_query,
+                is_assistant_message=is_assistant_message,
+                extract_message_id_and_usage=extract_message_id_and_usage,
+                extract_text_content=extract_text_content,
+                git_runner=git_runner,
+                validation_commands=[f"pytest {primary_test}"] if primary_test else [],
+                validation_runs=validation_runs,
+                timeout_hours=timeout_hours,
+                audit_dir=audit_dir,
+                contamination_stop_at=contamination_stop_at,
+            )
+        except Exception as exc:  # noqa: BLE001 - we want to log + continue
+            skipped.append({
+                "repo": repo, "pr": pr_num,
+                "reason": f"pair_run_error: {type(exc).__name__}: {exc}",
+            })
+            repo_stats["skipped"] += 1
+            log(f"[{repo}#{pr_num}] error: {exc}")
+            continue
+
+        repo_stats["completed"] += 1
+        if result.public_valid:
+            repo_stats["public_valid"] += 1
+        completed.append({
+            "repo": repo,
+            "pr": pr_num,
+            "pair_id": result.pair_id,
+            "arm_order": result.arm_order,
+            "public_valid": result.public_valid,
+        })
+        log(
+            f"[{repo}#{pr_num}] done pair_id={result.pair_id} "
+            f"public_valid={result.public_valid}"
+        )
+
+    return CorpusResult(
+        completed_pairs=completed,
+        skipped_tasks=skipped,
+        per_repo_summary=per_repo,
+        aggregate_attempted=sum(s["attempted"] for s in per_repo.values()),
+        aggregate_public_valid=sum(s["public_valid"] for s in per_repo.values()),
+    )
+
+
+# ---------------------------------------------------------------------------
 # SDK adapter (lazy-imported so tests don't need the package)
 # ---------------------------------------------------------------------------
 
